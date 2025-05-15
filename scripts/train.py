@@ -7,7 +7,12 @@ from torch.utils.data import DataLoader
 from scripts.model import MCADNNet  # 確保你 model.py 中的類別名稱正確
 
 # ----- 1. Device Setting -----
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
 print(f"Using device: {device}")
 
 # ----- 2. Hyperparameters -----
@@ -63,5 +68,5 @@ for epoch in range(epochs):
 
 # ----- 6. Save Model -----
 os.makedirs("checkpoints", exist_ok=True)
-torch.save(model.state_dict(), "checkpoints/mcadnnet_mps.pth")
-print("Model saved to checkpoints/mcadnnet_mps.pth")
+torch.save(model.state_dict(), "model/mcadnnet_mps.pth")
+print("Model saved to model/mcadnnet_mps.pth")
