@@ -1,6 +1,9 @@
 # semantic-KG
 
 ```
+poetry run python -m scripts.rename_nii
+```
+```
 poetry run python -m scripts.convert_image \
     --input_dir data/packages \
     --output_dir data/images \
