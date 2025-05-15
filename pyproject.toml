@@ -1,0 +1,24 @@
+[project]
+name = "semantic-kg"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Morris"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "poethepoet",
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "nibabel (>=5.3.2,<6.0.0)",
+    "numpy (>=2.2.5,<3.0.0)",
+]
+
+[tool.poe.tasks]
+install-ltt = "python3 -m pip install light-the-torch"
+run-ltt = "python3 -m light_the_torch install --upgrade torch torchaudio torchvision"
+autoinstall-torch-cuda = ["install-ltt", "run-ltt"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
