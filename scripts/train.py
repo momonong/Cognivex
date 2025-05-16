@@ -22,7 +22,7 @@ learning_rate = 0.001
 image_size = (64, 64)
 num_classes = 2
 
-data_dir = "data/images"  # 確保這個資料夾存在，且子資料夾為 NC/AD/MCI
+data_dir = "data/images"  # 確保這個資料夾存在，且子資料夾為 CN/AD/MCI
 
 # ----- 3. Data Loading -----
 transform = transforms.Compose([

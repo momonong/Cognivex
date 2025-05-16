@@ -36,8 +36,8 @@ def convert_4d_nii_to_png(
         # 判斷 label 資料夾
         if "AD" in file_name.upper():
             label = "AD"
-        elif "NC" in file_name.upper():
-            label = "NC"
+        elif "CN" in file_name.upper():
+            label = "CN"
         else:
             raise ValueError(f"Unknown label in file name: {file_name}")
 
