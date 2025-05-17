@@ -24,8 +24,8 @@ poetry run python -m scripts.train
 
 ```shell
 poetry run python -m scripts.inference \
-    --image data/images/AD/sub-AD_027_S_6648_task-rest_bold.nii_001_001.png \
+    --image data/images/AD/AD_sub-AD_027_S_6648_task-rest_bold.nii_z001_t003.png \
     --weights model/mcadnnet_mps.pth \
     --extract-activation \
-    --activation-output hook/activation
+    --activation-output activation
 ```

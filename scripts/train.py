@@ -17,7 +17,7 @@ print(f"Using device: {device}")
 
 # ----- 2. Hyperparameters -----
 batch_size = 32
-epochs = 10
+epochs = 5
 learning_rate = 0.001
 image_size = (64, 64)
 num_classes = 2

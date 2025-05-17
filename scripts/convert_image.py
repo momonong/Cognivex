@@ -1,81 +1,76 @@
-# scripts/convert_images.py
-import os
-import glob
-import time
-import cv2
 import numpy as np
 import nibabel as nib
+import glob
+import os 
+import cv2
+import time
 import argparse
-from typing import Optional
 
+"""
+This script reads nii.gz fMRI files (4D data) and extracts slices into 2D PNG format.
+Enhanced to automatically split output into AD/CN folders based on filename.
+Originally from: MCADNNet - https://ieeexplore.ieee.org/document/8883215
+"""
 
-def convert_4d_nii_to_png(
-    input_dir: str,
-    output_dir: str,
-    drop_slices: int = 10,
-    verbose: bool = True
-) -> None:
-    """
-    Convert .nii.gz 4D fMRI to 2D PNG, and auto-classify into subfolders like AD, NC.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    nii_files = glob.glob(os.path.join(input_dir, "*.nii.gz"))
-
+def imgconverting(foldername, targetfolder, slicedrop=10, printfilename=True):
     start = time.time()
+    os.makedirs(targetfolder, exist_ok=True)
+    nii_files = glob.glob(os.path.join(foldername, '*.nii.gz'))
 
-    for idx, file_path in enumerate(nii_files):
+    for hh, file_path in enumerate(nii_files):
         file_name = os.path.basename(file_path)
         file_id = os.path.splitext(file_name)[0]
-        img_data = nib.load(file_path).get_fdata()
 
-        if np.sum(img_data) == 0:
-            continue
-
-        img_data = (img_data / np.max(img_data)) * 255
-
-        # 判斷 label 資料夾
+        # Determine label based on filename
         if "AD" in file_name.upper():
             label = "AD"
         elif "CN" in file_name.upper():
             label = "CN"
         else:
-            raise ValueError(f"Unknown label in file name: {file_name}")
+            raise ValueError(f"Unknown label in filename: {file_name}")
 
-        label_dir = os.path.join(output_dir, label)
-        os.makedirs(label_dir, exist_ok=True)
+        # Create label-specific folder
+        label_folder = os.path.join(targetfolder, label)
+        os.makedirs(label_folder, exist_ok=True)
 
+        img_data = nib.load(file_path).get_fdata()
+        if img_data.sum() == 0:
+            continue
+
+        img_data = (img_data / np.max(img_data)) * 255
         depth = img_data.shape[2]
         timepoints = img_data.shape[3]
 
-        for z in range(depth - drop_slices):
+        for z in range(depth - slicedrop):
             for t in range(timepoints):
-                slice_img = img_data[:, :, z, t].astype(np.uint8).T
-                if np.sum(slice_img) == 0:
-                    if verbose:
-                        print(f"[SKIP] empty: {file_name}, z={z}, t={t}")
+                img_slice = img_data[:, :, z, t]
+                img_slice = img_slice.astype(np.uint8).T  # transpose to match expected orientation
+                if img_slice.sum() == 0:
+                    if printfilename:
+                        print(f"[SKIP] Empty slice: {file_name} z={z}, t={t}")
                     continue
 
-                filename = f"{file_id}_{z+1:03d}_{t+1:03d}.png"
-                save_path = os.path.join(label_dir, filename)
-                cv2.imwrite(save_path, slice_img)
-                if verbose:
+                filename = f"{label}_{file_id}_z{z+1:03d}_t{t+1:03d}.png"
+                save_path = os.path.join(label_folder, filename)
+                cv2.imwrite(save_path, img_slice)
+                if printfilename:
                     print(f"[SAVE] {save_path}")
 
     end = time.time()
     print(f"[DONE] Total time: {end - start:.2f} sec")
 
 
+def main(parserargs):
+    input_dir = parserargs.inputfolder
+    output_dir = parserargs.targetfolder
+    imgconverting(input_dir, output_dir, slicedrop=parserargs.drop, printfilename=parserargs.verbose)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--input_dir", required=True)
-    parser.add_argument("-o", "--output_dir", required=True)
-    parser.add_argument("-d", "--drop_slices", type=int, default=10)
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-i", "--inputfolder", required=True, help="Input folder containing nii.gz files")
+    parser.add_argument("-o", "--targetfolder", required=True, help="Target folder to store PNG slices")
+    parser.add_argument("-d", "--drop", type=int, default=10, help="Number of slices to drop from the end. Default = 10")
+    parser.add_argument("-v", "--verbose", type=bool, default=True, help="Print file names")
     args = parser.parse_args()
-
-    convert_4d_nii_to_png(
-        input_dir=args.input_dir,
-        output_dir=args.output_dir,
-        drop_slices=args.drop_slices,
-        verbose=args.verbose,
-    )
+    main(args)
