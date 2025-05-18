@@ -1,0 +1,48 @@
+source,target,relation
+Cuneus_L,Visual-Dorsal Attention Network,part_of
+Visual-Dorsal Attention Network,Visuospatial Processing,supports
+Occipital_Sup_R,Visual-Dorsal Attention Network,part_of
+Occipital_Sup_L,Visual-Dorsal Attention Network,part_of
+Precuneus_L,Posterior Cingulate-Precuneus,part_of
+Posterior Cingulate-Precuneus,Self-referential Processing,supports
+Precuneus_R,Posterior Cingulate-Precuneus,part_of
+Angular_L,Language Network,part_of
+Language Network,Language Comprehension & Expression,supports
+Angular_R,Language Network,part_of
+Hippocampus_L,Hippocampus-Amygdala,part_of
+Hippocampus-Amygdala,Memory & Emotion Coupling,supports
+Amygdala_R,Hippocampus-Amygdala,part_of
+SupraMarginal_L,Language Network,part_of
+Postcentral_L,Frontoparietal Network,part_of
+Frontoparietal Network,Working Memory & Executive Control,supports
+Frontoparietal Network,Motor Planning,supports
+Frontoparietal Network,Attention Control,supports
+Frontal_Mid_R,Frontoparietal Network,part_of
+Frontal_Mid_L,Frontoparietal Network,part_of
+Occipital_Mid_L,Visual-Dorsal Attention Network,part_of
+Occipital_Mid_R,Visual-Dorsal Attention Network,part_of
+Parietal_Inf_L,Language Network,part_of
+Parietal_Inf_R,Language Network,part_of
+Temporal_Mid_L,Language Network,part_of
+Temporal_Mid_R,Language Network,part_of
+Cingulum_Post_L,Posterior Cingulate-Precuneus,part_of
+Cingulum_Post_R,Posterior Cingulate-Precuneus,part_of
+Memory & Emotion Coupling,Recent Memory Loss & Apathy,manifests_as
+Self-referential Processing,Forgetfulness & Subjective Complaints,manifests_as
+Visuospatial Processing,Spatial Disorientation & Recognition Deficit,manifests_as
+Working Memory & Executive Control,Poor Planning & Problem Solving,manifests_as
+Stimulus Filtering & Attention Switching,Irritability & Attention Instability,manifests_as
+Language Comprehension & Expression,Progressive Aphasia,manifests_as
+Motor Planning,Fine Motor Impairment,manifests_as
+Recent Memory Loss & Apathy,AD,associated_with
+Forgetfulness & Subjective Complaints,MCI,associated_with
+Spatial Disorientation & Recognition Deficit,Posterior Cortical Atrophy,associated_with
+Poor Planning & Problem Solving,MCI,associated_with
+Poor Planning & Problem Solving,AD,associated_with
+Irritability & Attention Instability,AD,associated_with
+Progressive Aphasia,Language Variant AD,associated_with
+Fine Motor Impairment,MCI,associated_with
+Salience Network,Stimulus Filtering & Attention Switching,supports
+Precentral_L,Frontoparietal Network,part_of
+Attention Control,Distractibility & Decision Delay,manifests_as
+Distractibility & Decision Delay,AD,associated_with

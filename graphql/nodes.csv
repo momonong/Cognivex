@@ -1,0 +1,49 @@
+id,label,type,color
+Cuneus_L,Cuneus_L,Region,skyblue
+Visual-Dorsal Attention Network,Visual-Dorsal Attention Network,Region,skyblue
+Occipital_Sup_R,Occipital_Sup_R,Region,skyblue
+Occipital_Sup_L,Occipital_Sup_L,Region,skyblue
+Precuneus_L,Precuneus_L,Region,skyblue
+Posterior Cingulate-Precuneus,Posterior Cingulate-Precuneus,Region,skyblue
+Precuneus_R,Precuneus_R,Region,skyblue
+Angular_L,Angular_L,Region,skyblue
+Language Network,Language Network,Region,skyblue
+Angular_R,Angular_R,Region,skyblue
+Hippocampus_L,Hippocampus_L,Region,skyblue
+Hippocampus-Amygdala,Hippocampus-Amygdala,Region,skyblue
+Amygdala_R,Amygdala_R,Region,skyblue
+SupraMarginal_L,SupraMarginal_L,Region,skyblue
+Postcentral_L,Postcentral_L,Region,skyblue
+Frontoparietal Network,Frontoparietal Network,Region,skyblue
+Frontal_Mid_R,Frontal_Mid_R,Region,skyblue
+Frontal_Mid_L,Frontal_Mid_L,Region,skyblue
+Occipital_Mid_L,Occipital_Mid_L,Region,skyblue
+Occipital_Mid_R,Occipital_Mid_R,Region,skyblue
+Parietal_Inf_L,Parietal_Inf_L,Region,skyblue
+Parietal_Inf_R,Parietal_Inf_R,Region,skyblue
+Temporal_Mid_L,Temporal_Mid_L,Region,skyblue
+Temporal_Mid_R,Temporal_Mid_R,Region,skyblue
+Cingulum_Post_L,Cingulum_Post_L,Region,skyblue
+Cingulum_Post_R,Cingulum_Post_R,Region,skyblue
+Memory & Emotion Coupling,Memory & Emotion Coupling,Function,lightgreen
+Self-referential Processing,Self-referential Processing,Function,lightgreen
+Visuospatial Processing,Visuospatial Processing,Function,lightgreen
+Working Memory & Executive Control,Working Memory & Executive Control,Function,lightgreen
+Stimulus Filtering & Attention Switching,Stimulus Filtering & Attention Switching,Function,lightgreen
+Language Comprehension & Expression,Language Comprehension & Expression,Function,lightgreen
+Motor Planning,Motor Planning,Function,lightgreen
+Recent Memory Loss & Apathy,Recent Memory Loss & Apathy,Symptom,orange
+Forgetfulness & Subjective Complaints,Forgetfulness & Subjective Complaints,Symptom,orange
+Spatial Disorientation & Recognition Deficit,Spatial Disorientation & Recognition Deficit,Symptom,orange
+Poor Planning & Problem Solving,Poor Planning & Problem Solving,Symptom,orange
+Irritability & Attention Instability,Irritability & Attention Instability,Symptom,orange
+Progressive Aphasia,Progressive Aphasia,Symptom,orange
+Fine Motor Impairment,Fine Motor Impairment,Symptom,orange
+MCI,MCI,Disease,tomato
+AD,AD,Disease,tomato
+Posterior Cortical Atrophy,Posterior Cortical Atrophy,Disease,tomato
+Language Variant AD,Language Variant AD,Disease,tomato
+Salience Network,Salience Network,Unknown,gray
+Precentral_L,Precentral_L,Unknown,gray
+Attention Control,Attention Control,Unknown,gray
+Distractibility & Decision Delay,Distractibility & Decision Delay,Unknown,gray

@@ -1,0 +1,281 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d1" for="edge" attr.name="relation" attr.type="string"/>
+<key id="d0" for="node" attr.name="type" attr.type="string"/>
+<graph edgedefault="directed"><node id="Cuneus_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Visual-Dorsal Attention Network">
+  <data key="d0">Region</data>
+</node>
+<node id="Occipital_Sup_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Occipital_Sup_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Precuneus_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Posterior Cingulate-Precuneus">
+  <data key="d0">Region</data>
+</node>
+<node id="Precuneus_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Angular_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Language Network">
+  <data key="d0">Region</data>
+</node>
+<node id="Angular_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Hippocampus_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Hippocampus-Amygdala">
+  <data key="d0">Region</data>
+</node>
+<node id="Amygdala_R">
+  <data key="d0">Region</data>
+</node>
+<node id="SupraMarginal_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Postcentral_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Frontoparietal Network">
+  <data key="d0">Region</data>
+</node>
+<node id="Frontal_Mid_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Frontal_Mid_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Occipital_Mid_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Occipital_Mid_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Parietal_Inf_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Parietal_Inf_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Temporal_Mid_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Temporal_Mid_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Cingulum_Post_L">
+  <data key="d0">Region</data>
+</node>
+<node id="Cingulum_Post_R">
+  <data key="d0">Region</data>
+</node>
+<node id="Memory &amp; Emotion Coupling">
+  <data key="d0">Function</data>
+</node>
+<node id="Self-referential Processing">
+  <data key="d0">Function</data>
+</node>
+<node id="Visuospatial Processing">
+  <data key="d0">Function</data>
+</node>
+<node id="Working Memory &amp; Executive Control">
+  <data key="d0">Function</data>
+</node>
+<node id="Stimulus Filtering &amp; Attention Switching">
+  <data key="d0">Function</data>
+</node>
+<node id="Language Comprehension &amp; Expression">
+  <data key="d0">Function</data>
+</node>
+<node id="Motor Planning">
+  <data key="d0">Function</data>
+</node>
+<node id="Recent Memory Loss &amp; Apathy">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Forgetfulness &amp; Subjective Complaints">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Spatial Disorientation &amp; Recognition Deficit">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Poor Planning &amp; Problem Solving">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Irritability &amp; Attention Instability">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Progressive Aphasia">
+  <data key="d0">Symptom</data>
+</node>
+<node id="Fine Motor Impairment">
+  <data key="d0">Symptom</data>
+</node>
+<node id="MCI">
+  <data key="d0">Disease</data>
+</node>
+<node id="AD">
+  <data key="d0">Disease</data>
+</node>
+<node id="Posterior Cortical Atrophy">
+  <data key="d0">Disease</data>
+</node>
+<node id="Language Variant AD">
+  <data key="d0">Disease</data>
+</node>
+<node id="Salience Network"/>
+<node id="Precentral_L"/>
+<node id="Attention Control"/>
+<node id="Distractibility &amp; Decision Delay"/>
+<edge source="Cuneus_L" target="Visual-Dorsal Attention Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Visual-Dorsal Attention Network" target="Visuospatial Processing">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Occipital_Sup_R" target="Visual-Dorsal Attention Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Occipital_Sup_L" target="Visual-Dorsal Attention Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Precuneus_L" target="Posterior Cingulate-Precuneus">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Posterior Cingulate-Precuneus" target="Self-referential Processing">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Precuneus_R" target="Posterior Cingulate-Precuneus">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Angular_L" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Language Network" target="Language Comprehension &amp; Expression">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Angular_R" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Hippocampus_L" target="Hippocampus-Amygdala">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Hippocampus-Amygdala" target="Memory &amp; Emotion Coupling">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Amygdala_R" target="Hippocampus-Amygdala">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="SupraMarginal_L" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Postcentral_L" target="Frontoparietal Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Frontoparietal Network" target="Working Memory &amp; Executive Control">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Frontoparietal Network" target="Motor Planning">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Frontoparietal Network" target="Attention Control">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Frontal_Mid_R" target="Frontoparietal Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Frontal_Mid_L" target="Frontoparietal Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Occipital_Mid_L" target="Visual-Dorsal Attention Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Occipital_Mid_R" target="Visual-Dorsal Attention Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Parietal_Inf_L" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Parietal_Inf_R" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Temporal_Mid_L" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Temporal_Mid_R" target="Language Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Cingulum_Post_L" target="Posterior Cingulate-Precuneus">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Cingulum_Post_R" target="Posterior Cingulate-Precuneus">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Memory &amp; Emotion Coupling" target="Recent Memory Loss &amp; Apathy">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Self-referential Processing" target="Forgetfulness &amp; Subjective Complaints">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Visuospatial Processing" target="Spatial Disorientation &amp; Recognition Deficit">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Working Memory &amp; Executive Control" target="Poor Planning &amp; Problem Solving">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Stimulus Filtering &amp; Attention Switching" target="Irritability &amp; Attention Instability">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Language Comprehension &amp; Expression" target="Progressive Aphasia">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Motor Planning" target="Fine Motor Impairment">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Recent Memory Loss &amp; Apathy" target="AD">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Forgetfulness &amp; Subjective Complaints" target="MCI">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Spatial Disorientation &amp; Recognition Deficit" target="Posterior Cortical Atrophy">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Poor Planning &amp; Problem Solving" target="MCI">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Poor Planning &amp; Problem Solving" target="AD">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Irritability &amp; Attention Instability" target="AD">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Progressive Aphasia" target="Language Variant AD">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Fine Motor Impairment" target="MCI">
+  <data key="d1">associated_with</data>
+</edge>
+<edge source="Salience Network" target="Stimulus Filtering &amp; Attention Switching">
+  <data key="d1">supports</data>
+</edge>
+<edge source="Precentral_L" target="Frontoparietal Network">
+  <data key="d1">part_of</data>
+</edge>
+<edge source="Attention Control" target="Distractibility &amp; Decision Delay">
+  <data key="d1">manifests_as</data>
+</edge>
+<edge source="Distractibility &amp; Decision Delay" target="AD">
+  <data key="d1">associated_with</data>
+</edge>
+</graph></graphml>

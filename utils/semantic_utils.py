@@ -13,7 +13,7 @@ def explain_activation(start_node, G, max_depth=3):
             continue
 
         for neighbor in G.successors(current):
-            relation = G.edges[current, neighbor]['relation']
+            relation = G.edges[current, neighbor]["relation"]
             result.append((current, neighbor, relation))
             if neighbor not in visited:
                 queue.append((neighbor, depth + 1))
@@ -21,24 +21,12 @@ def explain_activation(start_node, G, max_depth=3):
 
     return result
 
-def explain_naturally(chain):
-    explanation = []
-    for src, tgt, rel in chain:
-        if rel == "supports":
-            explanation.append(f"{src} 支援了 {tgt} 的功能")
-        elif rel == "manifests_as":
-            explanation.append(f"{tgt} 是 {src} 功能受損後的表現")
-        elif rel == "associated_with":
-            explanation.append(f"{src} 通常與 {tgt} 有關")
-        elif rel == "part_of":
-            explanation.append(f"{src} 是 {tgt} 的一部分")
-        else:
-            explanation.append(f"{src} --{rel}→ {tgt}")
-    return "。".join(explanation) + "。"
 
 def generate_explanation(region, G):
     chain = explain_activation(region, G)
-    segments = {rel: [] for rel in ["part_of", "supports", "manifests_as", "associated_with"]}
+    segments = {
+        rel: [] for rel in ["part_of", "supports", "manifests_as", "associated_with"]
+    }
 
     for src, tgt, rel in chain:
         segments[rel].append((src, tgt))
