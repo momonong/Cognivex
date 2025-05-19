@@ -7,6 +7,7 @@ from torchvision import transforms
 from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from scripts.model import MCADNNet
 
 # ---------- 1. Device ----------
@@ -16,7 +17,7 @@ print(f"✅ Using device: {device}")
 # ---------- 2. Config ----------
 image_size = (64, 64)
 batch_size = 32
-epochs = 5
+epochs = 50
 learning_rate = 0.001
 num_classes = 2
 meta_csv = "data/slices_metadata_z30-60.csv"
@@ -55,6 +56,7 @@ df = pd.read_csv(meta_csv)
 best_overall_acc = 0.0
 best_overall_state_dict = None
 best_overall_fold = -1
+early_stop_epoch_record = {}
 
 # ---------- 6. Cross-validation ----------
 for val_fold in range(5):
@@ -68,16 +70,26 @@ for val_fold in range(5):
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model = MCADNNet(num_classes=num_classes, dropout_p=0.5).to(device)
+
+    # Freeze CNN layers
+    for name, param in model.named_parameters():
+        if "conv" in name:
+            param.requires_grad = False
+
+    trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = optim.Adam(trainable_params, lr=learning_rate, weight_decay=1e-4)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=2)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
     best_val_acc = 0.0
     best_state_dict = None
+    best_metrics = {}
+    patience = 3
+    no_improve_count = 0
 
-    print(f"\n🚀 Training Fold {val_fold}...")
+    print(f"\n🚀 Training Fold {val_fold} (Frozen CNN + EarlyStopping)...")
 
     for epoch in range(epochs):
-        # ----- Training -----
         model.train()
         train_loss = 0.0
         train_correct = 0
@@ -100,7 +112,6 @@ for val_fold in range(5):
         avg_train_loss = train_loss / train_total
         train_acc = 100. * train_correct / train_total
 
-        # ----- Validation -----
         model.eval()
         val_loss = 0.0
         val_preds = []
@@ -128,6 +139,8 @@ for val_fold in range(5):
               f"Train Acc: {train_acc:.2f}% | Val Acc: {epoch_val_acc:.2f}% | "
               f"P: {epoch_val_precision:.2f} | R: {epoch_val_recall:.2f} | F1: {epoch_val_f1:.2f}")
 
+        scheduler.step(avg_val_loss)
+
         if epoch_val_acc > best_val_acc:
             best_val_acc = epoch_val_acc
             best_state_dict = model.state_dict()
@@ -137,9 +150,18 @@ for val_fold in range(5):
                 "precision": epoch_val_precision,
                 "recall": epoch_val_recall,
                 "f1": epoch_val_f1,
+                "epoch": epoch + 1
             }
-            torch.save(best_metrics, f"model/fold{val_fold}_metrics.pt")
+            no_improve_count = 0
+        else:
+            no_improve_count += 1
 
+        if no_improve_count >= patience:
+            print(f"⏹️ Early stopping at Epoch {epoch+1} (no improvement for {patience} epochs)")
+            break
+
+    torch.save(best_metrics, f"model/fold{val_fold}_metrics.pt")
+    early_stop_epoch_record[val_fold] = best_metrics.get("epoch", "N/A")
     print(f"✅ Fold {val_fold} Best Val Acc: {best_val_acc:.2f}%")
 
     if best_val_acc > best_overall_acc:
@@ -168,7 +190,8 @@ for i in range(5):
               f"Val Acc: {metric['acc']:.2f}% | "
               f"P: {metric['precision']:.2f} | "
               f"R: {metric['recall']:.2f} | "
-              f"F1: {metric['f1']:.2f}")
+              f"F1: {metric['f1']:.2f} | "
+              f"Stopped at Epoch: {metric['epoch']}")
     else:
         print(f"Fold {i} → ❌ 無儲存紀錄")
 
@@ -180,5 +203,6 @@ if fold_metrics:
     print(f"🔹 Precision: {best['precision']:.2f}")
     print(f"🔹 Recall: {best['recall']:.2f}")
     print(f"🔹 F1 Score: {best['f1']:.2f}")
+    print(f"🔹 Epoch: {best['epoch']}")
 else:
     print("❌ 無法讀取最佳模型評估結果")
