@@ -1,21 +1,9 @@
 # semantic-KG
+先把 0515_GE 的資料夾放進 data 然後改名成 raw
 
 ```shell
 
-poetry run python -m scripts.rename_nii
-```
-
-```shell
-poetry run python -m scripts.convert_image \
-    --input_dir data/packages \
-    --output_dir data/images \
-    --drop_slices 10 \
-    --verbose
-```
-
-```shell
-# optional
-poetry run python -m scripts.populate_fake_nc
+poetry run python -m scripts.data_prepare
 ```
 
 ```shell
