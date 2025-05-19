@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class MCADNNet(nn.Module):
-    def __init__(self, num_classes=2, input_shape=(1, 64, 64)):
+    def __init__(self, num_classes=2, input_shape=(1, 64, 64), dropout_p=0.5):
         super(MCADNNet, self).__init__()
 
         self.conv0 = nn.Conv2d(in_channels=1, out_channels=10, kernel_size=5, stride=1)
@@ -15,15 +15,14 @@ class MCADNNet(nn.Module):
         self.conv2 = nn.Conv2d(in_channels=20, out_channels=50, kernel_size=5, stride=1)
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # 🧠 利用 dummy input 自動推算 flatten size
         self._flatten_dim = self._get_flatten_dim(input_shape)
-
-        self.fc1 = nn.Linear(in_features=self._flatten_dim, out_features=500)
-        self.fc2 = nn.Linear(in_features=500, out_features=num_classes)
+        self.fc1 = nn.Linear(in_features=self._flatten_dim, out_features=256)  # ⬅️ 減少參數量
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.fc2 = nn.Linear(in_features=256, out_features=num_classes)
 
     def _get_flatten_dim(self, input_shape):
         with torch.no_grad():
-            dummy = torch.zeros(1, *input_shape)  # e.g., [1, 1, 64, 64]
+            dummy = torch.zeros(1, *input_shape)
             x = self.pool0(F.relu(self.conv0(dummy)))
             x = self.pool1(F.relu(self.conv1(x)))
             x = self.pool2(F.relu(self.conv2(x)))
@@ -35,5 +34,7 @@ class MCADNNet(nn.Module):
         x = self.pool2(F.relu(self.conv2(x)))
         x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
+        x = self.dropout(x)  # ✅ activation 後使用 Dropout
         x = self.fc2(x)
         return x
+
