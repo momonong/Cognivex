@@ -1,4 +1,4 @@
-from utils.semantic_utils import explain_activation
+from tools.semantic_utils import explain_activation
 
 
 def region_to_path(state):

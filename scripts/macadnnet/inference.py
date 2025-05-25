@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from PIL import Image
 import numpy as np
-from scripts.model import MCADNNet
+from scripts.macadnnet.model import MCADNNet
 import os
 from pathlib import Path
 

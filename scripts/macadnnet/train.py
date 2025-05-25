@@ -8,7 +8,7 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from scripts.model import MCADNNet
+from scripts.macadnnet.model import MCADNNet
 
 # ---------- 1. Device ----------
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")

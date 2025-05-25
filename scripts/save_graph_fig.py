@@ -3,7 +3,7 @@ from nilearn import datasets
 import nibabel as nib
 from skimage.transform import resize
 from collections import defaultdict
-from utils.semantic_utils import generate_explanation
+from tools.semantic_utils import generate_explanation
 import networkx as nx
 import torch
 import matplotlib.pyplot as plt
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     G = build_semantic_graph()
 
     import torch
-    from scripts.model import MCADNNet
+    from scripts.model_macaddnet import MCADNNet
     model = MCADNNet(num_classes=2)
     model.load_state_dict(torch.load("model/mcadnnet_mps.pth", map_location="cpu"))
     model.eval()

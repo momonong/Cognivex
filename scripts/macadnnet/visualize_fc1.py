@@ -6,8 +6,8 @@ from collections import defaultdict
 import networkx as nx
 import torch
 import matplotlib.pyplot as plt
-from scripts.model import MCADNNet
-from utils.semantic_utils import generate_explanation
+from scripts.macadnnet.model import MCADNNet
+from tools.semantic_utils import generate_explanation
 
 
 def run_activation_to_top_regions(act_map, z_slice=50, top_k=5):
