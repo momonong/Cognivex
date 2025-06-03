@@ -14,12 +14,15 @@ os.makedirs(OUTPUT_NII_DIR, exist_ok=True)
 
 # ---------- 載入 metadata ----------
 df = pd.read_csv(METADATA_CSV)
-subject_list = df["subject_id"].unique().tolist()
+# subject_list = df["subject_id"].unique().tolist()
+subject_list = [
+    "sub-14"
+]  # * 僅處理 sub-14 的資料。注意：這行是為了測試，實際使用時可移除或修改
 
 for subject_id in tqdm(subject_list):
     subject_df = df[df["subject_id"] == subject_id].copy()
     act_path = os.path.join(ACTIVATION_DIR, f"{subject_id}_conv_volume.npy")
-    
+
     if not os.path.exists(act_path):
         continue
 
@@ -45,6 +48,14 @@ for subject_id in tqdm(subject_list):
             continue
 
         activation_map = act_volume[idx_in_df]
+
+        # Clip top 1% 極端值，避免爆紅
+        clip_val = np.percentile(activation_map, 99)
+        activation_map = np.clip(activation_map, 0, clip_val)
+
+        # 放大，建議倍率控制在 100~1000 之間
+        activation_map *= 500
+
         if np.max(activation_map) == 0.0:
             continue
 
@@ -53,8 +64,10 @@ for subject_id in tqdm(subject_list):
         y_start, y_end = y_center - 4, y_center + 5
 
         if (
-            x_start < 0 or y_start < 0 or
-            x_end > original_shape[0] or y_end > original_shape[1]
+            x_start < 0
+            or y_start < 0
+            or x_end > original_shape[0]
+            or y_end > original_shape[1]
         ):
             continue
 
@@ -66,4 +79,3 @@ for subject_id in tqdm(subject_list):
     print(f"✅ Saved: {output_path}")
     reloaded = nib.load(output_path).get_fdata()
     print(f"📦 Max activation value (after scaling): {reloaded.max():.4f}")
-

@@ -42,6 +42,7 @@ model.conv2.register_forward_hook(hook_fn)
 
 # ---------- 載入 metadata ----------
 df = pd.read_csv(csv_path)
+df = df[df["subject_id"] == "sub-14"]  # * 僅處理 sub-14 的資料。注意：這行是為了測試，實際使用時可移除或修改
 subject_activations = defaultdict(list)
 
 for _, row in tqdm(df.iterrows(), total=len(df)):
