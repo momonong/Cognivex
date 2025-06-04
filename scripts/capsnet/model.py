@@ -70,16 +70,31 @@ class CapsNetRNN(nn.Module):
         self.capsnet = CapsNet3D()
         self.rnn = nn.RNN(input_size=32, hidden_size=64, batch_first=True)
         self.fc = nn.Linear(64, 1)
+        self.activations = {}
+        self._register_hooks()
+
+    def _register_hooks(self):
+        def hook_fn(module, input, output):
+            self.activations['conv3'] = output.detach()
+
+        # 例如你想抓 Conv3d-3，對應的是 self.capsnet.conv3
+        self.capsnet.conv3.register_forward_hook(hook_fn)
 
     def forward(self, x):
-        # x: [B, 1, 5, 61, 73, 61]
-        B, _, T, D, H, W = x.size()
-        x = x.squeeze(1)  # [B, 5, 61, 73, 61]
+        # x: [B, 1, T, D, H, W] ← 4D fMRI 資料
+        if x.dim() == 6:
+            B, C, T, D, H, W = x.size()
+        else:
+            raise ValueError(f"Expected input shape [B, 1, T, D, H, W], but got {x.size()}")
+
         feats = []
         for t in range(T):
-            caps_out = self.capsnet(x[:, t].unsqueeze(1))  # [B, 2, 16]
-            feats.append(caps_out.view(B, -1))  # [B, 32]
-        feats = torch.stack(feats, dim=1)  # [B, 5, 32]
-        rnn_out, _ = self.rnn(feats)  # [B, 5, 64]
-        out = self.fc(rnn_out[:, -1, :])  # [B, 1]
+            # 取出第 t 個時間點的 volume
+            x_t = x[:, :, t, :, :, :]          # [B, 1, D, H, W]
+            caps_out = self.capsnet(x_t)       # [B, 2, 16]
+            feats.append(caps_out.view(B, -1)) # [B, 32]
+
+        feats = torch.stack(feats, dim=1)  # [B, T, 32]
+        rnn_out, _ = self.rnn(feats)       # [B, T, 64]
+        out = self.fc(rnn_out[:, -1, :])   # [B, 1]
         return torch.sigmoid(out).squeeze(1)
