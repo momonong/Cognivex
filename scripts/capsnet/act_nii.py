@@ -21,7 +21,7 @@ nii_data = np.transpose(resized, (1, 2, 0))  # [X, Y, Z]
 
 # Normalize + threshold top 2%
 nii_data = (nii_data - nii_data.min()) / (nii_data.max() - nii_data.min() + 1e-8)
-threshold = np.percentile(nii_data, 98)
+threshold = np.percentile(nii_data, 99)
 nii_masked = np.where(nii_data >= threshold, nii_data, 0).astype(np.float32)
 
 # Save NIfTI
