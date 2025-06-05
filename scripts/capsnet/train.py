@@ -65,7 +65,7 @@ def train(model, train_loader, val_loader, epochs=20, lr=1e-6, weight_decay=0.1,
         # Save model if best
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            save_path = f"checkpoints/best_capsnet_rnn.pth"
+            save_path = f"model/capsnet/best_capsnet_rnn.pth"
             torch.save(model.state_dict(), save_path)
             print(f"✅ New best model saved to: {save_path}")
 
