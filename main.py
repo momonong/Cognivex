@@ -5,8 +5,8 @@ from skimage.transform import resize
 from collections import defaultdict
 import matplotlib.pyplot as plt
 # from utils.build_neo4j import export_graph_to_neo4j_csv
-from utils.semantic_utils import generate_explanation
-from utils.generate_cypher import generate_cypher_path
+from tools.semantic_utils import generate_explanation
+from tools.generate_cypher import generate_cypher_path
 import networkx as nx
 import os
 import csv
