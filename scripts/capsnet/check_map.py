@@ -11,4 +11,4 @@ display = plotting.plot_stat_map(
     threshold=0.1,
     title="Activation Map (sub-14 conv3)"
 )
-display.savefig("activation_map.png")
+display.savefig("figures/capsnet/activation_map.png")

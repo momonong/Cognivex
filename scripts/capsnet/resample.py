@@ -10,3 +10,5 @@ resampled_act_img = resample_to_img(
 # 存起來看一下
 resampled_path = "output/capsnet/sub-14_conv3_resampled_to_atlas.nii.gz"
 resampled_act_img.to_filename(resampled_path)
+
+print("Resampled activation map saved to:", resampled_path)
