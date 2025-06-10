@@ -12,3 +12,4 @@ display = plotting.plot_stat_map(
     title="Activation Map (sub-14 conv3)"
 )
 display.savefig("figures/capsnet/activation_map.png")
+print("✅ Activation map displayed and saved as figures/capsnet/activation_map.png")
