@@ -22,7 +22,7 @@ with open(label_path, "r", encoding="utf-8") as f:
 print(f"📖 讀入 {len(id_to_label)} 筆腦區 label 對照表。")
 
 # === [2] 載入 group-level activation map ===
-act_img = nib.load("output/capsnet/sub-14_conv3_resampled_to_atlas.nii.gz")
+act_img = nib.load("output/group/group_mean_activation.nii.gz")
 act_data = act_img.get_fdata()
 print("🧠 Activation map shape:", act_data.shape)
 
