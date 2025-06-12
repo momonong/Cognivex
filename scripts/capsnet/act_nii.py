@@ -39,7 +39,7 @@ print(f"[轉成 NIfTI] 最終 shape: {nii_data.shape}（X, Y, Z）")
 
 # === Step 7. Normalize 並選取 top percentile 當作 activation mask ===
 nii_data = (nii_data - nii_data.min()) / (nii_data.max() - nii_data.min() + 1e-8)
-threshold = np.percentile(nii_data, 00)
+threshold = np.percentile(nii_data, 99)
 nii_masked = np.where(nii_data >= threshold, nii_data, 0).astype(np.float32)
 
 # === Step 8. 存成 NIfTI 檔案 ===
