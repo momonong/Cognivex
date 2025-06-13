@@ -1,55 +1,53 @@
 import pandas as pd
 from collections import defaultdict
 
-# === 預先讀入 Yeo 分佈 mapping ===
-yeo_mapping_df = pd.read_csv("output/kg/aal3_to_yeo7_mapping_distribution.csv")
+# 讀入 CSV
+csv_path = "output/kg/aal3_to_yeo7_mapping_distribution.csv"
+df = pd.read_csv(csv_path)
 
-# 建立 lookup: (region, region_id) -> list of (network, yeo_id, percentage)
-region_to_yeo = defaultdict(list)
-for _, row in yeo_mapping_df.iterrows():
-    key = (row["region"], int(str(row["region_id"]).split()[0]))
-    region_to_yeo[key].append((row["network"], row["yeo_id"], row["percentage"]))
+# 分組處理每個 AAL 區域
+region_groups = defaultdict(list)
 
+for _, row in df.iterrows():
+    region = row["region"]
+    region_id = row["region_id"]
+    network = row["network"]
+    yeo_id = row["yeo_id"]
+    percentage = row["percentage"]
 
-# === 主函式：處理單一 subject 的腦區 list ===
-def explain_subject_regions(subject_id: str, region_list: list[tuple[str, int]], top_k: int = 1):
-    print(f"🧠 Subject: {subject_id}\n{'='*60}")
-    for region_name, region_id in region_list:
-        key = (region_name, region_id)
-        if key not in region_to_yeo:
-            print(f"⚠️ 找不到對應 Yeo 資訊：{region_name} ({region_id})")
-            continue
+    region_key = (region, region_id)
+    region_groups[region_key].append((network, yeo_id, percentage))
 
-        mappings = sorted(region_to_yeo[key], key=lambda x: x[2], reverse=True)
-        top = mappings[:top_k]
-        rest = mappings[top_k:]
+# 產出文字說明
+# output_lines = []
 
-        # 主導網路描述
-        main_net, main_id, main_pct = top[0]
-        line = (
-            f"「{region_name}」（ID: {region_id}）主要參與 Yeo7 的「{main_net}」網路 "
-            f"(ID: {main_id})，佔比約 {main_pct * 100:.1f}%。"
-        )
+for (region, region_id), network_list in region_groups.items():
+    # 根據百分比排序，選出 top 1
+    sorted_nets = sorted(network_list, key=lambda x: x[2], reverse=True)
+    main_net = sorted_nets[0]
+    others = sorted_nets[1:]
 
-        # 額外貢獻網路（>5%）
-        extras = [
-            f"{net}（{perc * 100:.1f}%）"
-            for net, _, perc in rest if perc > 0.05
-        ]
-        if extras:
-            line += " 其他亦涵蓋：" + "、".join(extras) + "。"
+    main_text = (
+        f"「{region}」區域（AAL ID: {region_id}）有 {main_net[2]*100:.1f}% 的體素對應於 "
+        f"Yeo7 的「{main_net[0]}」網路（ID: {main_net[1]}），為其主要參與網路。"
+    )
 
-        print("- " + line)
-    print()
+    others_text = ""
+    for net, yeo_id, perc in others:
+        if perc >= 0.05:
+            others_text += f" 其中 {perc*100:.1f}% 體素對應「{net}」（ID: {yeo_id}）；"
 
+    if others_text:
+        final_text = f"{main_text} 此外，{others_text.rstrip('；')}。"
+    else:
+        final_text = main_text
 
-# === 範例：sub-14 的兩個 activation 腦區 ===
-example_subject_id = "sub-14"
-example_regions = [
-    ("Angular_L", 69),
-    ("Frontal_Sup_Medial_R", 20),
-    ("Temporal_Pole_Sup_R", 83),
-    ("Frontal_Mid_Orb_L", 9),
-]
+    # output_lines.append(final_text)
+    print(final_text)
 
-explain_subject_regions(example_subject_id, example_regions)
+# # 儲存為文字檔
+# with open("output/kg/region_to_yeo7_explanation.txt", "w") as f:
+#     for line in output_lines:
+#         f.write(line + "\n")
+
+# print("✅ 語意說明已產出：output/kg/region_to_yeo7_explanation.txt")
