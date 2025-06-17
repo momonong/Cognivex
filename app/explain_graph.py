@@ -15,7 +15,7 @@ explain_chain = graph_builder.compile()
 
 
 if __name__ == "__main__":
-    from main import build_semantic_graph
+    from test_overall import build_semantic_graph
 
     G = build_semantic_graph()
 
