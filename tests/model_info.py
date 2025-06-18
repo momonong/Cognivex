@@ -1,6 +1,6 @@
 import torch
 from torchsummary import summary
-from scripts.macadnnet.model import MCADNNet
+from scripts.capsnet.model import CapsNetRNN
 
-model = MCADNNet().to("cpu")  # ✅ 強制放回 CPU
-summary(model, input_size=(1, 64, 64), device="cpu")
+model = CapsNetRNN().to("cpu")  # ✅ 強制放回 CPU
+summary(model, input_size=(1, 1, 91, 91, 109), device="cpu")

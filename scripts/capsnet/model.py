@@ -82,10 +82,13 @@ class CapsNetRNN(nn.Module):
 
     def forward(self, x):
         # x: [B, 1, T, D, H, W] ← 4D fMRI 資料
-        if x.dim() == 6:
+        if x.dim() == 5: # Handle 5D input as a single time step
+            x = x.unsqueeze(2) # Add time dimension T=1 at index 2
+            B, C, T, D, H, W = x.size() # Recalculate dimensions
+        elif x.dim() == 6:
             B, C, T, D, H, W = x.size()
         else:
-            raise ValueError(f"Expected input shape [B, 1, T, D, H, W], but got {x.size()}")
+            raise ValueError(f"Expected input shape [B, 1, T, D, H, W] or [B, 1, D, H, W], but got {x.size()}")
 
         feats = []
         for t in range(T):

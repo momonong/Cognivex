@@ -53,8 +53,12 @@ for label_id, act_value in zip(atlas_labels, act_values):
     label_voxel_count[label_id] += 1
 
 # === [5] 列出每個腦區的平均 activation（由高至低排序） ===
-print("\n📊 Activation 平均值統計（依 activation 排序）：\n")
-sorted_labels = sorted(label_activation_sum.keys(), key=lambda k: label_activation_sum[k], reverse=True)
+print("\nActivation 平均值統計（依 activation 排序）：\n")
+sorted_labels = sorted(
+    label_activation_sum.keys(),
+    key=lambda k: (label_activation_sum[k] / label_voxel_count[k]) if label_voxel_count[k] > 0 else 0,
+    reverse=True
+)
 
 for label_id in sorted_labels:
     name = id_to_label.get(label_id, "❌ Unknown")
