@@ -20,7 +20,7 @@ def load_nifti_and_preprocess(path: str, window: int, stride: int) -> torch.Tens
     # Sliding window over time
     clips = []
     for i in range(0, data.shape[0] - window + 1, stride):
-        clip = data[i:i + window]  # [T, D, H, W]
+        clip = data[i : i + window]  # [T, D, H, W]
         clips.append(clip)
 
     arr = np.stack(clips)  # [B, T, D, H, W]
@@ -30,62 +30,71 @@ def load_nifti_and_preprocess(path: str, window: int, stride: int) -> torch.Tens
 
 def run_inference(
     model: torch.nn.Module,
-    model_path: str,
     nii_path: str,
     save_dir: str,
     save_name: str,
+    selected_layer_names: list[str],
     window: int = 5,
     stride: int = 3,
     device: str = "cpu",
 ):
-    """
-    Run inference using a prepared model with hooks attached.
-
-    Parameters:
-        model: A prepared model instance with hook-attached layers
-        nii_path: Path to input NIfTI file
-        save_dir: Directory to save outputs
-        save_name: Prefix name for saving activation files
-        window: Temporal window size
-        stride: Temporal stride size
-        device: Inference device (e.g., "cpu", "cuda", "mps")
-    """
     model = model.to(device)
-    model.load_state_dict(torch.load(model_path, map_location="cpu")) 
     model.eval()
 
-    # Load input
     inputs = load_nifti_and_preprocess(nii_path, window, stride).to(device)
-    print(f"Loaded input shape: {inputs.shape}")  # [B, 1, T, D, H, W]
+    print(f"Loaded input shape: {inputs.shape}")
 
-    # Inference
     with torch.no_grad():
         outputs = model(inputs)
         preds = (outputs > 0.5).float().squeeze().cpu().numpy()
 
-    # Classification result
     final_pred = int(np.round(preds.mean()))
     print(f"Inference Result: {final_pred} (1=AD, 0=CN)")
 
-    # Save activations
     if hasattr(model, "activations") and isinstance(model.activations, dict):
         os.makedirs(save_dir, exist_ok=True)
-        for layer_name, act in model.activations.items():
-            filename = f"{save_name}_{layer_name.replace('.', '_')}.pt"
-            save_path = os.path.join(save_dir, filename)
-            torch.save(act.cpu(), save_path)
-            print(f"Saved activation: {save_path}")
+        for layer_name in selected_layer_names:
+            if layer_name in model.activations:
+                act = model.activations[layer_name]
+                filename = f"{save_name}_{layer_name.replace('.', '_')}.pt"
+                save_path = os.path.join(save_dir, filename)
+                torch.save(act.cpu(), save_path)
+                print(f"Saved activation: {save_path}")
+            else:
+                print(f"Warning: Activation not found for layer '{layer_name}'")
 
 
 # Optional: run as script
 if __name__ == "__main__":
+    import torch
     from scripts.capsnet.model import CapsNetRNN
+    from agents.nii_inference.attach_hook import attach_hooks
+    from agents.nii_inference.inference import run_inference
+
+    # [1] 初始化模型並載入權重
+    model = CapsNetRNN()
+    model.load_state_dict(
+        torch.load("model/capsnet/best_capsnet_rnn.pth", map_location="cpu")
+    )
+
+    # [2] 指定要 hook 的層名稱（module path）
+    selected_layer_names = ["capsnet.conv3", "capsnet.caps2"]
+    
+    # [3] 建立 activation dict 並掛 hook
+    activation_dict = {}
+    attach_hooks(model, selected_layer_names, activation_dict)
+
+    # [4] 將 activation dict 附加到 model（run_inference 會使用）
+    model.activations = activation_dict
+
+    # [5] 執行推論，並只儲存指定層 activation
     run_inference(
-        model=CapsNetRNN(),
+        model=model,
         nii_path="data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz",
         save_dir="output/capsnet",
-        save_name="module_test",  
+        save_name="module_test",
+        selected_layer_names=selected_layer_names,  
         window=5,
         stride=3,
-        device="mps" if torch.backends.mps.is_available() else "cpu"
+        device="mps" if torch.backends.mps.is_available() else "cpu",
     )

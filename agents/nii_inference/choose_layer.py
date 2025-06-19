@@ -9,28 +9,28 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 INSTRUCTION = """
-You are a model analysis assistant. Your task is to help select the most suitable layer(s) for visualization or activation mapping from a list of PyTorch model layers.
+You are a model analysis assistant. Your task is to select the most informative **spatial feature extraction layer(s)** for visualizing activations (e.g., with GradCAM or 3D attention maps).
 
 Selection Criteria:
-1. Choose layers that likely capture high-level or abstract semantic features.
-2. Prefer layers that are not the final classification or output layers.
-3. Favor layers that preserve some spatial structure, suitable for GradCAM-like interpretation.
-
-You must return ONLY 1 or 2 layers that best meet the criteria. Avoid returning more than 2.
+1. Only select layers that **preserve spatial structure** (e.g., [C, D, H, W] or [C, H, W] output).
+2. Prioritize layers that perform convolution-like operations (e.g., Conv3d, ConvTranspose3d, spatial attention, or spatial capsules).
+3. Do NOT select layers that flatten, pool across all spatial dims, or produce pure classification outputs (e.g., Linear, GlobalAvgPool, Softmax).
+4. You may return **only 1 layer**, or 2 **if** they are spatially meaningful and offer complementary levels (e.g., mid-level + high-level features).
+5. Prefer layers closer to the later stages of the model (but not the final classifier).
+6. Capsule layers are **only allowed** if they retain full spatial dimensions and semantic meaning.
 
 Output Format:
-Return a valid JSON array of objects in the following format, with no extra explanation:
+Return a **valid JSON array of 1 or 2 items**, each formatted as:
 
 [
   {
-    "layer_name": "<human-readable name>",
-    "layer_type": "<PyTorch class>",
-    "model_path": "<exact name from model.named_modules()>",
+    "layer_name": "<descriptive name>",
+    "layer_type": "<PyTorch layer type>",
+    "model_path": "<exact model.named_modules() path>",
     "reason": "<brief justification>"
   }
 ]
 """
-
 
 
 class LayerSelection(BaseModel):
@@ -43,7 +43,7 @@ class LayerSelection(BaseModel):
 def select_visualization_layers(layers: list[dict]) -> list[dict]:
     prompt = f"""The model layers are:\n{layers}\n\n"""
     response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.5-flash",
         contents=prompt,  # prompt 包含 layers 的 json list 字串
         config=types.GenerateContentConfig(
             system_instruction=INSTRUCTION,

@@ -14,13 +14,14 @@ def save_activation_hook(layer_name: str, store_dict: dict):
 
 
 def attach_hooks(
-    model: torch.nn.Module, target_layers: list[str], activation_dict: dict
+    model: torch.nn.Module, selector_output: list[str], activation_dict: dict
 ):
     """
-    Attach forward hooks to the model based on specified layer names.
+    Attach forward hooks using fully qualified layer paths (e.g., 'capsnet.conv3').
     """
+    target_paths = selector_output
     for name, module in model.named_modules():
-        if name in target_layers:
+        if name in target_paths:
             print(f"Hook attached: {name} ({module.__class__.__name__})")
             module.register_forward_hook(save_activation_hook(name, activation_dict))
 
@@ -36,14 +37,12 @@ def resolve_target_layers(selector_output: list[dict]) -> list[str]:
 
 def prepare_model_with_hooks(
     model_class: Type[torch.nn.Module], selector_output: list[dict], device: str = "cpu"
-) -> tuple[torch.nn.Module, dict]:
-    """
-    Create model, resolve target layers, attach hooks, and return model and activations dict.
-    """
+) -> torch.nn.Module:
     model = model_class().to(device)
     activations = {}
     resolved_layers = resolve_target_layers(selector_output)
     attach_hooks(model, resolved_layers, activations)
+    model.activations = activations
     return model
 
 

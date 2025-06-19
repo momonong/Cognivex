@@ -37,6 +37,10 @@ def activation_to_nifti(
     """
     act = torch.load(activation_path)[0]  # shape: [C, D, H, W]
     print(f"[Original activation] shape: {act.shape}")
+    # Flatten if needed (e.g., CapsuleLayer: [32, 8, D, H, W] -> [256, D, H, W])
+    if act.ndim > 4:
+        act = act.reshape(act.shape[0] * act.shape[1], *act.shape[2:])
+    print(f"[Flattened activation] shape: {act.shape}")
 
     # Step 1: Select strongest channel
     channel_idx = select_strongest_channel(act, norm_type)
@@ -55,7 +59,7 @@ def activation_to_nifti(
         act_tensor,
         size=(ref_shape[2], ref_shape[0], ref_shape[1]),  # Z, X, Y
         mode="trilinear",
-        align_corners=False
+        align_corners=False,
     )  # [1, 1, Z, X, Y]
 
     # Step 4: Reshape to [X, Y, Z]
@@ -73,6 +77,7 @@ def activation_to_nifti(
     print("Saved filtered, strongest channel activation.")
     print("path:", output_path)
 
+
 if __name__ == "__main__":
     # Example usage
     activation_to_nifti(
@@ -80,5 +85,5 @@ if __name__ == "__main__":
         reference_nii_path="data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz",
         output_path="output/capsnet/module_test.nii.gz",
         norm_type="l2",
-        threshold_percentile=99.0
+        threshold_percentile=99.0,
     )
