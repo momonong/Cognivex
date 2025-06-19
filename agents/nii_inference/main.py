@@ -5,7 +5,7 @@ from agents.nii_inference.inspect_model import inspect_torch_model
 from agents.nii_inference.choose_layer import select_visualization_layers
 from agents.nii_inference.attach_hook import prepare_model_with_hooks
 from agents.nii_inference.inference import run_inference
-from agents.nii_inference.filter_layer import reselect_layers_by_activation_stats
+from agents.nii_inference.filter_layer import filter_layers_by_gemini
 from agents.nii_inference.act_to_nii import activation_to_nifti
 from agents.nii_inference.resample import resample_activation_to_atlas
 from agents.nii_inference.brain_map import analyze_brain_activation
@@ -55,14 +55,20 @@ def main():
         device=device,
     )
 
-    # Step 4: Dynamic filtering based on activation stats
-    print("\nStep 4: Dynamic filtering based on activation stats")
-    selected_layers = reselect_layers_by_activation_stats(
+    # Step 4: Dynamic filtering based on activation stats via Gemini
+    print("\nStep 4: Dynamic filtering based on activation stats (via Gemini)")
+    selected_layers = filter_layers_by_gemini(
         selected_layers=selected_layers,
         activation_dir=output_dir,
-        save_name_prefix=save_name
+        save_name_prefix=save_name,
+        delete_rejected=True,  # 可選：是否刪除 activation
     )
-    selected_layer_names = [item["model_path"] for item in selected_layers]
+    if not selected_layers:
+        raise ValueError("No valid layers selected after Gemini filtering.")
+
+    selected_layer_names = [layer["model_path"] for layer in selected_layers]
+    print(f"[Summary] Final selected layers: {selected_layer_names}")
+
 
     # Step 5~7: For each selected layer, continue post-processing
     for layer_name in selected_layer_names:

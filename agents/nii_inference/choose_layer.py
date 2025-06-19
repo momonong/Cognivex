@@ -44,7 +44,7 @@ def select_visualization_layers(layers: list[dict]) -> list[dict]:
     prompt = f"""The model layers are:\n{layers}\n\n"""
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=prompt,  # prompt 包含 layers 的 json list 字串
+        contents=prompt, 
         config=types.GenerateContentConfig(
             system_instruction=INSTRUCTION,
             response_mime_type="application/json",
