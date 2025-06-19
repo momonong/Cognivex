@@ -1,13 +1,10 @@
 import os
 import json
 import torch
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
 from pydantic import BaseModel
+from agents.llm_client.gemini_client import gemini_chat
 
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
 
 INSTRUCTION = """
 You are a model activation filter assistant.
@@ -84,21 +81,20 @@ def filter_layers_by_gemini(
 
     print("[Activation Layer Stats Before Gemini Filtering]")
     for layer in layer_inputs:
-        print(f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}")
+        print(
+            f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}"
+        )
 
     prompt = f"The model layer activations are as follows:\n{layer_inputs}\n\nWhich ones should we keep?"
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=list[SelectedLayer],
-        ),
+    response = gemini_chat(
+        prompt=prompt,
+        system_instruction=INSTRUCTION,
+        mime_type="application/json",
+        response_schema=list[SelectedLayer],
     )
 
-    keep_entries = json.loads(response.text)
+    keep_entries = json.loads(response)
     keep_model_paths = [entry["model_path"] for entry in keep_entries]
 
     print(f"[Gemini Selected Layers]:")
@@ -112,7 +108,9 @@ def filter_layers_by_gemini(
         else:
             print(f"✘ Dropping: {layer['model_path']} - {layer['reason']}")
             safe_name = layer["model_path"].replace(".", "_")
-            act_path = os.path.join(activation_dir, f"{save_name_prefix}_{safe_name}.pt")
+            act_path = os.path.join(
+                activation_dir, f"{save_name_prefix}_{safe_name}.pt"
+            )
             if delete_rejected and os.path.exists(act_path):
                 os.remove(act_path)
                 print(f"Deleted: {act_path}")

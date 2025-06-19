@@ -30,7 +30,7 @@ def main():
     input_shape = (1, 1, 91, 91, 109)
     layers = inspect_torch_model(MODEL, input_shape)
     response = select_visualization_layers(layers)
-    selected_layers = json.loads(response.text)
+    selected_layers = json.loads(response)
     print("Selected layers:", selected_layers)
 
     # Extract model paths only

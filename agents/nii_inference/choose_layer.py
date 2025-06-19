@@ -1,12 +1,6 @@
-import os
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
 from pydantic import BaseModel
+from agents.llm_client.gemini_client import gemini_chat
 
-
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 INSTRUCTION = """
 You are a model analysis assistant. Your task is to select the most informative **spatial feature extraction layer(s)** for visualizing activations (e.g., with GradCAM or 3D attention maps).
@@ -40,18 +34,17 @@ class LayerSelection(BaseModel):
     reason: str  # e.g. "Captures mid-level spatial features ..."
 
 
-def select_visualization_layers(layers: list[dict]) -> list[dict]:
-    prompt = f"""The model layers are:\n{layers}\n\n"""
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt, 
-        config=types.GenerateContentConfig(
-            system_instruction=INSTRUCTION,
-            response_mime_type="application/json",
-            response_schema=list[LayerSelection],
-        ),
+def select_visualization_layers(layers: list[dict]) -> list[LayerSelection]:
+    prompt = (
+        f"The model layers are:\n{layers}\n\nPlease select layers for visualization."
     )
-    return response
+
+    return gemini_chat(
+        prompt=prompt,
+        system_instruction=INSTRUCTION,
+        mime_type="application/json",
+        response_schema=list[LayerSelection],
+    )
 
 
 if __name__ == "__main__":
