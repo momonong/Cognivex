@@ -1,20 +1,16 @@
 # scripts/graph_rag/get_graph_schema.py
-from .client import run_cypher_query
+from .neo_client import run_cypher_query
 from collections import defaultdict
 import json
-import os
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
-from agents.llm_client.gemini_client import build_gemini_config, gemini_chat
+from agents.llm_client.gemini_client import gemini_chat
 
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+
+
 
 def get_graph_schema() -> dict:
     schema = {
-        "nodes": defaultdict(list),   # label -> list of properties
-        "relationships": defaultdict(list)  # rel type -> list of properties
+        "nodes": defaultdict(list),  # label -> list of properties
+        "relationships": defaultdict(list),  # rel type -> list of properties
     }
 
     # 1. Node types
@@ -25,11 +21,10 @@ def get_graph_schema() -> dict:
     """
     nodes = run_cypher_query(node_query)
     for row in nodes:
-        for label in row['nodeLabels']:
-            schema['nodes'][label].append({
-                "property": row['propertyName'],
-                "type": row['propertyTypes']
-            })
+        for label in row["nodeLabels"]:
+            schema["nodes"][label].append(
+                {"property": row["propertyName"], "type": row["propertyTypes"]}
+            )
 
     # 2. Relationship types
     rel_query = """
@@ -39,12 +34,12 @@ def get_graph_schema() -> dict:
     """
     rels = run_cypher_query(rel_query)
     for row in rels:
-        schema['relationships'][row['relType']].append({
-            "property": row['propertyName'],
-            "type": row['propertyTypes']
-        })
+        schema["relationships"][row["relType"]].append(
+            {"property": row["propertyName"], "type": row["propertyTypes"]}
+        )
 
     return schema
+
 
 def describe_schema_with_llm(schema: dict) -> str:
     """使用 Gemini 對 graph schema 進行自然語言摘要"""
@@ -66,16 +61,14 @@ def describe_schema_with_llm(schema: dict) -> str:
         Schema:
         {json.dumps(schema, indent=2)}
     """
-    config = build_gemini_config(mime_type="text/plain")
-
-    return gemini_chat(prompt=prompt, config=config)
+    return gemini_chat(prompt=prompt, mime_type="text/plain")
 
 
 if __name__ == "__main__":
     schema = get_graph_schema()
-    print("📘 JSON Schema:")
+    print("JSON Schema:")
     print(json.dumps(schema, indent=2, ensure_ascii=False))
 
-    print("\n📖 Natural Language Summary from Gemini:")
+    print("\nNatural Language Summary from Gemini:")
     summary = describe_schema_with_llm(schema)
     print(summary)

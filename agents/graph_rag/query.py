@@ -1,6 +1,6 @@
 # agents/graph_rag/query.py
 from agents.graph_rag.schema import get_graph_schema
-from agents.graph_rag.client import gemini_chat
+from agents.graph_rag.neo_client import gemini_chat
 import json
 
 def build_cypher_prompt(question: str, schema: dict) -> str:

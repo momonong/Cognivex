@@ -1,4 +1,4 @@
-from .client import run_cypher_query
+from .neo_client import run_cypher_query
 from .query import query_gemini_with_graph
 
 if __name__ == "__main__":
