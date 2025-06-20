@@ -1,10 +1,7 @@
-# scripts/graph_rag/get_graph_schema.py
-from .neo_client import run_cypher_query
+from .neo4j_client import run_cypher_query
 from collections import defaultdict
 import json
 from agents.llm_client.gemini_client import gemini_chat
-
-
 
 
 def get_graph_schema() -> dict:
@@ -15,9 +12,9 @@ def get_graph_schema() -> dict:
 
     # 1. Node types
     node_query = """
-    CALL db.schema.nodeTypeProperties()
-    YIELD nodeLabels, propertyName, propertyTypes
-    RETURN nodeLabels, propertyName, propertyTypes
+        CALL db.schema.nodeTypeProperties()
+        YIELD nodeLabels, propertyName, propertyTypes
+        RETURN nodeLabels, propertyName, propertyTypes
     """
     nodes = run_cypher_query(node_query)
     for row in nodes:
@@ -28,9 +25,9 @@ def get_graph_schema() -> dict:
 
     # 2. Relationship types
     rel_query = """
-    CALL db.schema.relTypeProperties()
-    YIELD relType, propertyName, propertyTypes
-    RETURN relType, propertyName, propertyTypes
+        CALL db.schema.relTypeProperties()
+        YIELD relType, propertyName, propertyTypes
+        RETURN relType, propertyName, propertyTypes
     """
     rels = run_cypher_query(rel_query)
     for row in rels:
@@ -64,11 +61,12 @@ def describe_schema_with_llm(schema: dict) -> str:
     return gemini_chat(prompt=prompt, mime_type="text/plain")
 
 
-if __name__ == "__main__":
+def summarize_graph_schema() -> str:
+    """獲取圖譜 schema 並用 LLM 生成自然語言摘要"""
     schema = get_graph_schema()
-    print("JSON Schema:")
-    print(json.dumps(schema, indent=2, ensure_ascii=False))
+    return describe_schema_with_llm(schema)
 
-    print("\nNatural Language Summary from Gemini:")
-    summary = describe_schema_with_llm(schema)
+
+if __name__ == "__main__":
+    summary = summarize_graph_schema()
     print(summary)
