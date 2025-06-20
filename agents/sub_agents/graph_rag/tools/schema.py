@@ -64,6 +64,7 @@ def describe_schema_with_llm(schema: dict) -> str:
 def summarize_graph_schema() -> str:
     """獲取圖譜 schema 並用 LLM 生成自然語言摘要"""
     schema = get_graph_schema()
+    print("function call: get_graph_schema()")
     return describe_schema_with_llm(schema)
 
 

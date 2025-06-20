@@ -6,20 +6,39 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-# Import tools
-from agents.sub_agents.graph_rag.tools import schema, query, evaluate
+# Tools
+from agents.sub_agents.graph_rag.tools.schema import summarize_graph_schema
+from agents.sub_agents.graph_rag.tools.query import graph_rag_query, regenerate_cypher_with_strategy
+from agents.sub_agents.graph_rag.tools.evaluate import evaluate_query
 
-# 1. Define the Agent with its tools
+# -----------------------
+# 1. Define ADK Agent
+# -----------------------
+
 INSTRUCTIONS = """
-You are a GraphRAG agent that uses tools to answer graph questions.
-Workflow:
-1. Call summarize_graph_schema() → get schema summary.
-2. Call generate_cypher() with the question → get Cypher.
-3. Call run_query() with the Cypher → get raw results.
-4. Call evaluate_and_decide() with cypher, question & results → decide if query is good.
-5. If evaluation fails, you may re-ask or adjust externally.
-6. Return a JSON matching { "answer": "<your answer>" }.
+You are a GraphRAG agent that answers graph-based questions using structured reasoning.
+
+Follow these steps strictly and do NOT skip any step:
+
+1. First, call `summarize_graph_schema()` to understand the schema.
+2. Then, call `graph_rag_query(question)` to get the Cypher query and its result.
+3. Next, call `evaluate_query(question, result, expected_fields=["region", "function"], min_count=2)` to check if the result is valid and complete. You MUST run this step even if the result looks fine.
+4. If `evaluate_query().is_valid == False`, then you MUST call `regenerate_cypher_with_strategy()` using the provided strategy and re-run the Cypher.
+5. Once the result is valid and complete, call `synthesize_answer()` to generate the final answer.
+6. Finally, return: { "answer": "<your final natural language answer>" }
+
+You MUST call `evaluate_query()` before deciding whether to answer or retry.
+Do NOT skip evaluation even if the query result looks complete.
+
+NEVER return the final answer before evaluation.
+
+Example format:
+{
+  "answer": "The regions related to Alzheimer's disease include A, B, and C. These are associated with functions such as X, Y, and Z."
+}
 """
+
+
 
 graph_rag_agent = Agent(
     name="graph_rag_agent",
@@ -27,24 +46,28 @@ graph_rag_agent = Agent(
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
     instruction=INSTRUCTIONS,
     tools=[
-        schema.summarize_graph_schema,
-        query.graph_rag_answer,
-        # evaluate.evaluate_and_decide,
+        summarize_graph_schema,
+        graph_rag_query,
+        regenerate_cypher_with_strategy,
+        evaluate_query,
     ],
-    input_schema=None,  # we’ll pass raw JSON
-    output_schema=None,  # agent returns free-form JSON with "answer"
     output_key="answer",
 )
 
+# -----------------------
 # 2. Set up session & runner
+# -----------------------
+
 APP_NAME = "graph_rag_adk"
 USER_ID = "test_user"
 SESSION_ID = "session1"
 
+# -----------------------
+# 3. Test Driver (CLI entrypoint)
+# -----------------------
 
-# 3. Test driver
+
 async def main():
-    # 初始化 session service 與 runner
     session_service = InMemorySessionService()
     await session_service.create_session(
         app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
@@ -56,10 +79,10 @@ async def main():
         session_service=session_service,
     )
 
-    # 測試問題
+    # Sample input
     payload = json.dumps(
         {
-            "question": "What brain regions are associated with Alzheimer's disease, and what functions do they perform?",
+            "question": "What brain regions are associated with Alzheimer's disease, and what functions do they perform?"
         }
     )
     user_content = types.Content(role="user", parts=[types.Part(text=payload)])
@@ -75,8 +98,12 @@ async def main():
 
     print("\n<<< Agent’s final response:\n", final_answer, "\n")
 
-    # Optional: 檢查 session 狀態
-    session = await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+    # Optional: show session memory
+    session = await session_service.get_session(
+        app_name=APP_NAME,
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+    )
     print("Session state:", json.dumps(session.state, indent=2))
 
 
