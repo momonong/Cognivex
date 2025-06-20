@@ -27,7 +27,6 @@ def build_gemini_config(
         "response_schema": response_schema,
     }
 
-
     if input_schema is not None:
         kwargs["input_schema"] = input_schema
 
@@ -60,9 +59,4 @@ def gemini_chat(
         config=config,
     )
 
-    if mime_type == "application/json":
-        return response.candidates[0].content.parts[0].text  # 結構化 JSON 回傳
-    elif mime_type == "text/plain":
-        return response.candidates[0].content.parts[0].text
-    else:
-        return str(response.candidates[0].content.parts[0].text)  # 預設轉為字串
+    return response.candidates[0].content.parts[0].text
