@@ -117,9 +117,9 @@ def regenerate_cypher_with_strategy(
 ) -> str:
     print(f"\nRewriting Cypher with strategy: {strategy}")
     base_prompt = f"""
-The following Cypher query returned poor or incomplete results:
-{original_cypher}
-"""
+        The following Cypher query returned poor or incomplete results:
+        {original_cypher}
+    """
     extra = f"Strategy: {strategy}\nPlease rewrite the query using this strategy. Return only the new Cypher."
     return generate_cypher_from_prompt(question, schema_text, base_prompt, extra)
 
@@ -142,16 +142,16 @@ def run_cypher(cypher: str) -> list:
 
 def synthesize_answer(question: str, result: list) -> str:
     prompt = f"""
-You are a helpful assistant. Answer the question concisely based on the data below.
+        You are a helpful assistant. Answer the question concisely based on the data below.
 
-Question:
-{question}
+        Question:
+        {question}
 
-Data:
-{json.dumps(result[:10], indent=2)}
+        Data:
+        {json.dumps(result[:10], indent=2)}
 
-Answer:
-"""
+        Answer:
+    """
     return gemini_chat(prompt=prompt, mime_type="text/plain").strip()
 
 
