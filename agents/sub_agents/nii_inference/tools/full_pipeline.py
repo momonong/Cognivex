@@ -1,123 +1,130 @@
-from typing import TypedDict, List
+import torch
 import os
+import json
 
-class NiiInferenceInput(TypedDict):
-    subject_id: str
-    nii_path: str
-    model_path: str
-    output_name: str
+from agents.sub_agents.nii_inference.tools.inspect_model import inspect_torch_model
+from agents.sub_agents.nii_inference.tools.choose_layer import select_visualization_layers
+from agents.sub_agents.nii_inference.tools.attach_hook import prepare_model_with_hooks
+from agents.sub_agents.nii_inference.tools.inference import run_inference
+from agents.sub_agents.nii_inference.tools.filter_layer import filter_layers_by_gemini
+from agents.sub_agents.nii_inference.tools.act_to_nii import activation_to_nifti
+from agents.sub_agents.nii_inference.tools.resample import resample_activation_to_atlas
+from agents.sub_agents.nii_inference.tools.brain_map import analyze_brain_activation
+from agents.sub_agents.nii_inference.tools.visualize import visualize_activation_map
 
-class ActivationResult(TypedDict):
-    layer: str
-    summary: str
-    visualization_path: str
+from scripts.capsnet.model import CapsNetRNN
 
-class NiiInferenceOutput(TypedDict):
-    classification: str
-    final_layers: List[str]
-    activation_results: List[ActivationResult]
+SUBJECT_ID = "sub-14"
+MODEL_PATH = "model/capsnet/best_capsnet_rnn.pth"
+NII_PATH = "data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz"
+DEVICE = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps" if torch.backends.mps.is_available() else "cpu"
+)
+MODEL = CapsNetRNN().to(DEVICE)
+INPUT_SHAPE = (1, 1, 91, 91, 109)
+WINDOW = 5
+STRIDE = 3
+OUTPUT_DIR = "output/agent_test"
+SAVE_NAME = "agent_test"
+VIS_DIR_PREFIX = f"figures/agent_test/"
+NORM_TYPE = "l2"
+ACT_THRESHOLD_PERCENTILE = 99.0
+ATLAS_PATH = "data/aal3/AAL3v1_1mm.nii.gz"
+LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt"
+VIS_FIG_NAME = "activation_map_mosaic.png"
+VIS_THRESHOLD_PERCENTILE = 0.1
 
-def run_full_inference_pipeline(
-    subject_id: str,
-    nii_path: str,
-    model_path: str = "model/capsnet/best_capsnet_rnn.pth",
-    output_name: str = "module_test"
-) -> NiiInferenceOutput:
-    from scripts.capsnet.model import CapsNetRNN
-    import torch
-    import json
-    from agents.sub_agents.nii_inference.tools.inspect_model import inspect_torch_model
-    from agents.sub_agents.nii_inference.tools.choose_layer import select_visualization_layers
-    from agents.sub_agents.nii_inference.tools.attach_hook import prepare_model_with_hooks
-    from agents.sub_agents.nii_inference.tools.inference import run_inference
-    from agents.sub_agents.nii_inference.tools.filter_layer import filter_layers_by_gemini
-    from agents.sub_agents.nii_inference.tools.act_to_nii import activation_to_nifti
-    from agents.sub_agents.nii_inference.tools.resample import resample_activation_to_atlas
-    from agents.sub_agents.nii_inference.tools.brain_map import analyze_brain_activation
-    from agents.sub_agents.nii_inference.tools.visualize import visualize_activation_map
 
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
-    output_dir = f"output/{output_name}"
-    output_prefix = os.path.join(output_dir, output_name)
-    os.makedirs(output_dir, exist_ok=True)
+def pipeline():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    MODEL = CapsNetRNN()
-    input_shape = (1, 1, 91, 91, 109)
-    layers = inspect_torch_model(MODEL, input_shape)
-    selected_layers = json.loads(select_visualization_layers(layers))
+    # Step 1: Inspect model structure
+    print("\nStep 1: Inspect model structure")
+    layers = inspect_torch_model(MODEL, INPUT_SHAPE)
+    response = select_visualization_layers(layers)
+    selected_layers = json.loads(response)
+    print("Selected layers:", selected_layers)
+
+    # Extract model paths only
     selected_layer_names = [item["model_path"] for item in selected_layers]
 
-    model = prepare_model_with_hooks(CapsNetRNN, selected_layers, device=device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.to(device).eval()
+    # Step 2: Prepare model with hook + load weights
+    print("\nStep 2: Attach hook and load weights")
+    model = prepare_model_with_hooks(MODEL, selected_layers, device=DEVICE)
+    model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    model.to(DEVICE).eval()
 
+    # Step 3: Inference + save activation
+    print("\nStep 3: Real data inference")
     run_inference(
         model=model,
-        nii_path=nii_path,
-        save_dir=output_dir,
-        save_name=output_name,
+        nii_path=NII_PATH,
+        save_dir=OUTPUT_DIR,
+        save_name=SAVE_NAME,
         selected_layer_names=selected_layer_names,
-        window=5,
-        stride=3,
-        device=device,
+        window=WINDOW,
+        stride=STRIDE,
+        device=DEVICE,
     )
 
+    # Step 4: Dynamic filtering based on activation stats via Gemini
+    print("\nStep 4: Dynamic filtering based on activation stats (via Gemini)")
     selected_layers = filter_layers_by_gemini(
         selected_layers=selected_layers,
-        activation_dir=output_dir,
-        save_name_prefix=output_name,
-        delete_rejected=True,
+        activation_dir=OUTPUT_DIR,
+        save_name_prefix=SAVE_NAME,
+        delete_rejected=True,  # 可選：是否刪除 activation
     )
-
     if not selected_layers:
         raise ValueError("No valid layers selected after Gemini filtering.")
 
     selected_layer_names = [layer["model_path"] for layer in selected_layers]
+    print(f"[Summary] Final selected layers: {selected_layer_names}")
+    output_prefix = os.path.join(OUTPUT_DIR, SAVE_NAME)
 
-    activation_results = []
+    # Step 5~8: For each selected layer, continue post-processing
     for layer_name in selected_layer_names:
         safe_layer_name = layer_name.replace(".", "_")
         act_path = f"{output_prefix}_{safe_layer_name}.pt"
         nii_output = f"{output_prefix}_{safe_layer_name}.nii.gz"
-        vis_dir = f"figures/{output_name}_{safe_layer_name}"
+        vis_dir = f"{VIS_DIR_PREFIX}/{SAVE_NAME}_{safe_layer_name}"
         os.makedirs(vis_dir, exist_ok=True)
 
+        print(f"\nStep 5: Convert activation to NIfTI for layer: {layer_name}")
+        assert os.path.exists(act_path), f"Missing activation file: {act_path}"
         activation_to_nifti(
             activation_path=act_path,
-            reference_nii_path=nii_path,
+            reference_nii_path=NII_PATH,
             output_path=nii_output,
-            norm_type="l2",
-            threshold_percentile=99.0,
+            norm_type=NORM_TYPE,
+            threshold_percentile=ACT_THRESHOLD_PERCENTILE,
         )
 
+        print(f"\nStep 6: Resample to atlas for layer: {layer_name}")
         resampled_path = resample_activation_to_atlas(
             act_path=nii_output,
-            atlas_path="data/aal3/AAL3v1_1mm.nii.gz",
-            output_dir=os.path.join(output_dir, "resampled", safe_layer_name),
+            atlas_path=ATLAS_PATH,
+            output_dir=os.path.join(OUTPUT_DIR, "resampled", safe_layer_name),
         )
 
+        print(f"\nStep 7: Analyze brain activation for layer: {layer_name}")
         df_result = analyze_brain_activation(
             activation_path=resampled_path,
-            atlas_path="data/aal3/AAL3v1_1mm.nii.gz",
-            label_path="data/aal3/AAL3v1_1mm.nii.txt",
+            atlas_path=ATLAS_PATH,
+            label_path=LABEL_PATH,
         )
+        print(df_result)
 
-        vis_path = os.path.join(vis_dir, "activation_map_mosaic.png")
+        print(f"\nStep 8: Visualize activation for layer: {layer_name}")
         visualize_activation_map(
             activation_path=resampled_path,
-            output_path=vis_path,
-            threshold=0.1,
-            title=f"Activation Map ({subject_id} {layer_name})",
+            output_path=os.path.join(vis_dir, VIS_FIG_NAME),
+            threshold=VIS_THRESHOLD_PERCENTILE,
+            title=f"Activation Map ({SUBJECT_ID} {layer_name})",
         )
 
-        activation_results.append({
-            "layer": layer_name,
-            "summary": df_result.to_string(index=False),
-            "visualization_path": vis_path,
-        })
 
-    return {
-        "classification": "AD",  # optional: 你可以根據 logits 真實分類
-        "final_layers": selected_layer_names,
-        "activation_results": activation_results,
-    }
+if __name__ == "__main__":
+    pipeline()

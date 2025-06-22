@@ -35,10 +35,7 @@ def resolve_target_layers(selector_output: list[dict]) -> list[str]:
     )
 
 
-def prepare_model_with_hooks(
-    model_class: Type[torch.nn.Module], selector_output: list[dict], device: str = "cpu"
-) -> torch.nn.Module:
-    model = model_class().to(device)
+def prepare_model_with_hooks(model, selector_output: list[dict]) -> torch.nn.Module:
     activations = {}
     resolved_layers = resolve_target_layers(selector_output)
     attach_hooks(model, resolved_layers, activations)
