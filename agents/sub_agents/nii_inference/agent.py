@@ -1,5 +1,6 @@
 from google.adk.agents.llm_agent import Agent
-from agents.sub_agents.nii_inference.tools.full_pipeline import run_full_inference_pipeline
+from agents.sub_agents.nii_inference.tools.full_pipeline import pipeline
+
 
 INSTRUCTION = """
 You are an fMRI NIfTI processing agent. You must run the full inference pipeline on a given .nii.gz brain image.
@@ -15,13 +16,19 @@ Your tasks include:
 
 Always return the result in this format:
 {
-  "classification": "<AD or CN>",
-  "final_layers": ["conv3", "fc1"],
+  "classification": "AD or CN",
+  "final_layers": [
+    {
+      "model_path": "capsnet.conv3",
+      "reason": "Selected because it has high nonzero activation and provides meaningful high-level spatial features."
+    },
+    ...
+  ],
   "activation_results": [
     {
       "layer": "conv3",
-      "summary": "This activation involves regions such as the hippocampus and posterior cingulate...",
-      "visualization_path": "figures/..."
+      "summary": "This activation map shows significant involvement in the right angular gyrus, superior frontal, and precuneus regions, often linked to early Alzheimer's pathology.",
+      "visualization_path": "figures/agent_test/activation_map_mosaic.png"
     },
     ...
   ]
@@ -33,6 +40,52 @@ nii_inference_agent = Agent(
     model="gemini-2.5-flash",
     description="Agent for full NIfTI fMRI inference and semantic analysis.",
     instruction=INSTRUCTION,
-    tools=[run_full_inference_pipeline],
-    output_key="activation_results",  # 或改成 return 完整物件
+    tools=[pipeline],
+    output_key="activation_results",
 )
+
+# -----------------------
+# Set up session & runner
+# -----------------------
+
+APP_NAME = "nii_inference_adk"
+USER_ID = "test_user"
+SESSION_ID = "nii-session-1"
+
+if __name__ == "__main__":
+    import asyncio
+    from google.adk.runners import Runner
+    from google.adk.sessions import InMemorySessionService
+    from google.genai import types
+
+    async def main():
+        session_service = InMemorySessionService()
+        await session_service.create_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+        )
+
+        runner = Runner(
+            agent=nii_inference_agent,
+            app_name=APP_NAME,
+            session_service=session_service,
+        )
+
+        user_message = types.Content(
+            role="user",
+            parts=[types.Part(text="Run full NIfTI inference on the provided data.")],
+        )
+
+        print("\n>>> Sending request to nii_inference_agent...\n")
+
+        final_result = None
+        async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            new_message=user_message,
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_result = event.content.parts[0].text
+
+        print("\n<<< Agent’s final response:\n", final_result)
+
+    asyncio.run(main())

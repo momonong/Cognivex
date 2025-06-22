@@ -2,15 +2,33 @@ import torch
 import os
 import json
 
-from agents.sub_agents.nii_inference.tools.inspect_model import inspect_torch_model
-from agents.sub_agents.nii_inference.tools.choose_layer import select_visualization_layers
-from agents.sub_agents.nii_inference.tools.attach_hook import prepare_model_with_hooks
-from agents.sub_agents.nii_inference.tools.inference import run_inference
-from agents.sub_agents.nii_inference.tools.filter_layer import filter_layers_by_gemini
-from agents.sub_agents.nii_inference.tools.act_to_nii import activation_to_nifti
-from agents.sub_agents.nii_inference.tools.resample import resample_activation_to_atlas
-from agents.sub_agents.nii_inference.tools.brain_map import analyze_brain_activation
-from agents.sub_agents.nii_inference.tools.visualize import visualize_activation_map
+from agents.sub_agents.nii_inference.tools.pipelines.inspect_model import (
+    inspect_torch_model,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.choose_layer import (
+    select_visualization_layers,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.attach_hook import (
+    prepare_model_with_hooks,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.inference import (
+    run_nii_inference,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.filter_layer import (
+    filter_layers_by_gemini,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.act_to_nii import (
+    activation_to_nifti,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.resample import (
+    resample_activation_to_atlas,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.brain_map import (
+    analyze_brain_activation,
+)
+from agents.sub_agents.nii_inference.tools.pipelines.visualize import (
+    visualize_activation_map,
+)
 
 from scripts.capsnet.model import CapsNetRNN
 
@@ -39,6 +57,12 @@ VIS_THRESHOLD_PERCENTILE = 0.1
 
 def pipeline():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    results = {
+        "classification": None,
+        "final_layers": [],
+        "activation_results": [],
+        "visualization_results": None,
+    }
 
     # Step 1: Inspect model structure
     print("\nStep 1: Inspect model structure")
@@ -58,7 +82,7 @@ def pipeline():
 
     # Step 3: Inference + save activation
     print("\nStep 3: Real data inference")
-    run_inference(
+    prediction_result = run_nii_inference(
         model=model,
         nii_path=NII_PATH,
         save_dir=OUTPUT_DIR,
@@ -68,19 +92,21 @@ def pipeline():
         stride=STRIDE,
         device=DEVICE,
     )
+    results["classification"] = prediction_result
 
     # Step 4: Dynamic filtering based on activation stats via Gemini
     print("\nStep 4: Dynamic filtering based on activation stats (via Gemini)")
-    selected_layers = filter_layers_by_gemini(
+    keep_entries = filter_layers_by_gemini(
         selected_layers=selected_layers,
         activation_dir=OUTPUT_DIR,
         save_name_prefix=SAVE_NAME,
         delete_rejected=True,  # 可選：是否刪除 activation
     )
-    if not selected_layers:
+    if not keep_entries:
         raise ValueError("No valid layers selected after Gemini filtering.")
 
-    selected_layer_names = [layer["model_path"] for layer in selected_layers]
+    results["final_layers"] = keep_entries
+    selected_layer_names = [layer["model_path"] for layer in keep_entries]
     print(f"[Summary] Final selected layers: {selected_layer_names}")
     output_prefix = os.path.join(OUTPUT_DIR, SAVE_NAME)
 
@@ -115,15 +141,20 @@ def pipeline():
             atlas_path=ATLAS_PATH,
             label_path=LABEL_PATH,
         )
+        results["activation_results"] = df_result.to_dict(orient="records")
         print(df_result)
 
         print(f"\nStep 8: Visualize activation for layer: {layer_name}")
-        visualize_activation_map(
+        vis_output_path = visualize_activation_map(
             activation_path=resampled_path,
             output_path=os.path.join(vis_dir, VIS_FIG_NAME),
             threshold=VIS_THRESHOLD_PERCENTILE,
             title=f"Activation Map ({SUBJECT_ID} {layer_name})",
         )
+        results["visualization_results"] = vis_output_path
+
+        print("RESULTS:", results)
+        return results
 
 
 if __name__ == "__main__":

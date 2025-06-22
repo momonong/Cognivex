@@ -5,7 +5,6 @@ from pydantic import BaseModel
 from agents.llm_client.gemini_client import gemini_chat
 
 
-
 INSTRUCTION = """
 You are a model activation filter assistant.
 
@@ -56,11 +55,17 @@ def filter_layers_by_gemini(
     selected_layers: list[dict],
     activation_dir: str,
     save_name_prefix: str,
-    delete_rejected=True,
-):
-    """Call Gemini to decide which layers to keep based on activation stats + semantic metadata"""
-    layer_inputs = []
+    delete_rejected: bool = True,
+) -> list[dict]:
+    """
+    Call Gemini to decide which layers to keep based on activation stats + semantic metadata.
 
+    Returns:
+        A list of dicts with keys: model_path, reason
+    """
+
+    # Collect activation statistics
+    layer_inputs = []
     for layer in selected_layers:
         model_path = layer["model_path"]
         safe_name = model_path.replace(".", "_")
@@ -68,6 +73,7 @@ def filter_layers_by_gemini(
         if not os.path.exists(act_path):
             print(f"[Skip] Activation not found: {act_path}")
             continue
+
         stats = get_activation_stats(act_path)
         layer_inputs.append(
             {
@@ -79,14 +85,17 @@ def filter_layers_by_gemini(
             }
         )
 
+    # Print activation statistics
     print("[Activation Layer Stats Before Gemini Filtering]")
     for layer in layer_inputs:
         print(
             f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}"
         )
 
-    prompt = f"The model layer activations are as follows:\n{layer_inputs}\n\nWhich ones should we keep?"
+    # Build Gemini prompt
+    prompt = f"The model layer activations are as follows:\n{json.dumps(layer_inputs, indent=2)}\n\nWhich ones should we keep and why?"
 
+    # Gemini response
     response = gemini_chat(
         prompt=prompt,
         system_instruction=INSTRUCTION,
@@ -101,11 +110,9 @@ def filter_layers_by_gemini(
     for entry in keep_entries:
         print(f"✔ {entry['model_path']:30} — {entry['reason']}")
 
-    final_layers = []
+    # Remove rejected activation files
     for layer in selected_layers:
-        if layer["model_path"] in keep_model_paths:
-            final_layers.append(layer)
-        else:
+        if layer["model_path"] not in keep_model_paths:
             print(f"✘ Dropping: {layer['model_path']} - {layer['reason']}")
             safe_name = layer["model_path"].replace(".", "_")
             act_path = os.path.join(
@@ -115,4 +122,4 @@ def filter_layers_by_gemini(
                 os.remove(act_path)
                 print(f"Deleted: {act_path}")
 
-    return final_layers
+    return keep_entries  # List[{"model_path", "reason"}]

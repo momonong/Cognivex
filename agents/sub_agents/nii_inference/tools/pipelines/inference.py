@@ -28,7 +28,7 @@ def load_nifti_and_preprocess(path: str, window: int, stride: int) -> torch.Tens
     return tensor
 
 
-def run_inference(
+def run_nii_inference(
     model: torch.nn.Module,
     nii_path: str,
     save_dir: str,
@@ -62,14 +62,17 @@ def run_inference(
                 print(f"Saved activation: {save_path}")
             else:
                 print(f"Warning: Activation not found for layer '{layer_name}'")
+    
+    # Save final prediction result
+    prediction_result = "AD" if final_pred == 1 else "CN"
+    return prediction_result
 
 
 # Optional: run as script
 if __name__ == "__main__":
     import torch
     from scripts.capsnet.model import CapsNetRNN
-    from agents.nii_inference.attach_hook import attach_hooks
-    from agents.nii_inference.inference import run_inference
+    from agents.sub_agents.nii_inference.tools.pipelines.attach_hook import attach_hooks
 
     # [1] 初始化模型並載入權重
     model = CapsNetRNN()
