@@ -42,7 +42,7 @@ def pipeline():
 
     # Step 1: Inspect model structure
     print("\nStep 1: Inspect model structure")
-    layers = inspect_torch_model(MODEL, INPUT_SHAPE)
+    layers = inspect_torch_model(MODEL, INPUT_SHAPE, DEVICE)
     response = select_visualization_layers(layers)
     selected_layers = json.loads(response)
     print("Selected layers:", selected_layers)
@@ -52,7 +52,7 @@ def pipeline():
 
     # Step 2: Prepare model with hook + load weights
     print("\nStep 2: Attach hook and load weights")
-    model = prepare_model_with_hooks(MODEL, selected_layers, device=DEVICE)
+    model = prepare_model_with_hooks(MODEL, selected_layers)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
     model.to(DEVICE).eval()
 

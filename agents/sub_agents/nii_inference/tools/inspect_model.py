@@ -20,7 +20,7 @@ def parse_summary_text(summary_text: str):
     return layers
 
 
-def inspect_torch_model(model, input_shape: tuple) -> list[dict]:
+def inspect_torch_model(model, input_shape: tuple, device: str) -> list[dict]:
     """
     Return layer information from PyTorch model using named_modules, matched with torchsummary.
     :param MODEL: PyTorch model instance
@@ -30,7 +30,7 @@ def inspect_torch_model(model, input_shape: tuple) -> list[dict]:
     # Get summary string
     buffer = io.StringIO()
     with redirect_stdout(buffer):
-        summary(model, input_size=input_shape, device="cpu")
+        summary(model, input_size=input_shape, device=device)
     summary_text = buffer.getvalue()
     parsed_layers = parse_summary_text(summary_text)
 
