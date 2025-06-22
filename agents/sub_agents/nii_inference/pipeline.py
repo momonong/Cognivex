@@ -1,15 +1,15 @@
 import torch
 import os
 import json
-from agents.nii_inference.inspect_model import inspect_torch_model
-from agents.nii_inference.choose_layer import select_visualization_layers
-from agents.nii_inference.attach_hook import prepare_model_with_hooks
-from agents.nii_inference.inference import run_inference
-from agents.nii_inference.filter_layer import filter_layers_by_gemini
-from agents.nii_inference.act_to_nii import activation_to_nifti
-from agents.nii_inference.resample import resample_activation_to_atlas
-from agents.nii_inference.brain_map import analyze_brain_activation
-from agents.nii_inference.visualize import visualize_activation_map
+from agents.sub_agents.nii_inference.tools.inspect_model import inspect_torch_model
+from agents.sub_agents.nii_inference.tools.choose_layer import select_visualization_layers
+from agents.sub_agents.nii_inference.tools.attach_hook import prepare_model_with_hooks
+from agents.sub_agents.nii_inference.tools.inference import run_inference
+from agents.sub_agents.nii_inference.tools.filter_layer import filter_layers_by_gemini
+from agents.sub_agents.nii_inference.tools.act_to_nii import activation_to_nifti
+from agents.sub_agents.nii_inference.tools.resample import resample_activation_to_atlas
+from agents.sub_agents.nii_inference.tools.brain_map import analyze_brain_activation
+from agents.sub_agents.nii_inference.tools.visualize import visualize_activation_map
 from scripts.capsnet.model import CapsNetRNN
 
 

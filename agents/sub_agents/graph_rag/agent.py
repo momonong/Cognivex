@@ -8,7 +8,10 @@ from google.genai import types
 
 # Tools
 from agents.sub_agents.graph_rag.tools.schema import summarize_graph_schema
-from agents.sub_agents.graph_rag.tools.query import graph_rag_query, regenerate_cypher_with_strategy
+from agents.sub_agents.graph_rag.tools.query import (
+    graph_rag_query,
+    regenerate_cypher_with_strategy,
+)
 from agents.sub_agents.graph_rag.tools.evaluate import evaluate_query
 
 # -----------------------
@@ -39,7 +42,6 @@ Example format:
 """
 
 
-
 graph_rag_agent = Agent(
     name="graph_rag_agent",
     model="gemini-2.5-flash",
@@ -67,45 +69,45 @@ SESSION_ID = "session1"
 # -----------------------
 
 
-async def main():
-    session_service = InMemorySessionService()
-    await session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
-    )
-
-    runner = Runner(
-        agent=graph_rag_agent,
-        app_name=APP_NAME,
-        session_service=session_service,
-    )
-
-    # Sample input
-    payload = json.dumps(
-        {
-            "question": "What brain regions are associated with Alzheimer's disease, and what functions do they perform?"
-        }
-    )
-    user_content = types.Content(role="user", parts=[types.Part(text=payload)])
-
-    print("\n>>> Sending question to graph_rag_agent:\n", payload, "\n")
-
-    final_answer = None
-    async for event in runner.run_async(
-        user_id=USER_ID, session_id=SESSION_ID, new_message=user_content
-    ):
-        if event.is_final_response() and event.content and event.content.parts:
-            final_answer = event.content.parts[0].text
-
-    print("\n<<< Agent’s final response:\n", final_answer, "\n")
-
-    # Optional: show session memory
-    session = await session_service.get_session(
-        app_name=APP_NAME,
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-    )
-    print("Session state:", json.dumps(session.state, indent=2))
-
-
 if __name__ == "__main__":
+
+    async def main():
+        session_service = InMemorySessionService()
+        await session_service.create_session(
+            app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+        )
+
+        runner = Runner(
+            agent=graph_rag_agent,
+            app_name=APP_NAME,
+            session_service=session_service,
+        )
+
+        # Sample input
+        payload = json.dumps(
+            {
+                "question": "What brain regions are associated with Alzheimer's disease, and what functions do they perform?"
+            }
+        )
+        user_content = types.Content(role="user", parts=[types.Part(text=payload)])
+
+        print("\n>>> Sending question to graph_rag_agent:\n", payload, "\n")
+
+        final_answer = None
+        async for event in runner.run_async(
+            user_id=USER_ID, session_id=SESSION_ID, new_message=user_content
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_answer = event.content.parts[0].text
+
+        print("\n<<< Agent’s final response:\n", final_answer, "\n")
+
+        # Optional: show session memory
+        session = await session_service.get_session(
+            app_name=APP_NAME,
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+        )
+        print("Session state:", json.dumps(session.state, indent=2))
+
     asyncio.run(main())
