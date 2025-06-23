@@ -28,9 +28,9 @@ Return a **valid JSON array of 1 or 2 items**, each formatted as:
 
 
 class LayerSelection(BaseModel):
-    layer_name: str  # e.g. "Conv3d-3"
+    layer_name: str  # e.g. "Conv3d-4"
     layer_type: str  # e.g. "Conv3d"
-    model_path: str  # e.g. "capsnet.conv2"
+    model_path: str  # e.g. "capsnet.conv3"
     reason: str  # e.g. "Captures mid-level spatial features ..."
 
 

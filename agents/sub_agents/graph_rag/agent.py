@@ -1,10 +1,6 @@
 import json
 import asyncio
-
-from google.adk.agents.llm_agent import Agent
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
-from google.genai import types
+from google.adk.agents import LlmAgent
 
 # Tools
 from agents.sub_agents.graph_rag.tools.schema import summarize_graph_schema
@@ -15,7 +11,7 @@ from agents.sub_agents.graph_rag.tools.query import (
 from agents.sub_agents.graph_rag.tools.evaluate import evaluate_query
 
 # -----------------------
-# 1. Define ADK Agent
+# Define ADK Agent
 # -----------------------
 
 INSTRUCTIONS = """
@@ -42,7 +38,7 @@ Example format:
 """
 
 
-graph_rag_agent = Agent(
+graph_rag_agent = LlmAgent(
     name="graph_rag_agent",
     model="gemini-2.5-flash",
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
@@ -53,23 +49,23 @@ graph_rag_agent = Agent(
         regenerate_cypher_with_strategy,
         evaluate_query,
     ],
-    output_key="answer",
+    output_key="graph_rag_result",
 )
 
-# -----------------------
-# 2. Set up session & runner
-# -----------------------
-
-APP_NAME = "graph_rag_adk"
-USER_ID = "test_user"
-SESSION_ID = "session1"
 
 # -----------------------
-# 3. Test Driver (CLI entrypoint)
+# Set up session & runner
 # -----------------------
 
 
 if __name__ == "__main__":
+    from google.adk.sessions import InMemorySessionService
+    from google.adk.runners import Runner
+    from google.genai import types
+
+    APP_NAME = "graph_rag_adk"
+    USER_ID = "test_user"
+    SESSION_ID = "session1"
 
     async def main():
         session_service = InMemorySessionService()

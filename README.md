@@ -21,9 +21,9 @@ poetry run python -m scripts.inference \
 ### actvation 視覺化順序
 ```shell
 poetry run python -m scripts.group.infer
-poetry run python -m scripts.group.acc_nii
+poetry run python -m scripts.group.act_nii
 poetry run python -m scripts.group.resample
-poetry run python -m scripts.group.get_avg_map # optional
+poetry run python -m scripts.group.get_avg_act # optional
 poetry run python -m scripts.group.brain_map
 poetry run python -m scripts.group.check_map
 ```

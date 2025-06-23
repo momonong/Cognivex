@@ -1,6 +1,11 @@
-from google.adk.agents.llm_agent import Agent
+from google.adk.agents import LlmAgent
+
+# Tool
 from agents.sub_agents.nii_inference.tools.full_pipeline import pipeline
 
+# -----------------------
+# Define ADK Agent
+# -----------------------
 
 INSTRUCTION = """
 You are an fMRI NIfTI processing agent. You must run the full inference pipeline on a given .nii.gz brain image.
@@ -35,28 +40,29 @@ Always return the result in this format:
 }
 """
 
-nii_inference_agent = Agent(
+nii_inference_agent = LlmAgent(
     name="nii_inference_agent",
     model="gemini-2.5-flash",
     description="Agent for full NIfTI fMRI inference and semantic analysis.",
     instruction=INSTRUCTION,
     tools=[pipeline],
-    output_key="activation_results",
+    output_key="nii_inference_result",
 )
 
 # -----------------------
 # Set up session & runner
 # -----------------------
 
-APP_NAME = "nii_inference_adk"
-USER_ID = "test_user"
-SESSION_ID = "nii-session-1"
 
 if __name__ == "__main__":
     import asyncio
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
+
+    APP_NAME = "nii_inference_adk"
+    USER_ID = "test_user"
+    SESSION_ID = "nii-session-1"
 
     async def main():
         session_service = InMemorySessionService()

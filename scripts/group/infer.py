@@ -9,7 +9,7 @@ import os
 # ---------- 參數 ----------
 MODEL_PATH = "model/capsnet/best_capsnet_rnn.pth"
 # NII_PATH = "data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz"  # 要推論的影像路徑
-DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
 WINDOW = 5
 STRIDE = 3
 

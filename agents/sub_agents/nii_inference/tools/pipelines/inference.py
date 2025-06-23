@@ -91,7 +91,7 @@ if __name__ == "__main__":
     model.activations = activation_dict
 
     # [5] 執行推論，並只儲存指定層 activation
-    run_inference(
+    run_nii_inference(
         model=model,
         nii_path="data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz",
         save_dir="output/capsnet",
