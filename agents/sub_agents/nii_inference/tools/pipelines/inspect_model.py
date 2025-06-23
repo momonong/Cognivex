@@ -1,5 +1,6 @@
 import io
 import re
+import torch
 from torchsummary import summary
 from contextlib import redirect_stdout
 
@@ -27,10 +28,19 @@ def inspect_torch_model(model, input_shape: tuple, device: str) -> list[dict]:
     :param input_shape: tuple of input shape (excluding batch size)
     :return: list of layers with name, class_name, output_shape (from summary), and params
     """
+
+    # Determine the actual device to use based on availability
+    if device == 'cuda' and torch.cuda.is_available():
+        actual_device = 'cuda'
+    else:
+        actual_device = 'cpu'
+        if device != 'cpu': # Only warn if the explicitly requested device wasn't 'cpu'
+            print(f"Warning: Device '{device}' is not available or invalid. Using 'cpu' instead.")
+
     # Get summary string
     buffer = io.StringIO()
     with redirect_stdout(buffer):
-        summary(model, input_size=input_shape, device=device)
+        summary(model, input_size=input_shape, device=actual_device)
     summary_text = buffer.getvalue()
     parsed_layers = parse_summary_text(summary_text)
 

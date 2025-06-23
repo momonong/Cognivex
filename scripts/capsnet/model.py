@@ -93,7 +93,7 @@ class CapsNetRNN(nn.Module):
         feats = []
         for t in range(T):
             # 取出第 t 個時間點的 volume
-            x_t = x[:, :, t, :, :, :]          # [B, 1, D, H, W]
+            x_t = x[:, :, t, :, :, :].to(next(self.capsnet.parameters()).device)          # [B, 1, D, H, W]
             caps_out = self.capsnet(x_t)       # [B, 2, 16]
             feats.append(caps_out.view(B, -1)) # [B, 32]
 
