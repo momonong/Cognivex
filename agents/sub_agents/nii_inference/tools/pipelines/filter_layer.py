@@ -51,7 +51,7 @@ def get_activation_stats(act_path: str):
     }
 
 
-def filter_layers_by_gemini(
+def filter_layers_by_llm(
     selected_layers: list[dict],
     activation_dir: str,
     save_name_prefix: str,
@@ -86,7 +86,7 @@ def filter_layers_by_gemini(
         )
 
     # Print activation statistics
-    print("[Activation Layer Stats Before Gemini Filtering]")
+    print("[Activation Layer Stats Before llm Filtering]")
     for layer in layer_inputs:
         print(
             f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}"
@@ -95,12 +95,12 @@ def filter_layers_by_gemini(
     # Build Gemini prompt
     prompt = f"The model layer activations are as follows:\n{json.dumps(layer_inputs, indent=2)}\n\nWhich ones should we keep and why?"
 
-    # Gemini response
+    # Gemini response - avoid schema compatibility issues
     response = gemini_chat(
         prompt=prompt,
         system_instruction=INSTRUCTION,
         mime_type="application/json",
-        response_schema=list[SelectedLayer],
+        # Remove response_schema to avoid compatibility issues
     )
 
     keep_entries = json.loads(response)

@@ -24,7 +24,9 @@ for act_path in paths:
     resampled_act_img = resample_to_img(
         source_img=act_img,
         target_img=atlas_img,
-        interpolation='nearest'
+        interpolation='nearest',
+        copy_header=True,
+        force_resample=True,
     )
 
     print("✅ Resample 完成後")

@@ -1,58 +1,76 @@
 from google.adk.agents import LlmAgent
 
-# Tool
-from agents.sub_agents.nii_inference.tools.full_pipeline import pipeline
+# Import the complete pipeline tool (now includes save_results)
+from agents.sub_agents.nii_inference.tools.pipeline import pipeline
+
+# -----------------------
+# ADK Agent Instructions
+# -----------------------
+
+INSTRUCTION = """
+You are an fMRI NIfTI processing agent specialized in Alzheimer's disease detection using deep learning and neuroimaging analysis.
+
+Your primary task is to run a complete inference pipeline on fMRI neuroimaging data (.nii.gz files) to:
+
+1. **Model Inspection & Layer Selection**:
+   - Analyze the neural network architecture (CapsNet-RNN)
+   - Select appropriate layers for activation visualization
+   - Validate layer selections using LLM-based filtering
+
+2. **Neural Network Inference**:
+   - Load pre-trained model weights
+   - Run inference on fMRI data using sliding window approach
+   - Extract activations from selected layers
+   - Classify the input as AD (Alzheimer's Disease) or CN (Cognitively Normal)
+
+3. **Activation Analysis & Brain Mapping**:
+   - Convert neural activations to NIfTI format
+   - Resample to AAL3 brain atlas coordinate system
+   - Map activations to specific brain regions
+   - Generate visualization heatmaps
+
+4. **Results Storage & Clinical Interpretation**:
+   - Use save_results function to properly format and store analysis results
+   - Analyze activation patterns in context of Alzheimer's pathology
+   - Identify key brain regions involved in the classification
+   - Provide structured results for clinical report generation
+
+**Expected Output Format**:
+Return results as a structured JSON containing:
+- Classification result (AD/CN)
+- Selected neural network layers with justification
+- Brain region activation analysis
+- Visualization file paths
+- Clinical interpretation summary
+- Properly saved results from save_results function
+
+**Key Requirements**:
+- Always use the provided pipeline tool to run the complete analysis
+- Ensure all processing steps complete successfully including save_results
+- Provide clear interpretation of neural activation patterns
+- Focus on clinically relevant brain regions (hippocampus, temporal lobe, etc.)
+- Generate publication-ready visualizations
+
+The pipeline automatically handles all technical aspects including model loading, data preprocessing, activation extraction, atlas mapping, result saving, and visualization generation.
+"""
 
 # -----------------------
 # Define ADK Agent
 # -----------------------
 
-INSTRUCTION = """
-You are an fMRI NIfTI processing agent. You must run the full inference pipeline on a given .nii.gz brain image.
-
-Your tasks include:
-1. Model inspection and layer selection
-2. Attaching hook and running inference
-3. Gemini-based activation filtering
-4. Converting activations to NIfTI
-5. Resampling to AAL3 atlas
-6. Analyzing activation brain regions
-7. Producing visualizations
-
-Always return the result in this format:
-{
-  "classification": "AD or CN",
-  "final_layers": [
-    {
-      "model_path": "capsnet.conv3",
-      "reason": "Selected because it has high nonzero activation and provides meaningful high-level spatial features."
-    },
-    ...
-  ],
-  "activation_results": [
-    {
-      "layer": "conv3",
-      "summary": "This activation map shows significant involvement in the right angular gyrus, superior frontal, and precuneus regions, often linked to early Alzheimer's pathology.",
-      "visualization_path": "figures/agent_test/activation_map_mosaic.png"
-    },
-    ...
-  ]
-}
-"""
-
-nii_inference_agent = LlmAgent(
+map_act_brain_agent = LlmAgent(
     name="nii_inference_agent",
     model="gemini-2.5-flash",
-    description="Agent for full NIfTI fMRI inference and semantic analysis.",
+    description="Advanced fMRI neuroimaging agent for Alzheimer's disease detection using deep learning, brain activation analysis, and proper results storage.",
     instruction=INSTRUCTION,
     tools=[pipeline],
     output_key="nii_inference_result",
 )
 
-# -----------------------
-# Set up session & runner
-# -----------------------
 
+# -----------------------
+# Session & Runner Setup
+# -----------------------
 
 if __name__ == "__main__":
     import asyncio
@@ -60,29 +78,49 @@ if __name__ == "__main__":
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
 
-    APP_NAME = "nii_inference_adk"
-    USER_ID = "test_user"
-    SESSION_ID = "nii-session-1"
+    APP_NAME = "nii_inference_pipeline"
+    USER_ID = "neuroimaging_user"
+    SESSION_ID = "nii-session-001"
 
     async def main():
+        """
+        Run the NIfTI inference agent with proper ADK session management.
+        """
+        # Create session service
         session_service = InMemorySessionService()
         await session_service.create_session(
-            app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
+            app_name=APP_NAME, 
+            user_id=USER_ID, 
+            session_id=SESSION_ID
         )
 
+        # Create runner
         runner = Runner(
-            agent=nii_inference_agent,
+            agent=map_act_brain_agent,
             app_name=APP_NAME,
             session_service=session_service,
         )
 
+        # Prepare user message
         user_message = types.Content(
             role="user",
-            parts=[types.Part(text="Run full NIfTI inference on the provided data.")],
+            parts=[types.Part(
+                text="Run complete fMRI analysis pipeline for Alzheimer's detection. "
+                     "Use subject_id='test-patient-001' for this analysis. "
+                     "Ensure proper results saving and provide clinical interpretation."
+            )],
         )
 
+        print("\n" + "="*80)
+        print("STARTING NII INFERENCE AGENT (with save_results integration)")
+        print("="*80)
+        print(f"App: {APP_NAME}")
+        print(f"User: {USER_ID}")
+        print(f"Session: {SESSION_ID}")
+        print(f"Agent: {map_act_brain_agent.name}")
         print("\n>>> Sending request to nii_inference_agent...\n")
 
+        # Run the agent
         final_result = None
         async for event in runner.run_async(
             user_id=USER_ID,
@@ -91,7 +129,14 @@ if __name__ == "__main__":
         ):
             if event.is_final_response() and event.content and event.content.parts:
                 final_result = event.content.parts[0].text
+                
+        print("\n" + "="*80)
+        print("NII INFERENCE AGENT RESPONSE")
+        print("="*80)
+        print(final_result)
+        print("\n" + "="*80)
+        
+        return final_result
 
-        print("\n<<< Agent’s final response:\n", final_result)
-
-    asyncio.run(main())
+    # Run the async main function
+    result = asyncio.run(main())

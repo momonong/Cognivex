@@ -36,7 +36,8 @@ def run_nii_inference(
     selected_layer_names: list[str],
     window: int = 5,
     stride: int = 3,
-    device: str = "cpu",
+    device: str = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+,
 ):
     model = model.to(device)
     model.eval()

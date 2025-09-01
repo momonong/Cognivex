@@ -1,7 +1,7 @@
 from google.adk.agents import SequentialAgent
 
 # Sub-agents
-from agents.sub_agents.nii_inference.agent import nii_inference_agent
+from agents.sub_agents.nii_inference.agent0 import nii_inference_agent
 from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
