@@ -9,7 +9,7 @@ import json
 import os
 from typing import Dict, Any
 
-from agents.sub_agents.nii_inference.tools.pipeline_tools import (
+from agents.sub_agents.act_to_brain.tools.pipeline_tools import (
     inspect_model_structure,
     validate_layers, 
     prepare_model_for_inference,

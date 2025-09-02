@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 
 # Import the complete pipeline tool (now includes save_results)
-from agents.sub_agents.nii_inference.tools.pipeline import pipeline
+from agents.sub_agents.act_to_brain.tools.pipeline import pipeline
 
 # -----------------------
 # ADK Agent Instructions
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     from google.adk.sessions import InMemorySessionService
     from google.genai import types
 
-    APP_NAME = "nii_inference_pipeline"
+    APP_NAME = "map_act_brain_agent_pipeline"
     USER_ID = "neuroimaging_user"
     SESSION_ID = "nii-session-001"
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
         print(f"User: {USER_ID}")
         print(f"Session: {SESSION_ID}")
         print(f"Agent: {map_act_brain_agent.name}")
-        print("\n>>> Sending request to nii_inference_agent...\n")
+        print("\n>>> Sending request to map_act_brain_agent...\n")
 
         # Run the agent
         final_result = None
@@ -131,7 +131,7 @@ if __name__ == "__main__":
                 final_result = event.content.parts[0].text
                 
         print("\n" + "="*80)
-        print("NII INFERENCE AGENT RESPONSE")
+        print("ACT TO BRAIN AGENT RESPONSE")
         print("="*80)
         print(final_result)
         print("\n" + "="*80)

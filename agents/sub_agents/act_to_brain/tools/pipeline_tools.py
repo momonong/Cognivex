@@ -2,34 +2,34 @@ import torch
 import os
 import json
 
-from agents.sub_agents.nii_inference.tools.pipelines.inspect_model import (
+from agents.sub_agents.act_to_brain.tools.pipelines.inspect_model import (
     inspect_torch_model,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.choose_layer import (
+from agents.sub_agents.act_to_brain.tools.pipelines.choose_layer import (
     select_visualization_layers,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.attach_hook import (
+from agents.sub_agents.act_to_brain.tools.pipelines.attach_hook import (
     prepare_model_with_hooks as attach_hooks_to_model,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.inference import (
+from agents.sub_agents.act_to_brain.tools.pipelines.inference import (
     run_nii_inference,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.filter_layer import (
+from agents.sub_agents.act_to_brain.tools.pipelines.filter_layer import (
     filter_layers_by_llm,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.validate_layer import (
+from agents.sub_agents.act_to_brain.tools.pipelines.validate_layer import (
     validate_layers_by_llm,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.act_to_nii import (
+from agents.sub_agents.act_to_brain.tools.pipelines.act_to_nii import (
     activation_to_nifti,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.resample import (
+from agents.sub_agents.act_to_brain.tools.pipelines.resample import (
     resample_activation_to_atlas,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.brain_map import (
+from agents.sub_agents.act_to_brain.tools.pipelines.brain_map import (
     analyze_brain_activation,
 )
-from agents.sub_agents.nii_inference.tools.pipelines.visualize import (
+from agents.sub_agents.act_to_brain.tools.pipelines.visualize import (
     visualize_activation_map,
 )
 
