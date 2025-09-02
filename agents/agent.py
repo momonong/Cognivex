@@ -1,7 +1,7 @@
 from google.adk.agents import SequentialAgent
 
 # Sub-agents
-from agents.sub_agents.nii_inference.agent import nii_inference_agent
+from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
 from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
@@ -11,7 +11,7 @@ root_agent = SequentialAgent(
     name="fMRI_Alzheimer_Pipeline",
     description="A multi-step neuroimaging analysis pipeline for Alzheimer's detection using deep learning and knowledge graph reasoning.",
     sub_agents=[
-        nii_inference_agent,
+        map_act_brain_agent,
         image_explain_agent,
         graph_rag_agent,
         report_generator_agent,
