@@ -59,7 +59,7 @@ The pipeline automatically handles all technical aspects including model loading
 # -----------------------
 
 map_act_brain_agent = LlmAgent(
-    name="map_act_brain_agent",
+    name="MapActBrainAgent",
     model="gemini-2.5-flash",
     description="Advanced fMRI neuroimaging agent for Alzheimer's disease detection using deep learning, brain activation analysis, and proper results storage.",
     instruction=INSTRUCTION,

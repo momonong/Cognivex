@@ -33,7 +33,7 @@ Do NOT generate the final answer until the data is validated.
 
 
 graph_rag_agent = LlmAgent(
-    name="graph_rag_agent",
+    name="GraphRAGAgent",
     model="gemini-2.5-flash",
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
     instruction=INSTRUCTIONS,

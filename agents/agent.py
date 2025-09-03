@@ -1,4 +1,4 @@
-from google.adk.agents import SequentialAgent, LlmAgent
+from google.adk.agents import SequentialAgent, LlmAgent, ParallelAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
@@ -6,20 +6,16 @@ from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
 
-INSTRUCTION = """
-You need to strictly follow the order and run all pipelines:
-1. Run the `map_act_brain_agent` to process the fMRI data and extract activation patterns.
-2. Use the `image_explain_agent` to generate a clinical explanation of the activation maps.
-3. Execute the `graph_rag_agent` to query the knowledge graph for additional insights.
-4. Finally, call the `report_generator_agent` to compile all results into a comprehensive clinical report.
-"""
+explain_parallel_agent = ParallelAgent(
+    name="ExplainParallelAgent", sub_agents=[image_explain_agent, graph_rag_agent]
+)
+
 root_agent = SequentialAgent(
-    name="fMRI_Alzheimer_Pipeline",
+    name="fMRIAlzheimerPipeline",
     description="A multi-step neuroimaging analysis pipeline for Alzheimer's detection using deep learning and knowledge graph reasoning.",
     sub_agents=[
         map_act_brain_agent,
-        image_explain_agent,
-        graph_rag_agent,
+        explain_parallel_agent,
         report_generator_agent,
     ],
 )
