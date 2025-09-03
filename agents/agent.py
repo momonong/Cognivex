@@ -1,4 +1,4 @@
-from google.adk.agents import SequentialAgent
+from google.adk.agents import SequentialAgent, LlmAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
@@ -6,7 +6,13 @@ from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
 
-
+INSTRUCTION = """
+You need to strictly follow the order and run all pipelines:
+1. Run the `map_act_brain_agent` to process the fMRI data and extract activation patterns.
+2. Use the `image_explain_agent` to generate a clinical explanation of the activation maps.
+3. Execute the `graph_rag_agent` to query the knowledge graph for additional insights.
+4. Finally, call the `report_generator_agent` to compile all results into a comprehensive clinical report.
+"""
 root_agent = SequentialAgent(
     name="fMRI_Alzheimer_Pipeline",
     description="A multi-step neuroimaging analysis pipeline for Alzheimer's detection using deep learning and knowledge graph reasoning.",
@@ -45,7 +51,11 @@ if __name__ == "__main__":
 
         user_message = types.Content(
             role="user",
-            parts=[types.Part(text="Analyze fMRI subject using the pipeline.")],
+            parts=[
+                types.Part(
+                    text="Give me a thorough report of the subject. Subject ID: 'sub-14'."
+                )
+            ],
         )
 
         print("\n>>> Sending request to root agent...\n")

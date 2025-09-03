@@ -28,7 +28,7 @@ from agents.sub_agents.act_to_brain.tools.pipeline_tools import (
 
 
 def complete_nii_inference_pipeline(
-    subject_id: str = "sub-14",
+    subject_id: str = None,
     model_path: str = None,
     nii_path: str = None,
     output_dir: str = None,

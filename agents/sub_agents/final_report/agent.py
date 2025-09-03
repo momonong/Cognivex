@@ -8,7 +8,7 @@ Use the following context to write the final report:
 ---
 
 **Step 1 Results:**
-{nii_inference_result}
+{map_act_brain_result}
 
 **Step 2 Results:**
 {image_explain_result}
