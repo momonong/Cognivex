@@ -17,29 +17,23 @@ from agents.sub_agents.graph_rag.tools.evaluate import evaluate_query
 INSTRUCTIONS = """
 You are a GraphRAG agent that answers graph-based questions using structured reasoning.
 
+Conclude the question with {map_act_brain_result} to check the indo in knowlede graph.
+
 Follow these steps strictly and do NOT skip any step:
 
 1. First, call `summarize_graph_schema()` to understand the schema.
 2. Then, call `graph_rag_query(question)` to get the Cypher query and its result.
-3. Next, call `evaluate_query(question, result, expected_fields=["region", "function"], min_count=2)` to check if the result is valid and complete. You MUST run this step even if the result looks fine.
-4. If `evaluate_query().is_valid == False`, then you MUST call `regenerate_cypher_with_strategy()` using the provided strategy and re-run the Cypher.
-5. Once the result is valid and complete, call `synthesize_answer()` to generate the final answer.
-6. Finally, return: { "answer": "<your final natural language answer>" }
+3. Next, call `evaluate_query(question, result, ...)` to check if the result is valid and complete.
+4. If `evaluate_query().is_valid == False`, then you MUST call `regenerate_cypher_with_strategy()` and re-run the query process starting from step 2.
+5. **Once `evaluate_query()` returns `is_valid: True`, your task is complete. You must then synthesize the validated data and the original question into a final, natural language answer yourself.**
 
-You MUST call `evaluate_query()` before deciding whether to answer or retry.
-Do NOT skip evaluation even if the query result looks complete.
-
-NEVER return the final answer before evaluation.
-
-Example format:
-{
-  "answer": "The regions related to Alzheimer's disease include A, B, and C. These are associated with functions such as X, Y, and Z."
-}
+You MUST call `evaluate_query()` before generating the final answer.
+Do NOT generate the final answer until the data is validated.
 """
 
 
 graph_rag_agent = LlmAgent(
-    name="graph_rag_agent",
+    name="GraphRAGAgent",
     model="gemini-2.5-flash",
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
     instruction=INSTRUCTIONS,
@@ -82,28 +76,23 @@ if __name__ == "__main__":
         # Sample input
         payload = json.dumps(
             {
-                "question": "What brain regions are associated with Alzheimer's disease, and what functions do they perform?"
+                "question": "Which three brain regions have the most functions associated with them in our knowledge graph?"
             }
         )
         user_content = types.Content(role="user", parts=[types.Part(text=payload)])
 
         print("\n>>> Sending question to graph_rag_agent:\n", payload, "\n")
 
-        final_answer = None
+        # Run agent and collect final response
+        final_result = None
         async for event in runner.run_async(
-            user_id=USER_ID, session_id=SESSION_ID, new_message=user_content
-        ):
-            if event.is_final_response() and event.content and event.content.parts:
-                final_answer = event.content.parts[0].text
-
-        print("\n<<< Agent’s final response:\n", final_answer, "\n")
-
-        # Optional: show session memory
-        session = await session_service.get_session(
-            app_name=APP_NAME,
             user_id=USER_ID,
             session_id=SESSION_ID,
-        )
-        print("Session state:", json.dumps(session.state, indent=2))
+            new_message=user_content,
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_result = event.content.parts[0].text
 
+        print("\n<<< Final Agent Response:\n")
+        print(final_result)
     asyncio.run(main())

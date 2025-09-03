@@ -78,14 +78,14 @@ def generate_cypher(question: str, schema_text: str) -> str:
         - Return only the Cypher query, no markdown.
         If possible, include both region names and their functions in your answer.
     """
-    return generate_cypher_from_prompt(question, schema_text, base_prompt)
+    return generate_cypher_from_prompt(question, schema_text, base_prompt, None)
 
 
 def generate_cypher_from_prompt(
     question: str,
     schema_text: str,
     base_prompt: str,
-    extra_context: Optional[str] = None,
+    extra_context: Optional[str],
 ) -> str:
     prompt = f"""
         {base_prompt.strip()}
