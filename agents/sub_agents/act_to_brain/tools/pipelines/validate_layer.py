@@ -104,7 +104,6 @@ def validate_layers_by_llm(
         response_json_str = gemini_chat(
             prompt=prompt,
             system_instruction=INSTRUCTION,
-            model="gemini-2.5-flash",  # 使用穩定的模型
             mime_type="application/json",
             # 不使用 response_schema 避免相容性問題
         )
