@@ -11,7 +11,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # 選擇模型（推薦使用 gemini-1.5-flash 或 gemini-1.5-pro）
 client = genai.Client(api_key=GOOGLE_API_KEY)
-model = 'gemini-2.5-flash'  # 或 'gemini-2.5-pro'，根據需要選擇
+model = 'gemini-2.5-flash-lite'  # 或 'gemini-2.5-pro'，根據需要選擇
 
 # 圖片路徑（請換成你電腦上任一張 PNG）
 image_path = Path("figures/agent_test/agent_test_capsnet_conv3/activation_map_mosaic.png")

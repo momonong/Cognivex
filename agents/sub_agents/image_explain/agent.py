@@ -51,7 +51,7 @@ Be medically precise and prioritize structured clarity.
 image_explain_agent = LlmAgent(
     name="ImageExplainAgent",
     description="Analyzes an fMRI brain activation map and provides semantic insights related to brain function and Alzheimer's disease.",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash-lite",
     instruction=INSTRUCTION,
     tools=[explain_activation_map],
     output_key="image_explain_result",
