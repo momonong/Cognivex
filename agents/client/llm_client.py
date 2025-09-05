@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from google import genai
 from typing import Optional, Any, Type
 from google.genai import types
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 from agents.client.utils import build_gemini_config
@@ -116,10 +115,3 @@ def llm_response(
             input_schema=input_schema,
     )
     return response
-
-def load_llm(model="gemini-2.5-flash-lite") -> ChatGoogleGenerativeAI:
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash-lite", 
-        temperature=0,
-    )
-    return llm
