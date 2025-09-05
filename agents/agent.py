@@ -1,4 +1,4 @@
-from google.adk.agents import SequentialAgent
+from google.adk.agents import SequentialAgent, LoopAgent, ParallelAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
@@ -7,13 +7,16 @@ from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
 
 
+explain_parallel_agent = ParallelAgent(
+    name="ExplainParallelAgent", sub_agents=[image_explain_agent, graph_rag_agent]
+)
+
 root_agent = SequentialAgent(
-    name="fMRI_Alzheimer_Pipeline",
+    name="fMRIAlzheimerPipeline",
     description="A multi-step neuroimaging analysis pipeline for Alzheimer's detection using deep learning and knowledge graph reasoning.",
     sub_agents=[
         map_act_brain_agent,
-        image_explain_agent,
-        graph_rag_agent,
+        explain_parallel_agent,
         report_generator_agent,
     ],
 )
@@ -45,7 +48,11 @@ if __name__ == "__main__":
 
         user_message = types.Content(
             role="user",
-            parts=[types.Part(text="Analyze fMRI subject using the pipeline.")],
+            parts=[
+                types.Part(
+                    text="Give me a thorough report of the subject. Subject ID: 'sub-14'."
+                )
+            ],
         )
 
         print("\n>>> Sending request to root agent...\n")

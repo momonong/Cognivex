@@ -5,16 +5,18 @@ from dotenv import load_dotenv
 from google import genai
 from typing import Optional, Any, Type
 from google.genai import types
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-from agents.llm_client.utils import build_gemini_config
-from agents.llm_client.utils import prepare_image_parts_from_paths
+
+from agents.client.utils import build_gemini_config
+from agents.client.utils import prepare_image_parts_from_paths
 
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 
 def gemini_chat(
@@ -91,3 +93,33 @@ def gemini_image(
 
     # Return raw text (structured parsing可另接)
     return response.text
+
+
+def llm_response(
+    prompt: str | list,
+    *,
+    llm_provider: str = "gemini",
+    model: str = DEFAULT_MODEL,
+    mime_type: Optional[str] = "text/plain",
+    system_instruction: Optional[str] = None,
+    response_schema: Optional[Type] = None,
+    input_schema: Optional[Type] = None,
+) -> str | Any:
+
+    if llm_provider.startswith("gemini"):    
+        response = gemini_chat(
+            prompt=prompt,
+            model=model,
+            mime_type=mime_type,
+            system_instruction=system_instruction,
+            response_schema=response_schema,
+            input_schema=input_schema,
+    )
+    return response
+
+def load_llm(model="gemini-2.5-flash-lite") -> ChatGoogleGenerativeAI:
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash-lite", 
+        temperature=0,
+    )
+    return llm

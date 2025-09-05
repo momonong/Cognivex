@@ -8,7 +8,7 @@ Use the following context to write the final report:
 ---
 
 **Step 1 Results:**
-{+nii_inference_result}
+{map_act_brain_result}
 
 **Step 2 Results:**
 {+image_explain_result}
@@ -35,7 +35,7 @@ Be precise, medically relevant, and clearly structured.
 
 report_generator_agent = LlmAgent(
     name="ReportGeneratorAgent",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash-lite",
     description="Integrates outputs from previous steps and writes the final clinical report.",
     instruction=INSTRUCTION,
     output_key="final_report"

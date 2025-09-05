@@ -26,6 +26,10 @@ full_task_json_str = json.dumps(task_context, indent=2)
 INSTRUCTION = """
 You are a medical AI analyst.
 
+find <Brain region activation analysis> in {map_act_brain_result} as analysis_data_json to refer as
+ data about brain region activations.
+find <Visualization file paths> in {map_act_brain_result} as image_paths_to_analyze to refer as path of relevant images.
+
 Your task is to analyze a subject’s fMRI activation map. 
 You must first call the `explain_activation_map` tool to obtain detailed region-level activation information.
 
@@ -45,9 +49,9 @@ Be medically precise and prioritize structured clarity.
 
 
 image_explain_agent = LlmAgent(
-    name="image_explain_agent",
+    name="ImageExplainAgent",
     description="Analyzes an fMRI brain activation map and provides semantic insights related to brain function and Alzheimer's disease.",
-    model="gemini-2.5-flash",
+    model="gemini-2.5-flash-lite",
     instruction=INSTRUCTION,
     tools=[explain_activation_map],
     output_key="image_explain_result",
