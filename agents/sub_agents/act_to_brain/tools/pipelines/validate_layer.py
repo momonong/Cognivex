@@ -1,7 +1,7 @@
 import json
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-from agents.llm_client.gemini_client import gemini_chat
+from agents.client.llm_client import llm_response
 
 # ==============================================================================
 #  PART 1: The Instruction (System Prompt) - AI 的工作手冊
@@ -71,7 +71,7 @@ def validate_layers_by_llm(
     layer_stats_list: List[Dict[str, Any]],
 ) -> List[Dict[str, str]]:
     """
-    Calls Gemini to decide which layers to keep based on activation stats + semantic metadata.
+    Calls llm to decide which layers to keep based on activation stats + semantic metadata.
 
     This function separates the static instructions (who the agent is, its rules) from the
     dynamic prompt (the specific data to process).
@@ -101,7 +101,7 @@ def validate_layers_by_llm(
 
     # Gemini response - 不使用 response_schema 來避免相容性問題
     try:
-        response_json_str = gemini_chat(
+        response_json_str = llm_response(
             prompt=prompt,
             system_instruction=INSTRUCTION,
             mime_type="application/json",

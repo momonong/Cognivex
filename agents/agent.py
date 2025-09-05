@@ -1,10 +1,11 @@
-from google.adk.agents import SequentialAgent, LlmAgent, ParallelAgent
+from google.adk.agents import SequentialAgent, LoopAgent, ParallelAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
 from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
+
 
 explain_parallel_agent = ParallelAgent(
     name="ExplainParallelAgent", sub_agents=[image_explain_agent, graph_rag_agent]

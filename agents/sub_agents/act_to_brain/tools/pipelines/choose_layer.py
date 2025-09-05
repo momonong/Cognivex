@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from agents.llm_client.gemini_client import gemini_chat
+from agents.client.llm_client import llm_response
 
 
 INSTRUCTION = """
@@ -39,7 +39,7 @@ def select_visualization_layers(layers: list[dict]) -> list[LayerSelection]:
         f"The model layers are:\n{layers}\n\nPlease select layers for visualization."
     )
 
-    return gemini_chat(
+    return llm_response(
         prompt=prompt,
         system_instruction=INSTRUCTION,
         mime_type="application/json",

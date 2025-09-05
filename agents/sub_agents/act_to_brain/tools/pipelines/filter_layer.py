@@ -2,7 +2,7 @@ import os
 import json
 import torch
 from pydantic import BaseModel
-from agents.llm_client.gemini_client import gemini_chat
+from agents.client.llm_client import llm_response
 
 
 INSTRUCTION = """
@@ -96,7 +96,7 @@ def filter_layers_by_llm(
     prompt = f"The model layer activations are as follows:\n{json.dumps(layer_inputs, indent=2)}\n\nWhich ones should we keep and why?"
 
     # Gemini response - avoid schema compatibility issues
-    response = gemini_chat(
+    response = llm_response(
         prompt=prompt,
         system_instruction=INSTRUCTION,
         mime_type="application/json",

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from agents.llm_client.gemini_client import gemini_image
+from agents.client.llm_client import gemini_image
 from typing import List, Dict, Any
 
 # --- Input Configuration ---
