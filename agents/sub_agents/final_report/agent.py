@@ -11,10 +11,10 @@ Use the following context to write the final report:
 {map_act_brain_result}
 
 **Step 2 Results:**
-{+image_explain_result}
+{image_explain_result}
 
 **Step 3 Results:**
-{+graph_rag_result}
+{graph_rag_result}
 
 ---
 
