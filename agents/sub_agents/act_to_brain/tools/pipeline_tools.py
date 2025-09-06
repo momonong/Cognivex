@@ -35,9 +35,6 @@ from agents.sub_agents.act_to_brain.tools.pipelines.visualize import (
 
 from scripts.capsnet.model import CapsNetRNN
 
-SUBJECT_ID = "sub-14"
-MODEL_PATH = "model/capsnet/best_capsnet_rnn.pth"
-NII_PATH = "data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz"
 DEVICE = (
     "cuda"
     if torch.cuda.is_available()
@@ -54,7 +51,6 @@ NORM_TYPE = "l2"
 ACT_THRESHOLD_PERCENTILE = 99.0
 ATLAS_PATH = "data/aal3/AAL3v1_1mm.nii.gz"
 LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt"
-VIS_FIG_NAME = "activation_map_mosaic.png"
 VIS_THRESHOLD_PERCENTILE = 0.1
 
 
@@ -71,11 +67,11 @@ def inspect_model_structure(model, input_shape, device):
         selected_layers: The selected layers
         selected_layer_names: The model paths of the selected layers
     """
-    print("\nStep 1: Inspect model structure")
+    # print("\nStep 1: Inspect model structure")
     layers = inspect_torch_model(model, input_shape, device)
     response = select_visualization_layers(layers)
     selected_layers = json.loads(response)
-    print("Selected layers:", selected_layers)
+    # print("Selected layers:", selected_layers)
     # Extract model paths only
     selected_layer_names = [item["model_path"] for item in selected_layers]
 
@@ -162,7 +158,7 @@ def dynamic_filtering(
     )
     results["final_layers"] = keep_entries
     selected_layer_names = [layer["model_path"] for layer in keep_entries]
-    print(f"[Summary] Final selected layers: {selected_layer_names}")
+    # print(f"[Summary] Final selected layers: {selected_layer_names}")
     output_prefix = os.path.join(activation_dir, save_name_prefix)
 
     return keep_entries, selected_layer_names, output_prefix
@@ -181,7 +177,7 @@ def validate_layers(selected_layers: list[dict], all_layers_info: list[dict]) ->
     Returns:
         list[dict]: List of validated layers that exist in the model with complete metadata
     """
-    print("\n--- Tool: Validating Selected Layers ---")
+    # print("\n--- Tool: Validating Selected Layers ---")
     
     # First do basic existence validation
     valid_layer_paths = {layer["model_path"] for layer in all_layers_info}
@@ -191,13 +187,13 @@ def validate_layers(selected_layers: list[dict], all_layers_info: list[dict]) ->
         model_path = layer.get("model_path")
         if model_path in valid_layer_paths:
             basic_validated_layers.append(layer)
-            print(f"✔  OK: {model_path}")
-        else:
-            print(f"✘ DROPPED (Invalid): {model_path} - Layer does not exist.")
+            # print(f"✔  OK: {model_path}")
+        # else:
+        #     # print(f"✘ DROPPED (Invalid): {model_path} - Layer does not exist.")
     
     # Use LLM validation but preserve original metadata format
     if basic_validated_layers:
-        print("\n--- Running LLM-based Layer Validation ---")
+        # print("\n--- Running LLM-based Layer Validation ---")
         llm_validated_results = validate_layers_by_llm(basic_validated_layers)
         
         # Map LLM results back to original layer format with complete metadata
@@ -217,10 +213,10 @@ def validate_layers(selected_layers: list[dict], all_layers_info: list[dict]) ->
                     updated_layer["reason"] = llm_result["reason"]
                 final_validated_layers.append(updated_layer)
                 
-        print(f"\n[Validation Summary] {len(final_validated_layers)}/{len(selected_layers)} layers passed validation")
+        # print(f"\n[Validation Summary] {len(final_validated_layers)}/{len(selected_layers)} layers passed validation")
         return final_validated_layers
     else:
-        print("\n[Warning] No valid layers found after basic validation")
+        # print("\n[Warning] No valid layers found after basic validation")
         return []
 
 
@@ -330,6 +326,6 @@ def save_results(results, vis_output_path, df_result):
     """
     results["visualization_results"] = vis_output_path
     results["activation_results"] = df_result.to_dict(orient="records")
-    print(df_result)
-    print("RESULTS:", results)
+    # print(df_result)
+    # print("RESULTS:", results)
     return results

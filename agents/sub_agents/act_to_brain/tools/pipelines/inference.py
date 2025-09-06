@@ -43,14 +43,14 @@ def run_nii_inference(
     model.eval()
 
     inputs = load_nifti_and_preprocess(nii_path, window, stride).to(device)
-    print(f"Loaded input shape: {inputs.shape}")
+    # print(f"Loaded input shape: {inputs.shape}")
 
     with torch.no_grad():
         outputs = model(inputs)
         preds = (outputs > 0.5).float().squeeze().cpu().numpy()
 
     final_pred = int(np.round(preds.mean()))
-    print(f"Inference Result: {final_pred} (1=AD, 0=CN)")
+    # print(f"Inference Result: {final_pred} (1=AD, 0=CN)")
 
     if hasattr(model, "activations") and isinstance(model.activations, dict):
         os.makedirs(save_dir, exist_ok=True)
@@ -60,9 +60,7 @@ def run_nii_inference(
                 filename = f"{save_name}_{layer_name.replace('.', '_')}.pt"
                 save_path = os.path.join(save_dir, filename)
                 torch.save(act.cpu(), save_path)
-                print(f"Saved activation: {save_path}")
-            else:
-                print(f"Warning: Activation not found for layer '{layer_name}'")
+                # print(f"Saved activation: {save_path}")
     
     # Save final prediction result
     prediction_result = "AD" if final_pred == 1 else "CN"

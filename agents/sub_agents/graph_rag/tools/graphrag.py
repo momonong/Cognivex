@@ -26,7 +26,7 @@ def graphrag(region_names: List[str]) -> str:
     if not isinstance(region_names, list) or not region_names:
         return json.dumps({"result": [], "message": "Input region list was empty."})
 
-    print(f"--- [Tool Log] Running stable Cypher query for {region_names} regions... ---")
+    # print(f"--- [Tool Log] Running stable Cypher query for {region_names} regions... ---")
     try:
         with driver.session() as session:
             result = session.run(CYPHER_TEMPLATE, {"regionNames": region_names})

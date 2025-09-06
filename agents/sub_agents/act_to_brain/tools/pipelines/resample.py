@@ -20,18 +20,18 @@ def resample_activation_to_atlas(
     Returns:
         str: Output file path to resampled activation map
     """
-    print("Resampling activation to atlas space...")
+    # print("Resampling activation to atlas space...")
     
     act_img = nib.load(act_path)
     atlas_img = nib.load(atlas_path)
 
-    print("Original activation image")
-    print(f"  shape:  {act_img.shape}")
-    print(f"  affine:\n{act_img.affine}\n")
+    # print("Original activation image")
+    # print(f"  shape:  {act_img.shape}")
+    # print(f"  affine:\n{act_img.affine}\n")
 
-    print("Target atlas image")
-    print(f"  shape:  {atlas_img.shape}")
-    print(f"  affine:\n{atlas_img.affine}\n")
+    # print("Target atlas image")
+    # print(f"  shape:  {atlas_img.shape}")
+    # print(f"  affine:\n{atlas_img.affine}\n")
 
     # --- Resample ---
     resampled_img = resample_to_img(
@@ -42,9 +42,9 @@ def resample_activation_to_atlas(
         copy_header=True
     )
 
-    print("Resampled activation image")
-    print(f"  shape:  {resampled_img.shape}")
-    print(f"  affine:\n{resampled_img.affine}\n")
+    # print("Resampled activation image")
+    # print(f"  shape:  {resampled_img.shape}")
+    # print(f"  affine:\n{resampled_img.affine}\n")
 
     # --- Save result ---
     filename = os.path.basename(act_path).replace(".nii", "").replace(".gz", "") + "_resampled.nii.gz"
@@ -52,7 +52,7 @@ def resample_activation_to_atlas(
     os.makedirs(output_dir, exist_ok=True)
     resampled_img.to_filename(output_path)
 
-    print(f"Resampled NIfTI saved to: {output_path}")
+    # print(f"Resampled NIfTI saved to: {output_path}")
     return output_path
 
 # Example usage

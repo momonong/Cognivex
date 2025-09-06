@@ -22,7 +22,7 @@ def attach_hooks(
     target_paths = selector_output
     for name, module in model.named_modules():
         if name in target_paths:
-            print(f"Hook attached: {name} ({module.__class__.__name__})")
+            # print(f"Hook attached: {name} ({module.__class__.__name__})")
             module.register_forward_hook(save_activation_hook(name, activation_dict))
 
 

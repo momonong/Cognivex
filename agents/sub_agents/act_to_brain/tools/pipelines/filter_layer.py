@@ -71,7 +71,7 @@ def filter_layers_by_llm(
         safe_name = model_path.replace(".", "_")
         act_path = os.path.join(activation_dir, f"{save_name_prefix}_{safe_name}.pt")
         if not os.path.exists(act_path):
-            print(f"[Skip] Activation not found: {act_path}")
+            # print(f"[Skip] Activation not found: {act_path}")
             continue
 
         stats = get_activation_stats(act_path)
@@ -85,12 +85,12 @@ def filter_layers_by_llm(
             }
         )
 
-    # Print activation statistics
-    print("[Activation Layer Stats Before llm Filtering]")
-    for layer in layer_inputs:
-        print(
-            f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}"
-        )
+    # # print activation statistics
+    # print("[Activation Layer Stats Before llm Filtering]")
+    # for layer in layer_inputs:
+    #     # print(
+    #         f"• {layer['model_path']:30} | mean={layer['mean_activation']:.6f} | nonzero={layer['nonzero_ratio']:.4f}"
+    #     )
 
     # Build Gemini prompt
     prompt = f"The model layer activations are as follows:\n{json.dumps(layer_inputs, indent=2)}\n\nWhich ones should we keep and why?"
@@ -106,20 +106,20 @@ def filter_layers_by_llm(
     keep_entries = json.loads(response)
     keep_model_paths = [entry["model_path"] for entry in keep_entries]
 
-    print(f"[Gemini Selected Layers]:")
-    for entry in keep_entries:
-        print(f"✔ {entry['model_path']:30} — {entry['reason']}")
+    # print(f"[Gemini Selected Layers]:")
+    # for entry in keep_entries:
+    #     # print(f"✔ {entry['model_path']:30} — {entry['reason']}")
 
     # Remove rejected activation files
     for layer in selected_layers:
         if layer["model_path"] not in keep_model_paths:
-            print(f"✘ Dropping: {layer['model_path']} - {layer['reason']}")
+            # print(f"✘ Dropping: {layer['model_path']} - {layer['reason']}")
             safe_name = layer["model_path"].replace(".", "_")
             act_path = os.path.join(
                 activation_dir, f"{save_name_prefix}_{safe_name}.pt"
             )
             if delete_rejected and os.path.exists(act_path):
                 os.remove(act_path)
-                print(f"Deleted: {act_path}")
+                # print(f"Deleted: {act_path}")
 
     return keep_entries  # List[{"model_path", "reason"}]

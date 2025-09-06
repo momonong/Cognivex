@@ -86,7 +86,7 @@ def validate_layers_by_llm(
                               each containing 'model_path' and 'reason'.
     """
     if not layer_stats_list:
-        print("[Warning] No layer stats provided to filter. Returning empty list.")
+        # print("[Warning] No layer stats provided to filter. Returning empty list.")
         return []
 
     # Build Gemini prompt - 簡潔、直接，只包含數據和行動指令
@@ -117,17 +117,17 @@ def validate_layers_by_llm(
         elif isinstance(validation_response, dict) and "selected_layers" in validation_response:
             return validation_response["selected_layers"]
         else:
-            print(f"[Warning] Unexpected response format: {type(validation_response)}")
+            # print(f"[Warning] Unexpected response format: {type(validation_response)}")
             return validation_response if isinstance(validation_response, list) else []
             
     except json.JSONDecodeError as e:
-        print(f"[Warning] Failed to parse JSON response: {e}")
-        print(f"[Debug] Raw response: {response_json_str}")
+        # print(f"[Warning] Failed to parse JSON response: {e}")
+        # print(f"[Debug] Raw response: {response_json_str}")
         return [{"model_path": layer.get("model_path", ""), "reason": "JSON parsing failed"} for layer in layer_stats_list]
         
     except Exception as e:
-        print(f"[Warning] LLM validation failed: {e}")
-        print("[Info] Falling back to basic validation (returning all input layers)")
+        # print(f"[Warning] LLM validation failed: {e}")
+        # print("[Info] Falling back to basic validation (returning all input layers)")
         # 如果 LLM 驗證失敗，返回原始輸入作為後備
         return [{"model_path": layer.get("model_path", ""), "reason": "LLM validation unavailable"} for layer in layer_stats_list]
 

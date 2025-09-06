@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from google.adk.agents import LlmAgent
+from sympy import true
 
 INSTRUCTION = """
 You are a clinical report generator responsible for summarizing multi-stage analysis results from an fMRI Alzheimer pipeline.
@@ -62,6 +63,8 @@ report_generator_agent = LlmAgent(
    model="gemini-2.5-flash-lite",
    description="Integrates outputs from previous steps and writes the final clinical report.",
    instruction=INSTRUCTION,
-   output_key="final_report",
    output_schema=FinalReport,
+   output_key="final_report",
+   disallow_transfer_to_peers=True,
+   disallow_transfer_to_parent=True,
 )

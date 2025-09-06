@@ -33,7 +33,7 @@ def visualize_activation_map(
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     display.savefig(output_path)
-    print(f"Activation map saved as {output_path}")
+    # print(f"Activation map saved as {output_path}")
     
     return output_path
 

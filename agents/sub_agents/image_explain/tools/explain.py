@@ -70,8 +70,8 @@ def explain_activation_map(
 
     Now, generate the detailed clinical explanation in the required JSON format.
     """
-    # print("IMAGES TO ANALYZE:", image_paths)
-    # print("ANALYSIS_DATA JSON:", analysis_data_json)
+    # # print("IMAGES TO ANALYZE:", image_paths)
+    # # print("ANALYSIS_DATA JSON:", analysis_data_json)
 
     raw_response_str = gemini_image(
         prompt=prompt,
@@ -84,9 +84,9 @@ def explain_activation_map(
     # Parse the raw JSON string into an ActivationExplanation object
     response_object = ActivationExplanation.model_validate_json(raw_response_str)
 
-    print("[Gemini Explanation Output]:\n")
-    print(raw_response_str)
-    print("\n[Highlighted Regions]:", response_object.highlighted_regions)
+    # print("[Gemini Explanation Output]:\n")
+    # print(raw_response_str)
+    # print("\n[Highlighted Regions]:", response_object.highlighted_regions)
 
     return {
         "text": response_object.text,
