@@ -1,8 +1,7 @@
-import json
-import asyncio
 from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
 
-# Tools
+from agents.client.agent_client import create_llm_agent
 from agents.sub_agents.graph_rag.tools.graphrag import graphrag
 from agents.sub_agents.graph_rag.tools.entity_linker import entity_linker_tool
 
@@ -28,6 +27,7 @@ You will receive a `highlighted_regions` list with potentially imprecise names.
 
 graph_rag_agent = LlmAgent(
     name="GraphRAGAgent",
+    # model=LiteLlm(model="ollama_chat/gpt-oss:20b"),  
     model="gemini-2.5-flash-lite",
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
     instruction=INSTRUCTIONS,
@@ -42,6 +42,8 @@ graph_rag_agent = LlmAgent(
 
 
 if __name__ == "__main__":
+    import json
+    import asyncio
     from google.adk.sessions import InMemorySessionService
     from google.adk.runners import Runner
     from google.genai import types

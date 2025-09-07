@@ -1,4 +1,5 @@
 import os
+import ollama
 from pathlib import Path
 from typing import Union, Optional
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ from agents.client.utils import prepare_image_parts_from_paths
 load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-client = genai.Client(api_key=GOOGLE_API_KEY)
+gemini_client = genai.Client(api_key=GOOGLE_API_KEY)
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
@@ -38,7 +39,7 @@ def gemini_chat(
         input_schema=input_schema,
     )
 
-    response = client.models.generate_content(
+    response = gemini_client.models.generate_content(
         model=model,
         contents=prompt,
         config=config,
@@ -84,7 +85,7 @@ def gemini_image(
     )
 
     # Send multimodal request
-    response = client.models.generate_content(
+    response = gemini_client.models.generate_content(
         model=model,
         contents=[{"role": "user", "parts": parts}],
         config=config,
@@ -104,7 +105,6 @@ def llm_response(
     response_schema: Optional[Type] = None,
     input_schema: Optional[Type] = None,
 ) -> str | Any:
-
     if llm_provider.startswith("gemini"):    
         response = gemini_chat(
             prompt=prompt,
@@ -113,5 +113,21 @@ def llm_response(
             system_instruction=system_instruction,
             response_schema=response_schema,
             input_schema=input_schema,
-    )
+        )
+
+    if llm_provider.startswith("gpt-oss-20b"):
+        if isinstance(prompt, list):
+            messages = []
+            if system_instruction:
+                messages.append({'role': 'system', 'content': system_instruction})
+            messages += [{'role': 'user', 'content': m} for m in prompt]
+            if response_schema:
+                response = ollama.chat(model=model, messages=messages,format=response_schema)
+            else:
+                response = ollama.chat(model=model, messages=messages,)
+            return response['message']['content']  
+        else:
+            response = ollama.generate(model=model, prompt=prompt)
+            return response['response']
     return response
+

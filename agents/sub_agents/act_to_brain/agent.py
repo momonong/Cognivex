@@ -1,6 +1,7 @@
 from google.adk.agents import LlmAgent
+from google.adk.models.lite_llm import LiteLlm
 
-# Import the complete pipeline tool (now includes save_results)
+from agents.client.agent_client import create_llm_agent
 from agents.sub_agents.act_to_brain.tools.pipeline import pipeline
 
 # -----------------------
@@ -60,6 +61,7 @@ The pipeline automatically handles all technical aspects including model loading
 
 map_act_brain_agent = LlmAgent(
     name="MapActBrainAgent",
+    # model=LiteLlm(model="ollama_chat/gpt-oss:20b"), 
     model="gemini-2.5-flash-lite",
     description="Advanced fMRI neuroimaging agent for Alzheimer's disease detection using deep learning, brain activation analysis, and proper results storage.",
     instruction=INSTRUCTION,

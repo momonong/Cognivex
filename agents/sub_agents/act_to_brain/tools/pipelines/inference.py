@@ -71,7 +71,7 @@ def run_nii_inference(
 if __name__ == "__main__":
     import torch
     from scripts.capsnet.model import CapsNetRNN
-    from agents.sub_agents.nii_inference.tools.pipelines.attach_hook import attach_hooks
+    from agents.sub_agents.act_to_brain.tools.pipelines.attach_hook import attach_hooks
 
     # [1] 初始化模型並載入權重
     model = CapsNetRNN()

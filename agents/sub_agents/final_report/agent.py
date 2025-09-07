@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from google.adk.agents import LlmAgent
-from sympy import true
+from google.adk.models.lite_llm import LiteLlm
+
+from agents.client.agent_client import create_llm_agent
 
 INSTRUCTION = """
 You are a clinical report generator responsible for summarizing multi-stage analysis results from an fMRI Alzheimer pipeline.
@@ -60,7 +62,8 @@ class FinalReport(BaseModel):
 
 report_generator_agent = LlmAgent(
    name="ReportGeneratorAgent",
-   model="gemini-2.5-flash-lite",
+   #  model=LiteLlm(model="ollama_chat/gpt-oss:20b"),  
+    model="gemini-2.5-flash-lite",
    description="Integrates outputs from previous steps and writes the final clinical report.",
    instruction=INSTRUCTION,
    output_schema=FinalReport,

@@ -61,8 +61,7 @@ if __name__ == "__main__":
             role="user",
             parts=[
                 types.Part(
-                    text="Give me a thorough report of the subject with the following details:\n"
-                        f"{json.dumps(payload, indent=2)}"
+                    text=f"Give me a thorough report of the subject with the following details:\n f{json.dumps(payload, indent=2)}"
                 )
             ],
         )
@@ -78,7 +77,6 @@ if __name__ == "__main__":
             # print("EVENT_CONTENT:", event)
             if event.is_final_response() and event.content and event.content.parts:
                 final_result = event.content.parts[0].text
-                print("EVENT_CONTENT:", event)
 
         print("\n<<< Final Agent Response:\n")
         print(final_result)
