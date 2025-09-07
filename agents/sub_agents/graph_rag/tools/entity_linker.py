@@ -49,15 +49,15 @@ def entity_linker_tool(dirty_region_list: list[str]) -> list[str]:
     ---
     """
 
-    print("--- [Tool Log] Running LLM for entity linking... ---")
+    # print("--- [Tool Log] Running LLM for entity linking... ---")
     # 3. 呼叫 LLM 並解析結果
     try:
         response_str = llm_response(prompt)
         clean_list = json.loads(
             response_str.strip().replace("```json", "").replace("```", "")
         )
-        print(f"--- [Tool Log] Entity Linking complete. Clean list: {clean_list} ---")
+        # print(f"--- [Tool Log] Entity Linking complete. Clean list: {clean_list} ---")
         return clean_list
     except Exception as e:
-        print(f"--- [Tool Log - ERROR] Failed during entity linking: {e} ---")
+        # print(f"--- [Tool Log - ERROR] Failed during entity linking: {e} ---")
         return []

@@ -36,22 +36,22 @@ def activation_to_nifti(
     - threshold_percentile: Percentage of strongest activations to keep for masking
     """
     act = torch.load(activation_path)[0]  # shape: [C, D, H, W]
-    print(f"[Original activation] shape: {act.shape}")
+    # print(f"[Original activation] shape: {act.shape}")
     # Flatten if needed (e.g., CapsuleLayer: [32, 8, D, H, W] -> [256, D, H, W])
     if act.ndim > 4:
         act = act.reshape(act.shape[0] * act.shape[1], *act.shape[2:])
-    print(f"[Flattened activation] shape: {act.shape}")
+    # print(f"[Flattened activation] shape: {act.shape}")
 
     # Step 1: Select strongest channel
     channel_idx = select_strongest_channel(act, norm_type)
     act = act[channel_idx]  # shape: [D, H, W]
-    print(f"[Selected channel {channel_idx}] shape: {act.shape}")
+    # print(f"[Selected channel {channel_idx}] shape: {act.shape}")
 
     # Step 2: Load reference image
     ref_img = nib.load(reference_nii_path)
     affine = ref_img.affine
     ref_shape = ref_img.shape[:3]
-    print(f"[Reference image shape] {ref_shape}")
+    # print(f"[Reference image shape] {ref_shape}")
 
     # Step 3: Interpolate alignment
     act_tensor = act.unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
@@ -74,8 +74,8 @@ def activation_to_nifti(
     # Step 6: Save
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     nib.save(nib.Nifti1Image(nii_masked, affine), output_path)
-    print("Saved filtered, strongest channel activation.")
-    print("path:", output_path)
+    # print("Saved filtered, strongest channel activation.")
+    # print("path:", output_path)
 
 
 if __name__ == "__main__":

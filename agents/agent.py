@@ -1,4 +1,4 @@
-from google.adk.agents import SequentialAgent, LoopAgent, ParallelAgent
+from google.adk.agents import SequentialAgent, ParallelAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
@@ -23,6 +23,7 @@ root_agent = SequentialAgent(
 
 
 if __name__ == "__main__":
+    import json
     import asyncio
     from google.adk.runners import Runner
     from google.adk.sessions import InMemorySessionService
@@ -31,6 +32,10 @@ if __name__ == "__main__":
     APP_NAME = "fMRI_explain_pipeline"
     USER_ID = "test_user"
     SESSION_ID = "session-root-01"
+
+    SUBJECT_ID = "sub-14"
+    MODEL_PATH = "model/capsnet/best_capsnet_rnn.pth"
+    NII_PATH = "data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz"
 
     async def main():
         session_service = InMemorySessionService()
@@ -46,11 +51,17 @@ if __name__ == "__main__":
             session_service=session_service,
         )
 
+        payload = {
+            "subject_id": SUBJECT_ID,
+            "nii_path": NII_PATH,
+            "model_path": MODEL_PATH,
+        }
+
         user_message = types.Content(
             role="user",
             parts=[
                 types.Part(
-                    text="Give me a thorough report of the subject. Subject ID: 'sub-14'."
+                    text=f"Give me a thorough report of the subject with the following details:\n f{json.dumps(payload, indent=2)}"
                 )
             ],
         )
@@ -63,6 +74,7 @@ if __name__ == "__main__":
             session_id=SESSION_ID,
             new_message=user_message,
         ):
+            # print("EVENT_CONTENT:", event)
             if event.is_final_response() and event.content and event.content.parts:
                 final_result = event.content.parts[0].text
 
