@@ -7,21 +7,21 @@ from scripts.macadnnet.model import MCADNNet
 import os
 from pathlib import Path
 
-# ----------- 設定參數 ----------
+# ----------- Configuration Parameters ----------
 IMAGE_PATH = "data/slices/fold0/AD/AD_sub-07_z050_t003.png"
 WEIGHTS_PATH = "model/mcadnnet_fold.pth"
 OUTPUT_PREFIX = "conv2AD"
 OUTPUT_DIR = "output"
 EXTRACT_ACTIVATION = True
 
-# ----------- 儲存 activation --------
+# ----------- Save activations --------
 activations = {}
 def get_activation(name):
     def hook(model, input, output):
         activations[name] = output.detach().cpu()
     return hook
 
-# ----------- 模型載入 -------------
+# ----------- Model Loading -------------
 def load_model(weights_path, device, extract_activation=False):
     model = MCADNNet(num_classes=2)
     model.load_state_dict(torch.load(weights_path, map_location=device))
@@ -32,7 +32,7 @@ def load_model(weights_path, device, extract_activation=False):
         model.fc1.register_forward_hook(get_activation("fc1"))
     return model
 
-# ----------- 圖像處理 -------------
+# ----------- Image Processing -------------
 def preprocess_image(image_path):
     transform = transforms.Compose([
         transforms.Grayscale(num_output_channels=1),
@@ -43,7 +43,7 @@ def preprocess_image(image_path):
     image = Image.open(image_path).convert("RGB")
     return transform(image).unsqueeze(0)
 
-# ----------- 預測 ----------------
+# ----------- Prediction ----------------
 def predict(image_tensor, model, device):
     image_tensor = image_tensor.to(device)
     outputs = model(image_tensor)
@@ -52,7 +52,7 @@ def predict(image_tensor, model, device):
     confidence = probs[0, predicted_class].item()
     return predicted_class, confidence
 
-# ----------- 儲存 activation ------
+# ----------- Save activations ------
 def save_activations(output_prefix, subject_id, output_dir="output"):
     os.makedirs(output_dir, exist_ok=True)
     for layer_name, tensor in activations.items():
@@ -60,7 +60,7 @@ def save_activations(output_prefix, subject_id, output_dir="output"):
         np.save(save_path, tensor.numpy())
         print(f"✅ Saved activation to: {save_path}")
 
-# ----------- 擷取 ID -------------
+# ----------- Extract ID -------------
 def extract_subject_id(image_path):
     filename = Path(image_path).stem
     parts = filename.split("_")
@@ -69,7 +69,7 @@ def extract_subject_id(image_path):
             return p
     return "unknown"
 
-# ----------- 主流程 ----------------
+# ----------- Main workflow ----------------
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
     print(f"🧠 Device: {device}")

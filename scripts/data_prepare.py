@@ -7,14 +7,14 @@ import uuid
 from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 
-# ---------- 設定 ----------
-RAW_DIR = "data/raw"  # 你的原始資料目錄（包含 AD/ 和 CN/）
-OUTPUT_SLICE_DIR = "data/slices"  # 輸出切片資料夾
+# ---------- Configuration ----------
+RAW_DIR = "data/raw"  # Your raw data directory (contains AD/ and CN/)
+OUTPUT_SLICE_DIR = "data/slices"  # Output slice folder
 META_CSV_PATH = "data/subject_metadata.csv"
-SPLIT_FOLD = 5  # 幾折交叉驗證
-DROP_LAST_SLICES = 10  # 每個影像 z 軸最後幾層不保留
+SPLIT_FOLD = 5  # Number of folds for cross-validation
+DROP_LAST_SLICES = 10  # Number of last slices to drop from z-axis for each image
 
-# ---------- 建立 Metadata 表 ----------
+# ---------- Create Metadata Table ----------
 records = []
 for label in ["AD", "CN"]:
     label_path = os.path.join(RAW_DIR, label)
@@ -33,20 +33,20 @@ for label in ["AD", "CN"]:
 df = pd.DataFrame(records)
 df["uid"] = [uuid.uuid4().hex[:8] for _ in range(len(df))]
 
-# ---------- 分 fold ----------
+# ---------- Split folds ----------
 skf = StratifiedKFold(n_splits=SPLIT_FOLD, shuffle=True, random_state=42)
 df["fold"] = -1
 for fold, (_, val_idx) in enumerate(skf.split(df, df["diagnosis"])):
     df.loc[val_idx, "fold"] = fold
 
-# ---------- 開始切片 ----------
+# ---------- Start slicing ----------
 slice_records = []
-for row in tqdm(df.itertuples(), total=len(df), desc="切片中"):
+for row in tqdm(df.itertuples(), total=len(df), desc="Slicing"):
     img = nib.load(row.nii_path).get_fdata()
     if img.sum() == 0:
         continue
 
-    img = (img / np.max(img)) * 255  # 正規化
+    img = (img / np.max(img)) * 255  # Normalization
     z_dim, t_dim = img.shape[2], img.shape[3]
 
     for z in range(z_dim - DROP_LAST_SLICES):
@@ -73,7 +73,7 @@ for row in tqdm(df.itertuples(), total=len(df), desc="切片中"):
                 "path": full_path
             })
 
-# ---------- 儲存 metadata ----------
+# ---------- Save metadata ----------
 pd.DataFrame(slice_records).to_csv("data/slices_metadata.csv", index=False)
 df.to_csv(META_CSV_PATH, index=False)
-print("✅ 切片完成並匯出 metadata：slices_metadata.csv")
+print("✅ Slicing completed and metadata exported: slices_metadata.csv")

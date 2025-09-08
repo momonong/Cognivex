@@ -16,9 +16,11 @@ class MCADNNet(nn.Module):
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self._flatten_dim = self._get_flatten_dim(input_shape)
-        self.fc1 = nn.Linear(in_features=self._flatten_dim, out_features=256)  # ⬅️ 減少參數量
+        self.fc1 = nn.Linear(in_features=self._flatten_dim, out_features=256)  
         self.dropout = nn.Dropout(p=dropout_p)
         self.fc2 = nn.Linear(in_features=256, out_features=num_classes)
+
+        self.input_size = input_shape
 
     def _get_flatten_dim(self, input_shape):
         with torch.no_grad():

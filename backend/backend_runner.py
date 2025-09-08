@@ -9,23 +9,23 @@ from agents.agent import root_agent
 
 async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) -> str | None:
     """
-    以非同步方式執行 fMRI 分析的 Agent Pipeline。
+    Execute fMRI analysis Agent Pipeline asynchronously.
 
     Args:
-        subject_id (str): 受試者 ID。
-        nii_path (str): NIfTI 檔案的路徑。
-        model_path (str): 模型檔案 (.pth) 的路徑。
+        subject_id (str): Subject ID.
+        nii_path (str): Path to NIfTI file.
+        model_path (str): Path to model file (.pth).
 
     Returns:
-        str | None: Agent pipeline 回傳的最終結果字串 (通常是 JSON)，如果沒有結果則回傳 None。
+        str | None: Final result string returned by Agent pipeline (usually JSON), None if no result.
     """
-    # 1. 填寫常數並動態生成 SESSION_ID
+    # 1. Fill in constants and dynamically generate SESSION_ID
     APP_NAME = "fMRI_Explain_Pipeline"
     USER_ID = "test_user"
-    # 每次執行都建立一個獨立的 session，避免狀態互相干擾
+    # Create an independent session for each execution to avoid state interference
     SESSION_ID = f"session-{subject_id}-{int(time.time())}"
 
-    # 2. 建立 ADK Session 和 Runner
+    # 2. Create ADK Session and Runner
     session_service = InMemorySessionService()
     await session_service.create_session(
         app_name=APP_NAME,
@@ -39,7 +39,7 @@ async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) ->
         session_service=session_service,
     )
 
-    # 3. 準備傳送給 Agent 的 payload
+    # 3. Prepare payload to send to Agent
     payload = {
         "subject_id": subject_id,
         "nii_path": nii_path,
@@ -55,9 +55,9 @@ async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) ->
         ],
     )
 
-    print(f"\n>>> 正在發送請求至 Agent (Session: {SESSION_ID})...\n")
+    print(f"\n>>> Sending request to Agent (Session: {SESSION_ID})...\n")
 
-    # 4. 執行 Agent Pipeline 並取得結果
+    # 4. Execute Agent Pipeline and get results
     final_result = None
     async for event in runner.run_async(
         user_id=USER_ID,
@@ -67,44 +67,44 @@ async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) ->
         if event.is_final_response() and event.content and event.content.parts:
             final_result = event.content.parts[0].text
 
-    print("\n<<< Agent Pipeline 最終回傳:\n")
+    print("\n<<< Agent Pipeline final response:\n")
     if final_result:
         print(final_result)
     else:
-        print("Agent 沒有回傳任何內容。")
+        print("Agent returned no content.")
     
-    # 5. 回傳結果
+    # 5. Return results
     return final_result
 
 
 def run_analysis_sync(subject_id: str, nii_path: str, model_path: str) -> str | None:
     """
-    一個同步的包裝函式，讓 Streamlit 或其他同步程式可以輕易呼叫。
+    A synchronous wrapper function that allows Streamlit or other synchronous programs to easily call.
     """
     return asyncio.run(run_analysis_async(subject_id, nii_path, model_path))
 
 
-# --- 範例執行區塊 ---
+# --- Example execution block ---
 if __name__ == "__main__":
-    # 模擬從前端傳入的參數，用於獨立測試
+    # Simulate parameters passed from frontend for independent testing
     test_subject_id = "sub-14"
     test_nii_path = "data/raw/AD/sub-14/dswausub-098_S_6601_task-rest_bold.nii.gz"
     test_model_path = "model/capsnet/best_capsnet_rnn.pth"
     
     print("="*50)
-    print("正在以獨立模式執行後端分析腳本...")
+    print("Running backend analysis script in standalone mode...")
     print("="*50)
 
-    # 呼叫同步函式來執行整個流程
+    # Call synchronous function to execute the entire process
     result = run_analysis_sync(test_subject_id, test_nii_path, test_model_path)
 
     if result:
-        print("\n--- 測試執行成功 ---")
-        # 嘗試解析看看回傳的是否為有效的 JSON
+        print("\n--- Test execution successful ---")
+        # Try to parse if the returned content is valid JSON
         try:
             report_data = json.loads(result)
-            print("回傳的 JSON 解析成功！")
+            print("Returned JSON parsed successfully!")
         except json.JSONDecodeError:
-            print("回傳的內容不是有效的 JSON 格式。")
+            print("Returned content is not in valid JSON format.")
     else:
-        print("\n--- 測試執行完成，但沒有收到回傳結果 ---")
+        print("\n--- Test execution completed but no return result received ---")

@@ -64,9 +64,9 @@ def complete_nii_inference_pipeline(
     output_dir = output_dir or OUTPUT_DIR
     save_name = save_name or SAVE_NAME
 
-    # print("=" * 80)
-    # print(f"RUNNING COMPLETE NII INFERENCE PIPELINE FOR {subject_id}")
-    # print("=" * 80)
+    print("=" * 80)
+    print(f"RUNNING COMPLETE NII INFERENCE PIPELINE FOR {subject_id}")
+    print("=" * 80)
 
     results = {
         "subject_id": subject_id,
@@ -80,16 +80,16 @@ def complete_nii_inference_pipeline(
 
     try:
         # Step 1: Model Structure Inspection
-        # print("\n[STEP 1] Model Structure Inspection")
+        print("\n[STEP 1] Model Structure Inspection")
         selected_layers, selected_layer_names = inspect_model_structure(
             model=MODEL, input_shape=INPUT_SHAPE, device=DEVICE
         )
 
-        # print(f"Initial layers selected: {len(selected_layers)}")
+        print(f"Initial layers selected: {len(selected_layers)}")
         results["initial_layers"] = selected_layers
 
         # Step 2: Layer Validation
-        # print("\n[STEP 2] Layer Validation")
+        print("\n[STEP 2] Layer Validation")
         all_layers_info = (
             selected_layers  # Use selected layers as ground truth for validation
         )
@@ -98,7 +98,7 @@ def complete_nii_inference_pipeline(
             selected_layers=selected_layers, all_layers_info=all_layers_info
         )
 
-        # print(f"Validated layers: {len(validated_layers)}")
+        print(f"Validated layers: {len(validated_layers)}")
         results["validated_layers"] = validated_layers
 
         if not validated_layers:
@@ -108,7 +108,7 @@ def complete_nii_inference_pipeline(
         validated_layer_names = [layer["model_path"] for layer in validated_layers]
 
         # Step 3: Model Preparation
-        # print("\n[STEP 3] Model Preparation with Hooks")
+        print("\n[STEP 3] Model Preparation with Hooks")
         prepared_model = prepare_model_for_inference(
             model=MODEL,
             selected_layers=validated_layers,
@@ -116,10 +116,10 @@ def complete_nii_inference_pipeline(
             device=DEVICE,
         )
 
-        # print("Model prepared with hooks and weights loaded")
+        print("Model prepared with hooks and weights loaded")
 
         # Step 4: Real Data Inference
-        # print("\n[STEP 4] NIfTI Data Inference")
+        print("\n[STEP 4] NIfTI Data Inference")
         prediction_result = real_data_inference(
             model=prepared_model,
             nii_path=nii_path,
@@ -131,11 +131,11 @@ def complete_nii_inference_pipeline(
             device=DEVICE,
         )
 
-        # print(f"Inference completed. Prediction: {prediction_result}")
+        print(f"Inference completed. Prediction: {prediction_result}")
         results["classification"] = prediction_result
 
         # Step 5: Dynamic Filtering
-        # print("\n[STEP 5] Dynamic Layer Filtering")
+        print("\n[STEP 5] Dynamic Layer Filtering")
         keep_entries, final_layer_names, output_prefix = dynamic_filtering(
             results=results,
             selected_layers=validated_layers,
@@ -144,21 +144,21 @@ def complete_nii_inference_pipeline(
             delete_rejected=True,
         )
 
-        # print(f"Final layers after filtering: {len(keep_entries)}")
+        print(f"Final layers after filtering: {len(keep_entries)}")
         results["final_layers"] = keep_entries
 
         if not final_layer_names:
-            # print("[Warning] No layers passed filtering - using validation results")
+            print("[Warning] No layers passed filtering - using validation results")
             final_layer_names = validated_layer_names[:1]  # Use at least one layer
             keep_entries = validated_layers[:1]
 
         # Step 6: Post-processing for each remaining layer
-        # print("\n[STEP 6] Post-processing Pipeline")
+        print("\n[STEP 6] Post-processing Pipeline")
 
         activation_summaries = []
 
         for i, layer_name in enumerate(final_layer_names):
-            # print(f"\n[STEP 6.{i+1}] Processing layer: {layer_name}")
+            print(f"\n[STEP 6.{i+1}] Processing layer: {layer_name}")
 
             try:
                 # 6.1: Setup layer paths and convert to NIfTI
@@ -227,10 +227,10 @@ def complete_nii_inference_pipeline(
                 }
 
                 activation_summaries.append(layer_summary)
-                # print(f"✓ Completed processing for {layer_name}")
+                print(f"✓ Completed processing for {layer_name}")
 
             except Exception as e:
-                # print(f"✗ Error processing layer {layer_name}: {str(e)}")
+                print(f"✗ Error processing layer {layer_name}: {str(e)}")
                 # Add error summary for this layer
                 error_summary = {
                     "layer": layer_name.replace(".", "_"),
@@ -244,23 +244,23 @@ def complete_nii_inference_pipeline(
         results["pipeline_status"] = "completed"
 
         # Final results summary
-        # print("\n" + "=" * 80)
-        # print("PIPELINE COMPLETION SUMMARY")
-        # print("=" * 80)
-        # print(f"• Subject ID: {subject_id}")
-        # print(f"• Classification: {prediction_result}")
-        # print(f"• Initial layers: {len(selected_layers)}")
-        # print(f"• Validated layers: {len(validated_layers)}")
-        # print(f"• Final layers after filtering: {len(keep_entries)}")
-        # print(f"• Processed activations: {len(activation_summaries)}")
-        # print(f"• Output directory: {output_dir}")
-        # print("\nPipeline completed successfully!")
+        print("\n" + "=" * 80)
+        print("PIPELINE COMPLETION SUMMARY")
+        print("=" * 80)
+        print(f"• Subject ID: {subject_id}")
+        print(f"• Classification: {prediction_result}")
+        print(f"• Initial layers: {len(selected_layers)}")
+        print(f"• Validated layers: {len(validated_layers)}")
+        print(f"• Final layers after filtering: {len(keep_entries)}")
+        print(f"• Processed activations: {len(activation_summaries)}")
+        print(f"• Output directory: {output_dir}")
+        print("\nPipeline completed successfully!")
 
         return json.dumps(results, indent=2)
 
     except Exception as e:
         error_msg = f"Pipeline failed at step: {str(e)}"
-        # print(f"\n[ERROR] {error_msg}")
+        print(f"\n[ERROR] {error_msg}")
 
         results["pipeline_status"] = "failed"
         results["error"] = error_msg
@@ -290,7 +290,7 @@ def pipeline(subject_id: str, model_path: str, nii_path: str) -> str:
 if __name__ == "__main__":
     # Test the pipeline
     result = complete_nii_inference_pipeline()
-    # print("\n" + "=" * 50)
-    # print("PIPELINE TEST RESULT:")
-    # print("=" * 50)
-    # print(result)
+    print("\n" + "=" * 50)
+    print("PIPELINE TEST RESULT:")
+    print("=" * 50)
+    print(result)

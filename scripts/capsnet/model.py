@@ -72,6 +72,7 @@ class CapsNetRNN(nn.Module):
         self.fc = nn.Linear(64, 1)
         self.activations = {}
         self._register_hooks()
+        self.input_size = (1, 1, 91, 91, 109)  # For reference
 
     def _register_hooks(self):
         def hook_fn(module, input, output):

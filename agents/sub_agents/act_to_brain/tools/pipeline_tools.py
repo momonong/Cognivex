@@ -34,6 +34,7 @@ from agents.sub_agents.act_to_brain.tools.pipelines.visualize import (
 )
 
 from scripts.capsnet.model import CapsNetRNN
+from scripts.macadnnet.model import MCADNNet
 
 DEVICE = (
     "cuda"
@@ -41,7 +42,10 @@ DEVICE = (
     else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 MODEL = CapsNetRNN().to(DEVICE)
+# MODEL = MCADNNet().to(DEVICE)
 INPUT_SHAPE = (1, 1, 91, 91, 109)
+# INPUT_SHAPE = (1, 64, 64)
+
 WINDOW = 5
 STRIDE = 3
 OUTPUT_DIR = "output/agent_test"
