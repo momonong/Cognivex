@@ -125,7 +125,8 @@ def llm_response(
                 response = ollama.chat(model=model, messages=messages,format=response_schema)
             else:
                 response = ollama.chat(model=model, messages=messages,)
-            return response['message']['content']  
+            return response['message']['content']
+  
         else:
             response = ollama.generate(model=model, prompt=prompt)
             return response['response']

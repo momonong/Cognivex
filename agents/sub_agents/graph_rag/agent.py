@@ -25,10 +25,10 @@ You will receive a `highlighted_regions` list with potentially imprecise names.
 - After `query_regions_by_name` returns the final data, you MUST synthesize all information into the final Markdown report as previously instructed.
 """
 
-graph_rag_agent = LlmAgent(
+graph_rag_agent = create_llm_agent(
     name="GraphRAGAgent",
     # model=LiteLlm(model="ollama_chat/gpt-oss:20b"),  
-    model="gemini-2.5-flash-lite",
+    # model="gemini-2.5-flash-lite",
     description="Agent for querying and reasoning over knowledge graphs using RAG.",
     instruction=INSTRUCTIONS,
     tools=[entity_linker_tool, graphrag],

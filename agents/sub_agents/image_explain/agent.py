@@ -33,11 +33,11 @@ Be medically precise and prioritize structured clarity.
 """
 
 
-image_explain_agent = LlmAgent(
+image_explain_agent = create_llm_agent(
     name="ImageExplainAgent",
     description="Analyzes an fMRI brain activation map and provides semantic insights related to brain function and Alzheimer's disease.",
     # model=LiteLlm(model="ollama_chat/gpt-oss:20b"),  
-    model="gemini-2.5-flash-lite",
+    # model="gemini-2.5-flash-lite",
     instruction=INSTRUCTION,
     tools=[explain_activation_map],
     output_key="image_explain_result",

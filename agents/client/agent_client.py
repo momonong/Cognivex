@@ -18,33 +18,38 @@ def create_llm_agent(
 ) -> LlmAgent:
 
     if model.startswith("gpt-oss-20b"):
-        agent = (
-            LlmAgent(
-                name=name,
-                description=description,
-                model=LiteLlm(model="ollama_chat/gpt-oss:20b"),
-                instruction=instruction,
-                output_schema=output_schema,
-                tools=tools or [],
-                output_key=output_key,
-                disallow_transfer_to_peers=True,
-                disallow_transfer_to_parent=True,
-            ),
+        agent = LlmAgent(
+            name=name,
+            description=description,
+            model=LiteLlm(model="ollama_chat/gpt-oss:20b"),
+            instruction=instruction,
+            output_schema=output_schema,
+            tools=tools or [],
+            output_key=output_key,
+            disallow_transfer_to_peers=True,
+            disallow_transfer_to_parent=True,
         )
 
     if model.startswith("gemini-2.5-flash-lite"):
-        agent = (
-            LlmAgent(
+        if output_schema:
+            agent = LlmAgent(
                 name=name,
                 description=description,
                 model=model,
                 instruction=instruction,
                 output_schema=output_schema,
-                tools=tools or [],
                 output_key=output_key,
                 disallow_transfer_to_peers=True,
                 disallow_transfer_to_parent=True,
-            ),
-        )
+            )
+        else:
+            agent = LlmAgent(
+                name=name,
+                description=description,
+                model=model,
+                instruction=instruction,
+                tools=tools,
+                output_key=output_key,
+            )
 
     return agent

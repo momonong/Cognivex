@@ -60,14 +60,14 @@ class FinalReport(BaseModel):
         description="The file path to the primary activation map visualization PNG image for display."
     )
 
-report_generator_agent = LlmAgent(
+report_generator_agent = create_llm_agent(
    name="ReportGeneratorAgent",
    #  model=LiteLlm(model="ollama_chat/gpt-oss:20b"),  
-    model="gemini-2.5-flash-lite",
+   # model="gemini-2.5-flash-lite",
    description="Integrates outputs from previous steps and writes the final clinical report.",
    instruction=INSTRUCTION,
    output_schema=FinalReport,
    output_key="final_report",
-   disallow_transfer_to_peers=True,
-   disallow_transfer_to_parent=True,
+   # disallow_transfer_to_peers=True,
+   # disallow_transfer_to_parent=True,
 )
