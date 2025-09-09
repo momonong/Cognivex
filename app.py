@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import json
 import glob 
@@ -15,13 +16,25 @@ st.markdown("An agent-based framework for generating knowledge-grounded clinical
 st.sidebar.header("Analysis Controls")
 
 subject_folders = glob.glob("data/raw/*/sub-*")
-subject_list = sorted([folder.split('/')[-1] for folder in subject_folders])
+subject_labels = {} # { 'sub-14': 'AD', 'sub-21': 'NC', ... }
+
+for folder_path in subject_folders:
+    # folder_path looks like: 'data/raw/AD/sub-14'
+    parts = folder_path.split(os.sep) # 
+    if len(parts) >= 4:
+        subject_id = parts[-1] # 'sub-14'
+        label = parts[-2]      # 'AD' or 'NC'
+        subject_labels[subject_id] = label
+
+subject_list = sorted(subject_labels.keys())
 
 if not subject_list:
     st.sidebar.error("Please ensure the data is correctly placed.")
     subject_list = ["sub-14"] 
 
 selected_subject = st.sidebar.selectbox('Select Subject:', subject_list)
+ground_truth_label = subject_labels.get(selected_subject, "N/A")
+st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
 
 models = ["CapsNetRNN"] 
 selected_model = st.sidebar.selectbox('Select Inference Model:', models)
@@ -35,7 +48,6 @@ if st.sidebar.button('Start Analysis', type="primary"):
             # 1. Handle model paths
             model_paths_map = {
                 "CapsNetRNN": "model/capsnet/best_capsnet_rnn.pth",
-                "MCADNNet": "model/mcadnnet/best_mcadnnet.pth"
             }
             model_path = model_paths_map.get(selected_model)
             if not model_path:
