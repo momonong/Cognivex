@@ -28,10 +28,6 @@ This guide will walk you through setting up the project and running the complete
 We recommend using a virtual environment to manage dependencies.
 
 **Step 1: Clone the repository**
-```bash
-git clone [https://github.com/momonong/Neuro-Compass.git](https://github.com/momonong/Neuro-Compass.git)
-cd Neuro-Compass
-```
 
 **Step 2: Create and activate a virtual environment**
 ```bash
@@ -59,6 +55,11 @@ NEO4J_USERNAME="neo4j"
 NEO4J_PASSWORD="your_neo4j_password"
 ```
 
+Step 5: Set Up the Knowledge Graph
+This project relies on a Neo4j knowledge graph. Please ensure your Neo4j database is running. To build the required graph schema and populate it with data, please follow the step-by-step instructions in the document below:
+
+➡️ Knowledge Graph Setup Guide refers to `scripts/kg/build_kg.md` in this repo.
+
 ### 3. Usage
 
 The project is divided into several key stages.
@@ -70,8 +71,7 @@ This project requires a specific fMRI dataset for analysis. Please follow these 
 **Step 1: Download the Dataset**
 Download the compressed raw fMRI dataset from the cloud storage link provided below. The file will be a `.zip` or `.tar.gz` archive.
 
-[**➡️ Download Raw fMRI Dataset Here**](YOUR_CLOUD_STORAGE_LINK)  
-*(註：請將 `YOUR_CLOUD_STORAGE_LINK` 替換成您真實的雲端分享連結)*
+[**➡️ Download Raw fMRI Dataset Here**](https://u.pcloud.link/publink/show?code=kZEgL15ZhlezDWqfUEY3MkFwUK9Gtui7w0T7)  
 
 **Step 2: Unzip and Place the Data**
 1.  Unzip the file you just downloaded (e.g., `data.zip`).
