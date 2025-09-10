@@ -1,8 +1,15 @@
 # Neuro-Compass: An Explainable AI Agent for Neuroimaging
 
-This project is an autonomous multi-agent system for providing deep, explainable insights into fMRI-based Alzheimer's Disease models.
+This project introduces **Neuro-Compass**, a novel, autonomous multi-agent framework designed to provide robust, semantically rich explanations for fMRI-based Alzheimer's Disease (AD) classification models.
 
-*(... 在這裡放上您專案的詳細介紹 ...)*
+The core challenge in applying AI to neuroimaging is the "black box" problem. While models can achieve high accuracy, their lack of transparent reasoning hinders clinical adoption and trust. Neuro-Compass is engineered to solve this by creating a trustworthy AI assistant for neuroscientists. It automates the entire analysis pipeline, transforming raw fMRI data into a clinically relevant, knowledge-grounded report.
+
+### Key Features:
+* **🧠 Autonomous Multi-Agent System**: Orchestrates a team of specialist AI agents (built with Google's ADK) to manage a complex, multi-stage workflow.
+* **🔍 Dynamic XAI Layer Selection**: Implements a "hypothesize-and-verify" mechanism where an LLM first proposes, and then validates against real activation data, the most informative neural network layer for explainability.
+* **🔗 Robust Knowledge Graph Integration (GraphRAG)**: Solves the entity linking challenge by using an LLM to align model-identified brain regions with a canonical list from a Neo4j graph, followed by a 100% reliable templated Cypher query.
+* **📄 Publication-Ready Reporting**: The final agent synthesizes all computational results, visual interpretations, and knowledge graph insights into a comprehensive, structured clinical report.
+* **🔬 Scientifically-Grounded**: Our case studies show the system's ability to autonomously identify activation patterns in the Default Mode Network (DMN), a key neuropathological correlate of AD, validating the model's clinical relevance.
 
 ---
 
