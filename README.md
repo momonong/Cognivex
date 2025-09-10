@@ -55,7 +55,7 @@ NEO4J_USERNAME="neo4j"
 NEO4J_PASSWORD="your_neo4j_password"
 ```
 
-Step 5: Set Up the Knowledge Graph
+**Step 5: Set Up the Knowledge Graph**
 This project relies on a Neo4j knowledge graph. Please ensure your Neo4j database is running. To build the required graph schema and populate it with data, please follow the step-by-step instructions in the document below:
 
 ➡️ Knowledge Graph Setup Guide refers to `scripts/kg/build_kg.md` in this repo.
