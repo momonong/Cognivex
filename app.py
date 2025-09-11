@@ -79,6 +79,7 @@ if st.sidebar.button('Start Analysis', type="primary"):
             st.error(f"File error: {e}")
             st.session_state['run_complete'] = False
         except Exception as e:
+            st.error("Please wait a minute and try again.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
 
