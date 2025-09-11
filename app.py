@@ -82,6 +82,15 @@ if st.sidebar.button('Start Analysis', type="primary"):
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
 
+# --- Acknowledgement Section ---
+st.sidebar.markdown("---") 
+adni_acknowledgement = """
+<div style="font-size: 0.75rem; color: grey;">
+Data used in preparation of this article were obtained from the Alzheimer's Disease Neuroimaging Initiative (ADNI) database (adni.loni.usc.edu). As such, the investigators within the ADNI contributed to the design and implementation of ADNI and/or provided data but did not participate in analysis or writing of this report. A complete listing of ADNI investigators can be found at: <a href="http://adni.loni.usc.edu/wp-content/uploads/how_to_apply/ADNI_Acknowledgement_List.pdf" target="_blank">ADNI Acknowledgement List</a>.
+</div>
+"""
+st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
+
 # --- Results display section (this part remains unchanged) ---
 if 'run_complete' in st.session_state and st.session_state['run_complete']:
     # ... (Your original result display code)
