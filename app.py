@@ -96,6 +96,11 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
     
     st.markdown("---")
     st.header("Analysis Results")
+    st.subheader("Subject Activation overlay on brain.")
+    try:
+        st.image(report_data.visualization_path, caption=f"Activation map for subject {selected_subject}")
+    except Exception as e:
+        st.error(f"Cannot display image. Please check path: {report_data.visualization_path}. Error: {e}")
     
     # 預測結果比對
     predicted_label = "Unknown"
