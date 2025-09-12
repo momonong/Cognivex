@@ -6,21 +6,18 @@ import glob
 # --- 核心功能 Import ---
 from nilearn import plotting
 from nilearn import image as nimg
-import streamlit.components.v1 as components
 import matplotlib.pyplot as plt 
 
 # --- 從您的 Agent 腳本匯入 FinalReport ---
-# 確保這個路徑是您專案中定義 FinalReport Class 的正確位置
 from agents.sub_agents.final_report.agent import FinalReport
 # --- 從您的後端腳本匯入執行函式 ---
 from backend.backend_runner import run_analysis_sync
 
-# --- 【整合進來】從獨立檢視器複製過來的快取函式 ---
+# --- 快取函式 ---
 @st.cache_data
 def load_and_process_nifti(path: str):
     """
     載入一個 NIfTI 檔案，並將其轉換為一個 3D 平均影像。
-    使用快取來避免重複載入和處理，提升滑桿互動的流暢度。
     """
     img_4d = nimg.load_img(path)
     img_3d = nimg.mean_img(img_4d)
@@ -32,37 +29,26 @@ st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
 st.markdown("An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data.")
 
-# --- 側邊欄控制項 ---
+# --- 側邊欄控制項 (不變) ---
 st.sidebar.header("Analysis Controls")
-
-# 動態尋找 Subject 並同時儲存其真實標籤
 subject_folders = glob.glob("data/raw/*/sub-*")
 subject_labels = {} 
-
 for folder_path in subject_folders:
     parts = folder_path.split(os.sep) 
     if len(parts) >= 4:
         subject_id = parts[-1]
         label = parts[-2]      
         subject_labels[subject_id] = label
-
 subject_list = sorted(subject_labels.keys())
-
 if not subject_list:
     st.sidebar.error("在 'data/raw' 路徑下找不到任何 'AD/sub-XX' 或 'NC/sub-XX' 資料夾。")
-    subject_list = ["sub-14"] 
-    subject_labels["sub-14"] = "Unknown" 
-
+    st.stop()
 selected_subject = st.sidebar.selectbox('Select Subject:', subject_list)
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
-
 models = ["CapsNetRNN"] 
 selected_model = st.sidebar.selectbox('Select Inference Model:', models)
-
 start_button = st.sidebar.button('Start Analysis', type="primary")
-
-# --- ADNI 致謝詞 ---
 st.sidebar.markdown("---") 
 adni_acknowledgement = """
 <div style="font-size: 0.75rem; color: grey;">
@@ -74,6 +60,9 @@ st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 
 # --- 分析與結果顯示邏輯 ---
 if start_button:
+    # --- 【關鍵修正 1】在開始分析時，設定 expander 預設為打開狀態 ---
+    st.session_state.viewer_expanded = True
+    # ----------------------------------------------------------------
     with st.spinner('Analysis in progress... This may take a minute. Please wait.'):
         try:
             model_paths_map = { "CapsNetRNN": "model/capsnet/best_capsnet_rnn.pth" }
@@ -85,22 +74,18 @@ if start_button:
             if not nii_file_list: raise FileNotFoundError(f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。")
             nii_path = nii_file_list[0]
 
-            st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
-
             result_json_string = run_analysis_sync(selected_subject, nii_path, model_path)
             
             if result_json_string:
                 final_report_obj = FinalReport.model_validate_json(result_json_string)
-                
                 st.session_state['nii_path'] = nii_path 
                 st.session_state['final_report'] = final_report_obj
                 st.session_state['run_complete'] = True
             else:
                 st.error("Analysis finished but the agent returned no content.")
                 st.session_state['run_complete'] = False
-
         except Exception as e:
-            st.error("Please retry after at least 1 minute.")
+            st.error("Please retry at least after 1 minute.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
 
@@ -112,7 +97,7 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
     st.markdown("---")
     st.header("Analysis Results")
     
-    # 預測結果與真實標籤的比對
+    # 預測結果比對
     predicted_label = "Unknown"
     if "Alzheimer's Disease (AD)" in report_data.final_report_markdown: predicted_label = "AD"
     elif "Healthy Control (CN)" in report_data.final_report_markdown: predicted_label = "NC"
@@ -123,18 +108,16 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
     if ground_truth_label == predicted_label: st.success("✅ Prediction is Correct")
     else: st.error("❌ Prediction is Incorrect")
     
-    with st.expander("Explore Original fMRI Scan (Interactive Slicer)"):
-        # 從 session_state 取得原始 fMRI 檔案的路徑
+    # 互動式原始檔案檢視器
+    # --- 【關鍵修正 2】在建立 expander 時，使用 session_state 來控制其狀態 ---
+    is_expanded_default = st.session_state.get('viewer_expanded', False)
+    with st.expander("Explore Original fMRI Scan (Interactive Slicer)", expanded=is_expanded_default):
         nii_path = st.session_state.get('nii_path')
         
         if nii_path and os.path.exists(nii_path):
-            # 呼叫快取函式來載入影像
             img_3d = load_and_process_nifti(nii_path)
-            
             st.info("Use the sliders below to freely explore the subject's brain anatomy.")
-            
             coords = img_3d.shape
-            # 建立三個並排的滑桿，更節省空間
             col1, col2, col3 = st.columns(3)
             with col1:
                 x = st.slider('X (Sagittal)', int(-coords[0]/2), int(coords[0]/2), 0, key='slice_x')
@@ -143,26 +126,22 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
             with col3:
                 z = st.slider('Z (Axial)', int(-coords[2]/2), int(coords[2]/2), 0, key='slice_z')
             
-            selected_coords = (x, y, z)
-            
-            # 使用 Nilearn 繪圖
-            fig, axes = plt.subplots(1, 1, figsize=(12, 6))
-            plotting.plot_anat(
-                img_3d,
-                display_mode='ortho',
-                cut_coords=selected_coords,
-                axes=axes,
-                title=f"Orthogonal Views at {selected_coords}",
-                draw_cross=True,
-                annotate=True,
-                black_bg=True,
-            )
+            # 手動建立 1x3 的子圖
+            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
             fig.patch.set_facecolor('black')
             plt.rcParams['text.color'] = 'white'
+            
+            plotting.plot_anat(img_3d, display_mode='x', cut_coords=[x], axes=axes[0],
+                              title=f"Sagittal (X={x})", draw_cross=False, annotate=False, black_bg=True)
+            plotting.plot_anat(img_3d, display_mode='y', cut_coords=[y], axes=axes[1],
+                              title=f"Coronal (Y={y})", draw_cross=False, annotate=False, black_bg=True)
+            plotting.plot_anat(img_3d, display_mode='z', cut_coords=[z], axes=axes[2],
+                              title=f"Axial (Z={z})", draw_cross=False, annotate=False, black_bg=True)
+            
+            fig.tight_layout()
             st.pyplot(fig)
         else:
             st.warning("Could not find the original NIfTI file for this viewer.")
-
 
     # 中英文報告分頁
     tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
