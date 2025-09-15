@@ -4,13 +4,14 @@ from google import genai
 import os
 from dotenv import load_dotenv
 
+from agents.client.llm_client import GOOGLE_PROJECT_ID
+
 load_dotenv()
 
-# 替換為你的 API Key（如果尚未設置過）
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_PROJECT_ID = os.getenv("GOOGLE_PROJECT_ID")
+GOOGLE_LOCATION = os.getenv("GOOGLE_LOCATION")
 
-# 選擇模型（推薦使用 gemini-1.5-flash 或 gemini-1.5-pro）
-client = genai.Client(api_key=GOOGLE_API_KEY)
+client = genai.Client(vertexai=True, project=GOOGLE_PROJECT_ID, location=GOOGLE_LOCATION)
 model = 'gemini-2.5-flash-lite'  # 或 'gemini-2.5-pro'，根據需要選擇
 
 # 圖片路徑（請換成你電腦上任一張 PNG）

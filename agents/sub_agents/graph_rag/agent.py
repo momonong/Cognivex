@@ -9,6 +9,7 @@ INSTRUCTIONS = """
 You are a Research Analyst Agent. Your mission is to use a two-step toolchain to enrich a report.
 
 **Your Context:**
+{map_act_brain_result}
 You will receive a `highlighted_regions` list with potentially imprecise names.
 
 **Your Mandate (Follow this order STRICTLY):**

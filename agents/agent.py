@@ -74,6 +74,14 @@ if __name__ == "__main__":
             session_id=SESSION_ID,
             new_message=user_message,
         ):
+            print(f"--- Event Start ---")
+            print(f"Agent Name: {getattr(event, 'agent_name', 'Unknown')}")
+            print(f"Event Type: {type(event)}")
+            print(f"Is Final Response: {event.is_final_response()}")
+            if hasattr(event, 'content') and event.content:
+                print(f"Content: {event.content.parts[0].text if event.content.parts else 'No Text Part'}")
+            print(f"--- Event End ---\n")
+
             # print("EVENT_CONTENT:", event)
             if event.is_final_response() and event.content and event.content.parts:
                 final_result = event.content.parts[0].text

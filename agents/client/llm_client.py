@@ -6,15 +6,16 @@ from dotenv import load_dotenv
 from google import genai
 from typing import Optional, Any, Type
 from google.genai import types
-
+from google.genai.types import HttpOptions
 
 from agents.client.utils import build_gemini_config
 from agents.client.utils import prepare_image_parts_from_paths
 
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
+GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
 
-gemini_client = genai.Client(api_key=GOOGLE_API_KEY)
+gemini_client = genai.Client(vertexai=True,  project=str(GOOGLE_CLOUD_PROJECT), location=str(GOOGLE_CLOUD_LOCATION))
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
@@ -29,8 +30,7 @@ def gemini_chat(
     input_schema: Optional[Type] = None,
 ) -> str | Any:
     """
-    Call Gemini model with flexible configuration.
-    Returns either plain text or structured object depending on mime_type and response_schema.
+    Vertex AI Gemini 聊天函式，支援進階 config (mime_type、system_instruction、schema 等)。
     """
     config = build_gemini_config(
         mime_type=mime_type,
@@ -38,14 +38,13 @@ def gemini_chat(
         response_schema=response_schema,
         input_schema=input_schema,
     )
-
     response = gemini_client.models.generate_content(
         model=model,
         contents=prompt,
         config=config,
     )
-
-    return response.candidates[0].content.parts[0].text
+    # SDK 有時 response.text，有時 response.candidates
+    return getattr(response, "text", response.candidates[0].content.parts[0].text)
 
 
 def gemini_image(
@@ -92,7 +91,7 @@ def gemini_image(
     )
 
     # Return raw text (structured parsing可另接)
-    return response.text
+    return getattr(response, "text", response.candidates[0].content.parts[0].text)
 
 
 def llm_response(
