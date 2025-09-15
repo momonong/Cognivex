@@ -11,7 +11,7 @@ from agents.sub_agents.final_report.agent import report_generator_agent
 explain_parallel_agent = ParallelAgent(
     name="ExplainParallelAgent", 
     description="A parallel agent that implement the image explain and graphrag at the same time.", 
-    sub_agents=[image_explain_agent, graph_rag_agent]
+    sub_agents=[image_explain_agent, graph_rag_agent],
 )
 
 explain_loop_agent = LoopAgent(

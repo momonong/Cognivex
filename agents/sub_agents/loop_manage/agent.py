@@ -14,7 +14,8 @@ Your task is to evaluate the context based on one simple rule:
 -   **If BOTH {image_explain_result} AND {graph_rag_result} are present and contain information**, it means the analysis was successful. You MUST call the `exit_loop` function immediately to proceed to the next stage.
 -   **If EITHER {image_explain_result} OR {graph_rag_result} is missing**, it means the analysis is still in progress or has failed. You MUST NOT call any function and instead output a brief status message like "Waiting for parallel agents to complete."
 
-Do not analyze the content of the results or output any contents. Your only job is to verify their presence and then call the `exit_loop` tool if the condition is met.
+Your only job is to verify their presence and then call the `exit_loop` tool if the condition is met.
+Do not output anything or add any contents at any cases.
 """
 
 def exit_loop(tool_context: ToolContext):

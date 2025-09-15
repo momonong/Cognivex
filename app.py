@@ -86,7 +86,7 @@ if start_button:
                 st.error("Analysis finished but the agent returned no content.")
                 st.session_state['run_complete'] = False
         except Exception as e:
-            st.error("Please retry after at least 1 minute.")
+            st.error("Please try again later.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
 
