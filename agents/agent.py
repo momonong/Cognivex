@@ -1,14 +1,23 @@
-from google.adk.agents import SequentialAgent, ParallelAgent
+from google.adk.agents import SequentialAgent, ParallelAgent, LoopAgent
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
 from agents.sub_agents.image_explain.agent import image_explain_agent
 from agents.sub_agents.graph_rag.agent import graph_rag_agent
+from agents.sub_agents.loop_manage.agent import loop_check_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
 
 
 explain_parallel_agent = ParallelAgent(
-    name="ExplainParallelAgent", sub_agents=[image_explain_agent, graph_rag_agent]
+    name="ExplainParallelAgent", 
+    description="A parallel agent that implement the image explain and graphrag at the same time.", 
+    sub_agents=[image_explain_agent, graph_rag_agent]
+)
+
+explain_loop_agent = LoopAgent(
+    name="ExplainLoopAgent",
+    description="A loop agent that make sure the parallel agent did get a result.",
+    sub_agents=[explain_parallel_agent, loop_check_agent],
 )
 
 root_agent = SequentialAgent(
@@ -16,7 +25,7 @@ root_agent = SequentialAgent(
     description="A multi-step neuroimaging analysis pipeline for Alzheimer's detection using deep learning and knowledge graph reasoning.",
     sub_agents=[
         map_act_brain_agent,
-        explain_parallel_agent,
+        explain_loop_agent,
         report_generator_agent,
     ],
 )

@@ -59,13 +59,18 @@ async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) ->
 
     # 4. Execute Agent Pipeline and get results
     final_result = None
-    async for event in runner.run_async(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        new_message=user_message,
-    ):
-        if event.is_final_response() and event.content and event.content.parts:
-            final_result = event.content.parts[0].text
+    try:
+        async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            new_message=user_message,
+        ):
+            if event.is_final_response() and event.content and event.content.parts:
+                final_result = event.content.parts[0].text
+    except Exception as e:
+        # This block now only catches critical failures in the ADK runner itself,
+        # not pipeline logic errors, which are handled by the LoopManagerAgent.
+        print(f"A critical error occurred in the agent runner: {e}")
 
     print("\n<<< Agent Pipeline final response:\n")
     if final_result:
