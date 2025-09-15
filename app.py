@@ -80,6 +80,7 @@ if start_button:
                 final_report_obj = FinalReport.model_validate_json(result_json_string)
                 st.session_state['nii_path'] = nii_path 
                 st.session_state['final_report'] = final_report_obj
+                st.session_state['ground_truth_label'] = ground_truth_label # 將當前的 ground truth 存入 session
                 st.session_state['run_complete'] = True
             else:
                 st.error("Analysis finished but the agent returned no content.")
@@ -93,6 +94,7 @@ if start_button:
 # --- 結果顯示區塊 ---
 if 'run_complete' in st.session_state and st.session_state['run_complete']:
     report_data = st.session_state['final_report']
+    report_ground_truth = st.session_state.get('ground_truth_label', "N/A") # 從 session 讀取 ground truth
     
     st.markdown("---")
     st.header("Analysis Results")
@@ -103,14 +105,13 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
         st.error(f"Cannot display image. Please check path: {report_data.visualization_path}. Error: {e}")
     
     # 預測結果比對
-    predicted_label = "Unknown"
-    if "Alzheimer's Disease (AD)" in report_data.final_report_markdown: predicted_label = "AD"
-    elif "Healthy Control (CN)" in report_data.final_report_markdown: predicted_label = "NC"
+    # 直接從 final_report 物件中讀取分類結果
+    predicted_label = report_data.classification_result
     st.subheader("Prediction Verification")
     col1, col2 = st.columns(2)
-    col1.metric("Ground Truth", ground_truth_label)
+    col1.metric("Ground Truth", report_ground_truth)
     col2.metric("Model Prediction", predicted_label)
-    if ground_truth_label == predicted_label: st.success("✅ Prediction is Correct")
+    if report_ground_truth == predicted_label: st.success("✅ Prediction is Correct")
     else: st.error("❌ Prediction is Incorrect")
     
     # 互動式原始檔案檢視器

@@ -43,6 +43,7 @@ Your **sole final task** is to generate a JSON object that strictly adheres to t
 1.  **`visualization_path`**: First, you MUST find the primary activation map PNG path from the provided context (likely from the `{map_act_brain_result}`) and place it in this field.
 2.  **`final_report_markdown`**: Next, you MUST synthesize ALL the information from ALL context fields into a single, comprehensive, and coherent narrative report formatted in Markdown. This report should seamlessly integrate the model's findings, the visual interpretation, and the knowledge graph insights, following the professional structure of a clinical analysis.
 3.  **`final_report_chinese`**: Finally, you MUST translate the entire `final_report_markdown` into **TRADITIONAL Chinese**, ensuring that all medical terminology and nuances are accurately preserved.
+4.  **`classification_result`**: In addition, you should store the classification result of whether the subject is AD or CN in this field.
 
 Do not add any extra commentary outside of the JSON object.
 """
@@ -63,6 +64,10 @@ class FinalReport(BaseModel):
    visualization_path: str = Field(
       ..., 
       description="The file path to the primary activation map visualization PNG image for display."
+   )
+   classification_result: str = Field(
+      ...,
+      description="The classification result of the model."
    )
 
 
