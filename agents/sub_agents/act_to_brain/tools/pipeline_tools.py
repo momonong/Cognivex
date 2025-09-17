@@ -42,11 +42,22 @@ DEVICE = (
     else "mps" if torch.backends.mps.is_available() else "cpu"
 )
 MODEL = CapsNetRNN().to(DEVICE)
+MODEL_TYPE = "3d" # '3d' or '2d'
 # MODEL = MCADNNet().to(DEVICE)
+# MODEL_TYPE = "2d"
+
 INPUT_SHAPE = (1, 1, 91, 91, 109)
 # INPUT_SHAPE = (1, 64, 64)
 
-WINDOW = 5
+# --- Model-specific parameters ---
+if MODEL_TYPE == "3d":
+    WINDOW = 5 # Example for 3D sliding window
+    STRIDE = 3
+else: # 2D model
+    WINDOW = 1 # Process slice by slice
+    STRIDE = 1
+
+# --- General parameters ---
 STRIDE = 3
 OUTPUT_DIR = "output/agent_test"
 SAVE_NAME = "agent_test"
