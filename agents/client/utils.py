@@ -9,11 +9,15 @@ def build_gemini_config(
     system_instruction: Optional[str] = None,
     response_schema: Optional[Type] = None,
     input_schema: Optional[Type] = None,
+    temperture: float = 0,
+    seed: int = 42,
 ) -> types.GenerateContentConfig:
     kwargs = {
         "response_mime_type": mime_type,
         "system_instruction": system_instruction,
         "response_schema": response_schema,
+        "temperature": temperture,
+        "seed": seed,
     }
 
     if input_schema is not None:

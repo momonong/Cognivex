@@ -63,7 +63,7 @@ if start_button:
     # --- 【關鍵修正 1】在開始分析時，設定 expander 預設為打開狀態 ---
     st.session_state.viewer_expanded = True
     # ----------------------------------------------------------------
-    with st.spinner('Analysis in progress... This may take a minute. Please wait.'):
+    with st.spinner('Analysis in progress... This may take a few minutes. Please wait.'):
         try:
             model_paths_map = { "CapsNetRNN": "model/capsnet/best_capsnet_rnn.pth" }
             model_path = model_paths_map.get(selected_model)

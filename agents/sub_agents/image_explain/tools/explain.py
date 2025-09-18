@@ -49,12 +49,13 @@ def explain_activation_map(
     Args:
         image_paths (List[str]): A list of paths to the image files to be analyzed.
                                  Typically [individual_map_path, group_map_path].
-        analysis_data_json (str): The structured JSON output from the nii_inference pipeline,
+        analysis_data_json (str): The output from the nii_inference pipeline,
                                     containing factual data about activated regions.
 
     Returns:
         Dict[str, Any]: A dictionary containing the detailed text explanation and a list of highlighted regions.
     """
+    print("IMAGE EXPLAIN START")
     prompt = f"""
     Please analyze the provided fMRI data and images according to my instructions.
 
@@ -84,10 +85,10 @@ def explain_activation_map(
     # Parse the raw JSON string into an ActivationExplanation object
     response_object = ActivationExplanation.model_validate_json(raw_response_str)
 
-    # print("[Gemini Explanation Output]:\n")
-    # print(raw_response_str)
-    # print("\n[Highlighted Regions]:", response_object.highlighted_regions)
-
+    print("[Gemini Explanation Output]:\n")
+    print(raw_response_str)
+    print("\n[Highlighted Regions]:", response_object.highlighted_regions)
+    print("IMAGE EXPLAIN END")
     return {
         "text": response_object.text,
         "highlighted_regions": response_object.highlighted_regions,
@@ -96,4 +97,6 @@ def explain_activation_map(
 
 # --- Test run ---
 if __name__ == "__main__":
-    explain_activation_map()
+    IMAGE_PATH = "figures/agent_test/agent_test_capsnet_conv3/activation_map_capsnet_conv3.png"
+    ANALYSIS_DATA_JSON = "The fMRI analysis for subject sub-14 indicates Alzheimer's Disease (AD). The inference was performed using the CapsNet-RNN model, with activations extracted from the `capsnet.conv3` layer.\n\n**Activation Analysis:**\n\nThe analysis revealed significant activation patterns in several brain regions:\n\n*   **Right Hemisphere Dominance:** Higher activations were observed in the right hemisphere, particularly in the **Angular gyrus (Angular_R)**, **Superior Frontal gyrus (Frontal_Sup_2_R)**, **Inferior Parietal gyrus (Parietal_Inf_R)**, and **Superior Parietal gyrus (Parietal_Sup_R)**.\n*   **Parietal and Temporal Lobe Involvement:** The **Parietal_Inf_R**, **Parietal_Sup_R**, and **Temporal_Mid_R** regions showed notable activation, which is consistent with known patterns of neurodegeneration in AD affecting these areas.\n*   **Frontal Lobe Engagement:** Activations were also detected in the **Frontal_Sup_2_R**, **Frontal_Sup_Medial_R**, and **Frontal_Mid_2_R**, suggesting involvement of frontal cognitive networks.\n*   **Other Regions:** Moderate activations were observed in the **Postcentral_R**, **Occipital_Mid_R**, **SupraMarginal_R**, **Occipital_Sup_R**, **Frontal_Sup_Medial_L**, **ACC_pre_R**, and **Temporal_Sup_R**.\n\n**Clinical Interpretation:**\n\nThe observed activation patterns, particularly in the parietal and temporal lobes, align with the typical progression of Alzheimer's disease, which often involves atrophy and functional changes in these regions crucial for memory, language, and spatial processing. The involvement of frontal regions further supports the widespread network dysfunction seen in AD.\n\n**Visualization:**\n\nThe activation map for the `capsnet.conv3` layer is available at: `figures/agent_test/agent_test_capsnet_conv3/activation_map_capsnet_conv3.png`.\n\nThe detailed results, including brain region activations and file paths, have been saved and are available in the JSON output."
+    explain_activation_map(image_paths=[IMAGE_PATH], analysis_data_json=ANALYSIS_DATA_JSON)

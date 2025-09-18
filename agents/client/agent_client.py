@@ -1,6 +1,7 @@
 import os
 from google.adk.agents import LlmAgent
 from google.adk.models.lite_llm import LiteLlm
+from google.genai import types
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -19,6 +20,8 @@ def create_llm_agent(
     output_key: str = None,
     disallow_transfer_to_peers: bool = True,
     disallow_transfer_to_parent: bool = True,
+    temperature: float = 0,
+    seed: int = 42,
 ) -> LlmAgent:
     """
     Creates a Vertex AI Gemini or GPT OSS LLM Agent.
@@ -44,6 +47,10 @@ def create_llm_agent(
     # Gemini Agent (suitable for Vertex AI trial credit): uses the model name directly
     if model.startswith("gemini-2.5-flash-lite"):
         agent_kwargs["model"] = model
+        agent_kwargs["generate_content_config"] = types.GenerateContentConfig(
+            temperature=temperature,
+            seed=seed,
+        )
         if output_schema is not None:
             agent_kwargs["output_schema"] = output_schema
         return LlmAgent(**agent_kwargs)

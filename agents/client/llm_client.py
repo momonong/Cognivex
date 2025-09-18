@@ -28,6 +28,8 @@ def gemini_chat(
     system_instruction: Optional[str] = None,
     response_schema: Optional[Type] = None,
     input_schema: Optional[Type] = None,
+    temperature: float = 0,
+    seed: int = 42,
 ) -> str | Any:
     """
     Vertex AI Gemini 聊天函式，支援進階 config (mime_type、system_instruction、schema 等)。
@@ -37,6 +39,8 @@ def gemini_chat(
         system_instruction=system_instruction,
         response_schema=response_schema,
         input_schema=input_schema,
+        temperture=temperature,
+        seed=seed,
     )
     response = gemini_client.models.generate_content(
         model=model,
@@ -56,6 +60,8 @@ def gemini_image(
     mime_type: Optional[str] = "text/plain",
     response_schema: Optional[Type] = None,
     input_schema: Optional[Type] = None,
+    temperature: float = 0,
+    seed: int = 42,
 ) -> str:
     """
     Call Gemini with one or multiple images + prompt and return generated response.
@@ -81,6 +87,8 @@ def gemini_image(
         system_instruction=system_instruction,
         response_schema=response_schema,
         input_schema=input_schema,
+        temperture=temperature,
+        seed=seed,
     )
 
     # Send multimodal request

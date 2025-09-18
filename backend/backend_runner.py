@@ -65,6 +65,9 @@ async def run_analysis_async(subject_id: str, nii_path: str, model_path: str) ->
             session_id=SESSION_ID,
             new_message=user_message,
         ):
+            session = await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
+            print("All session state:", session.state)
+
             if event.is_final_response() and event.content and event.content.parts:
                 final_result = event.content.parts[0].text
     except Exception as e:
