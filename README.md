@@ -1,4 +1,4 @@
-# Neuro-Compass: An Explainable AI Agent for Neuroimaging
+# An Agent-based Framework for Explainable fMRI Analysis in Alzheimer's Disease
 
 This project introduces **Neuro-Compass**, a novel, autonomous multi-agent framework designed to provide robust, semantically rich explanations for fMRI-based Alzheimer's Disease (AD) classification models.
 
