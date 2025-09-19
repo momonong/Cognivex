@@ -1,5 +1,4 @@
 from google.adk.agents import SequentialAgent, ParallelAgent, LoopAgent
-from google.adk.sessions import session
 
 # Sub-agents
 from agents.sub_agents.act_to_brain.agent import map_act_brain_agent
@@ -10,12 +9,11 @@ from agents.sub_agents.loop_manage.agent import loop_check_agent
 from agents.sub_agents.final_report.agent import report_generator_agent
 
 
-explain_parallel_agent = ParallelAgent(
-    name="ExplainParallelAgent",
-    description="A parallel agent that implement the image explain and graphrag at the same time.",
-    sub_agents=[graph_rag_agent, image_explain_agent
-    ],
-)
+# explain_parallel_agent = ParallelAgent(
+#     name="ExplainParallelAgent",
+#     description="A parallel agent that implement the image explain and graphrag at the same time.",
+#     sub_agents=[graph_rag_agent, image_explain_agent],
+# )
 
 # explain_loop_agent = LoopAgent(
 #     name="ExplainLoopAgent",
@@ -29,7 +27,9 @@ root_agent = SequentialAgent(
     sub_agents=[
         map_act_brain_agent,
         retrieve_img_path_agent,
-        explain_parallel_agent,
+        # explain_parallel_agent,
+        image_explain_agent,
+        graph_rag_agent,
         report_generator_agent,
     ],
 )

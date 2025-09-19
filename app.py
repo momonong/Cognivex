@@ -73,6 +73,7 @@ if start_button:
             nii_file_list = glob.glob(nii_search_pattern)
             if not nii_file_list: raise FileNotFoundError(f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。")
             nii_path = nii_file_list[0]
+            st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
 
             result_json_string = run_analysis_sync(selected_subject, nii_path, model_path)
             

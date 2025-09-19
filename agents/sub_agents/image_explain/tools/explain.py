@@ -86,8 +86,6 @@ def explain_activation_map(
     response_object = ActivationExplanation.model_validate_json(raw_response_str)
 
     print("[Gemini Explanation Output]:\n")
-    print(raw_response_str)
-    print("\n[Highlighted Regions]:", response_object.highlighted_regions)
     print("IMAGE EXPLAIN END")
     return {
         "text": response_object.text,

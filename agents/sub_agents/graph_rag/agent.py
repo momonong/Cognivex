@@ -24,6 +24,22 @@ You will receive a `highlighted_regions` list with potentially imprecise names.
 
 **Step 3: Final Report.**
 - After `query_regions_by_name` returns the final data, you MUST synthesize all information into the final Markdown report as previously instructed.
+
+- **Output Formatting Constraint:**
+  - **You MUST NOT use Markdown tables (`| ... |`) in your final report.** Models often struggle with table formatting, leading to errors.
+  - Instead, for presenting detailed region information, you MUST use a heading for each brain region followed by a bulleted list for its details.
+
+  - **Example of the required format:**
+
+    ```markdown
+    ### Precuneus (Left)
+    - **Associated Networks:** Default Mode Network (DMN)
+    - **Key Functions:** Involved in episodic memory, self-processing, and consciousness.
+
+    ### Hippocampus (Right)
+    - **Associated Networks:** Limbic System
+    - **Key Functions:** Crucial for memory consolidation and spatial navigation.
+    ```
 """
 
 graph_rag_agent = create_llm_agent(
