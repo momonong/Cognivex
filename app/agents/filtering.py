@@ -10,7 +10,7 @@ def filter_layers_dynamically(state: AgentState) -> dict:
     print("\n--- Node: 2. Dynamic Layer Filtering ---")
     subject_id = state['subject_id']
     validated_layers = state.get('validated_layers', [])
-    save_name_prefix = f"subject_{subject_id}"
+    save_name_prefix = f"{subject_id}"
 
     try:
         keep_entries, _, _ = dynamic_filtering(

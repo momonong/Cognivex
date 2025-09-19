@@ -7,21 +7,40 @@ This document provides comprehensive guidance for AI assistants working with the
 **Neuro-Compass** is a cutting-edge explainable AI system that transforms fMRI neuroimaging data into clinically relevant, interpretable reports for Alzheimer's Disease diagnosis. The system solves the "black box" problem in medical AI by combining deep learning models with knowledge graph reasoning.
 
 ### Core Architecture
-- **Multi-Agent System**: Built on Google ADK (Agent Development Kit)
-- **Sequential Pipeline**: Brain mapping → Image analysis → Knowledge reasoning → Report generation
+- **LangGraph Workflow System**: Built on LangChain's LangGraph for state-based pipeline orchestration
+- **7-Node Sequential Pipeline**: Inference → Filtering → Post-processing → Entity Linking → Knowledge Reasoning → Image Explanation → Report Generation
 - **Knowledge Integration**: Neo4j graph database with semantic medical knowledge
 - **Deep Learning**: CapsNet-RNN and MCADNNet models for AD classification
+- **State Management**: Comprehensive AgentState tracking all intermediate and final results
 
 ## 📁 Project Structure
 
 ```
 semantic-KG/
-├── agents/                    # Google ADK multi-agent system
+├── agents/                    # Legacy Google ADK system (dual architecture support)
 │   ├── agent.py              # Root SequentialAgent (fMRIAlzheimerPipeline)
 │   └── sub_agents/           # Individual pipeline stages
-├── app/                      # Knowledge graph query utilities
-├── app.py                    # Streamlit web interface
-├── backend/                  # Async analysis runner
+├── app/                      # NEW: LangGraph-based analysis pipeline
+│   ├── agents/               # Pipeline node implementations
+│   │   ├── inference.py      # Model inference and classification
+│   │   ├── filtering.py      # Dynamic layer filtering
+│   │   ├── postprocessing.py # Activation map processing
+│   │   ├── entity_linking.py # Brain region entity linking
+│   │   ├── knowledge_reasoning.py # Neo4j knowledge integration
+│   │   ├── image_explainer.py # Visual analysis of brain maps
+│   │   └── report_generator.py # Final clinical report synthesis
+│   ├── core/                 # Core processing utilities
+│   │   ├── fmri_processing/  # fMRI analysis pipelines
+│   │   ├── knowledge_graph/  # KG query and entity tools
+│   │   └── vision/           # Image explanation tools
+│   ├── graph/                # LangGraph workflow definition
+│   │   ├── state.py          # AgentState schema and types
+│   │   └── workflow.py       # Complete pipeline workflow
+│   └── services/             # External service connectors
+│       ├── llm_provider.py   # Gemini/Ollama LLM services
+│       └── neo4j_connector.py # Neo4j database interface
+├── app.py                    # Streamlit web interface (LangGraph integration)
+├── backend/                  # Async analysis runner (legacy)
 ├── data/                     # fMRI datasets (AD/CN subjects)
 ├── graphql/                  # Neo4j knowledge graphs
 ├── model/                    # Trained neural network weights
@@ -45,15 +64,18 @@ poetry run poe autoinstall-torch-cuda
 pip install -r requirements.txt
 ```
 
-### 🤖 Multi-Agent Pipeline
+### 🤖 LangGraph Pipeline
 ```bash
-# Run complete analysis pipeline
-python -m agents.agent
+# Run LangGraph workflow directly
+python -m app.graph.workflow
 
-# Launch Streamlit interface
+# Launch Streamlit interface (LangGraph integration)
 streamlit run app.py
 
-# Run backend analysis (async/sync wrapper)
+# Legacy: Run Google ADK pipeline (still supported)
+python -m agents.agent
+
+# Legacy: Run backend analysis (async/sync wrapper)
 python -m backend.backend_runner
 ```
 
@@ -101,27 +123,39 @@ python -c "from agents.client.neo4j_client import Neo4jClient; client = Neo4jCli
 
 ### Key Dependencies
 ```toml
-# Core AI/ML
-google-adk = ">=1.3.0,<2.0.0"
-google-generativeai = ">=0.7.0,<0.9.0"
-langgraph = ">=0.4.5,<0.5.0"
-torch = "2.8.0"
+# Core Workflow & AI
+langgraph = ">=0.4.5,<0.5.0"                # Primary workflow orchestration
+google-adk = ">=1.3.0,<2.0.0"              # Legacy support (dual architecture)
+google-generativeai = ">=0.7.0,<0.9.0"     # Gemini LLM services
+google-cloud-aiplatform = ">=1.98.0,<2.0.0" # Vertex AI integration
 
-# Neuroimaging
-nibabel = ">=5.3.2,<6.0.0"
-nilearn = ">=0.11.1,<0.12.0"
-scikit-image = ">=0.25.2,<0.26.0"
+# Deep Learning
+torch = "2.8.0"                             # PyTorch for neural networks
+torchinfo = ">=1.8.0,<2.0.0"               # Model inspection tools
+torchsummary = ">=1.5.1,<2.0.0"            # Model architecture summary
 
-# Knowledge Graph
-neo4j = ">=5.28.1,<6.0.0"
+# Neuroimaging Processing
+nibabel = ">=5.3.2,<6.0.0"                 # NIfTI file handling
+nilearn = ">=0.11.1,<0.12.0"               # fMRI analysis tools
+scikit-image = ">=0.25.2,<0.26.0"          # Image processing
+opencv-python = ">=4.11.0.86,<5.0.0"       # Computer vision
+
+# Knowledge Graph & Database
+neo4j = ">=5.28.1,<6.0.0"                  # Graph database connector
+
+# LLM Services & APIs
+groq = ">=0.31.1,<0.32.0"                  # Groq API client
+litellm = ">=1.76.3,<2.0.0"                # Multi-LLM provider interface
+ollama = ">=0.5.3,<0.6.0"                  # Local LLM server
 
 # Web Interface
-streamlit = ">=1.49.1,<2.0.0"
+streamlit = ">=1.49.1,<2.0.0"              # Web app framework
 
-# Additional ML
-groq = ">=0.31.1,<0.32.0"
-litellm = ">=1.76.3,<2.0.0"
-ollama = ">=0.5.3,<0.6.0"
+# Scientific Computing
+numpy = ">=2.2.5,<3.0.0"                   # Numerical computing
+scikit-learn = ">=1.6.1,<2.0.0"            # Machine learning utilities
+matplotlib = ">=3.10.3,<4.0.0"             # Plotting and visualization
+seaborn = ">=0.13.2,<0.14.0"               # Statistical data visualization
 ```
 
 ### Required Environment Variables
@@ -140,24 +174,176 @@ BUCKET_ID=your_gcp_bucket
 
 ## 🧩 Agent Architecture Details
 
-### Root Agent (SequentialAgent)
-- **Name**: `fMRIAlzheimerPipeline`
-- **Function**: Orchestrates the complete analysis pipeline
+### LangGraph Workflow Architecture
+- **Framework**: LangChain's LangGraph for state-based workflow orchestration
+- **State Management**: Comprehensive `AgentState` with typed data flow
+- **Execution Model**: Sequential node execution with state persistence
+- **Location**: `app/graph/workflow.py`
+
+### 7-Node Sequential Pipeline
+1. **Inference Node**: `run_inference_and_classification` - Deep learning model inference and AD classification
+2. **Filtering Node**: `filter_layers_dynamically` - LLM-based dynamic layer selection
+3. **Post-processing Node**: `run_post_processing` - Activation map processing and NIfTI conversion
+4. **Entity Linking Node**: `link_entities` - Brain region entity extraction and linking
+5. **Knowledge Reasoning Node**: `enrich_with_knowledge_graph` - Neo4j knowledge graph integration
+6. **Image Explanation Node**: `explain_image` - Visual analysis of brain activation maps
+7. **Report Generation Node**: `generate_final_report` - Clinical report synthesis in English/Chinese
+
+### Legacy Google ADK Architecture (Still Supported)
+- **Root Agent**: `fMRIAlzheimerPipeline` (SequentialAgent)
 - **Location**: `agents/agent.py`
+- **Sub-Agents**: 5-stage pipeline for backward compatibility
 
-### Sub-Agents Pipeline
-1. **Brain Mapping**: `map_act_brain_agent` - Model inference and activation analysis
-2. **Image Retrieval**: `retrieve_img_path_agent` - Locate visualization paths
-3. **Image Explanation**: `image_explain_agent` - Medical interpretation of activation maps
-4. **Knowledge Reasoning**: `graph_rag_agent` - Graph database query and entity linking
-5. **Report Generation**: `report_generator_agent` - Clinical report synthesis
-
-### Parallel Architecture (Currently Commented)
+### AgentState Schema
 ```python
-# Available but currently disabled for stability
-explain_parallel_agent = ParallelAgent(
-    sub_agents=[graph_rag_agent, image_explain_agent]
-)
+class AgentState(TypedDict):
+    # === 1. Inputs ===
+    subject_id: str                           # Subject identifier
+    fmri_scan_path: str                       # Path to NIfTI file
+    model_path: Optional[str]                 # Path to model weights
+    
+    # === 2. Intermediate Data ===
+    validated_layers: Optional[List[Dict]]    # Validated model layers
+    final_layers: Optional[List[Dict]]        # Filtered layers
+    post_processing_results: Optional[List]   # Processed activations
+    clean_region_names: Optional[List[str]]   # Cleaned region names
+    
+    # === 3. Final Outputs ===
+    classification_result: Optional[str]      # AD/CN prediction
+    activated_regions: Optional[List[BrainRegionInfo]] # Brain regions
+    visualization_paths: Optional[List[str]]  # Image paths
+    image_explanation: Optional[Dict]         # Visual analysis
+    rag_summary: Optional[str]               # Knowledge summary
+    generated_reports: Optional[Dict[str, str]] # EN/ZH reports
+    
+    # === 4. System & Tracing ===
+    error_log: List[str]                     # Error tracking
+    trace_log: List[str]                     # Execution tracing
+```
+
+## 🎨 System Architecture Diagrams
+
+### LangGraph Workflow Architecture
+```mermaid
+graph LR
+    A[START] --> B[Inference Node]
+    B --> C[Filtering Node] 
+    C --> D[Post-processing Node]
+    D --> E[Entity Linking Node]
+    E --> F[Knowledge Reasoning Node]
+    F --> G[Image Explanation Node]
+    G --> H[Report Generation Node]
+    H --> I[END]
+    
+    subgraph "AgentState Management"
+        J[Input State] --> K[Intermediate Results] --> L[Final Outputs]
+    end
+    
+    style A fill:#f0f0f0
+    style B fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#e8f5e8
+    style E fill:#fff3e0
+    style F fill:#fce4ec
+    style G fill:#f1f8e9
+    style H fill:#e3f2fd
+    style I fill:#f0f0f0
+```
+
+### Data Flow Architecture
+```mermaid
+flowchart LR
+    A[fMRI Scan<br/>.nii.gz] --> B[Deep Learning<br/>CapsNet]
+    B --> C[Layer Filtering<br/>LLM-based]
+    C --> D[Post Processing<br/>NIfTI]
+    D --> E[Entity Linking<br/>Regions]
+    E --> F[Knowledge Graph<br/>Neo4j]
+    F --> G[Image Explanation<br/>Gemini]
+    G --> H[Final Report<br/>EN/ZH]
+    
+    B --> B1[Classification<br/>AD/CN]
+    D --> D1[Activation Maps]
+    F --> F1[Brain Region<br/>Knowledge]
+    
+    style A fill:#e3f2fd
+    style B fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#e8f5e8
+    style E fill:#fff3e0
+    style F fill:#fce4ec
+    style G fill:#f1f8e9
+    style H fill:#e3f2fd
+    style B1 fill:#fff9c4
+    style D1 fill:#f0f4c3
+    style F1 fill:#fce4ec
+```
+
+### Component Integration Architecture
+```mermaid
+graph TB
+    subgraph "🖥️ Frontend Layer"
+        A[Streamlit Web App<br/>User Interface & Visualization]
+    end
+    
+    subgraph "🔀 Workflow Orchestration Layer"
+        B[LangGraph Workflow<br/>State Management]
+        C[AgentState<br/>Data Persistence]
+        B <--> C
+    end
+    
+    subgraph "⚙️ Processing Nodes Layer"
+        D1[Inference<br/>Node]
+        D2[Filtering<br/>Node]
+        D3[Post-Processing<br/>Node]
+        D4[Entity Linking<br/>Node]
+        D5[Knowledge<br/>Reasoning]
+        D6[Image<br/>Explanation]
+        D7[Report<br/>Generation]
+        
+        D1 --> D2 --> D3 --> D4 --> D5 --> D6 --> D7
+    end
+    
+    subgraph "🔧 Core Services Layer"
+        E1[Deep Learning Models<br/>CapsNet/MCADNNet]
+        E2[Neo4j Knowledge<br/>Graph Database]
+        E3[LLM Services<br/>Gemini/Ollama]
+    end
+    
+    subgraph "💾 Data Layer"
+        F1[fMRI Data<br/>NIfTI Files]
+        F2[Brain Atlas<br/>AAL3]
+        F3[Model Weights<br/>.pth Files]
+    end
+    
+    A --> B
+    B --> D1
+    D1 --> E1
+    D2 --> E3
+    D4 --> E2
+    D5 --> E2
+    D6 --> E3
+    D7 --> E3
+    
+    E1 --> F1
+    E1 --> F3
+    E2 --> F2
+    
+    style A fill:#e3f2fd
+    style B fill:#f3e5f5
+    style C fill:#fff3e0
+    style D1 fill:#e1f5fe
+    style D2 fill:#f3e5f5
+    style D3 fill:#e8f5e8
+    style D4 fill:#fff3e0
+    style D5 fill:#fce4ec
+    style D6 fill:#f1f8e9
+    style D7 fill:#e3f2fd
+    style E1 fill:#ffebee
+    style E2 fill:#f1f8e9
+    style E3 fill:#e8f5e8
+    style F1 fill:#fafafa
+    style F2 fill:#fafafa
+    style F3 fill:#fafafa
 ```
 
 ## 🔬 Data Structure
@@ -239,29 +425,68 @@ sudo systemctl restart neo4j
 
 ## 📈 Recent Development Progress
 
-### Current Branch: `develop/optimize-stability`
-- **Latest Commits**: 
-  - f4cc844: Image path passing optimization attempts
-  - 259e929: Model switching flexibility improvements
-  - 7e16d4e: Stability optimization trials
-  - cedad93: Classification result passing method updates
+### Major Architecture Migration: Google ADK → LangGraph
+- **Framework Migration**: Transitioned from Google ADK multi-agent system to LangChain's LangGraph
+- **State Management**: Implemented comprehensive AgentState schema for data flow tracking
+- **Pipeline Optimization**: Expanded from 5-node to 7-node sequential pipeline
+- **Dual Architecture Support**: Maintained backward compatibility with legacy Google ADK system
 
 ### Key Recent Changes
-- **Vertex AI Integration**: Migrated to Google Vertex AI services
-- **Streamlit Optimization**: Enhanced web interface stability
-- **Model Flexibility**: Improved switching between CapsNet-RNN and MCADNNet
-- **Error Handling**: Better error messages and user feedback
+- **LangGraph Integration**: Complete workflow redesign using LangChain's state graph framework
+- **Enhanced Pipeline**: Added Entity Linking and Post-processing as dedicated nodes
+- **Improved Services**: Centralized LLM provider services (Gemini/Ollama) in `app/services/`
+- **Core Utilities**: Modularized fMRI processing, knowledge graph, and vision tools
+- **Streamlit Integration**: Updated web interface to use LangGraph workflow execution
+- **State Persistence**: Comprehensive state tracking through all pipeline stages
 
 ## 🎯 Development Guidelines for AI Assistants
 
 ### When Working with This Project:
-1. **Always check environment setup** before running commands
-2. **Verify Neo4j connectivity** before agent execution
-3. **Use appropriate model paths** based on selected architecture
-4. **Check data directory structure** matches expected format
-5. **Monitor GPU memory usage** during training/inference
-6. **Use poetry/poethepoet** for dependency management
-7. **Test components individually** before full pipeline runs
+1. **Choose Architecture**: Decide between LangGraph (primary) or Google ADK (legacy) workflows
+2. **Environment Setup**: Always check environment variables and service connectivity
+3. **State Management**: Understand AgentState schema for LangGraph workflow debugging
+4. **Service Dependencies**: Verify Neo4j, LLM providers (Gemini/Ollama) are running
+5. **Model Paths**: Use appropriate model weights based on selected architecture
+6. **Data Structure**: Ensure fMRI data follows expected directory structure
+7. **Resource Monitoring**: Monitor GPU memory during training/inference
+8. **Modular Testing**: Test individual nodes/services before full pipeline execution
+9. **Dual Architecture Support**: Be aware of both execution paths (app/graph vs agents/)
+
+### LangGraph Workflow Debugging
+```python
+# Direct workflow execution with state inspection
+from app.graph.workflow import app
+
+initial_state = {
+    "subject_id": "sub-01",
+    "fmri_scan_path": "data/raw/CN/sub-01/scan.nii.gz",
+    "model_path": "model/capsnet/best_capsnet_rnn.pth",
+    "trace_log": [],
+    "error_log": [],
+}
+
+# Stream execution to see each node's output
+for step in app.stream(initial_state):
+    node_name = list(step.keys())[0]
+    node_output = step[node_name]
+    print(f"--- Node: {node_name} completed ---")
+    print(f"Current state keys: {list(node_output.keys())}")
+
+# Or invoke for direct final result
+final_state = app.invoke(initial_state)
+print("Final reports:", final_state.get("generated_reports"))
+```
+
+### Individual Node Testing
+```python
+# Test specific nodes independently
+from app.agents.inference import run_inference_and_classification
+from app.agents.report_generator import generate_final_report
+
+# Mock state for testing
+test_state = {"subject_id": "test", "fmri_scan_path": "path/to/scan.nii.gz"}
+result = run_inference_and_classification(test_state)
+```
 
 ### Common Debugging Steps:
 1. Check `.env` file configuration

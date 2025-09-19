@@ -18,7 +18,7 @@ def load_and_process_nifti(path: str):
     載入一個 NIfTI 檔案，並將其轉換為一個 3D 平均影像。
     """
     img_4d = nimg.load_img(path)
-    img_3d = nimg.mean_img(img_4d)
+    img_3d = nimg.mean_img(img_4d, copy_header=True)
     return img_3d
 
 # --- STREAMLIT 前端介面 (保持不變) ---

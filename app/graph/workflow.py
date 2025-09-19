@@ -43,7 +43,7 @@ workflow.add_edge("report_generator", END)
 app = workflow.compile()
 
 if __name__ == "__main__":
-    import uuid
+    import json
 
     # 1. Define the initial input for the graph
     #    This dictionary must have the keys required by the first node.
@@ -63,28 +63,15 @@ if __name__ == "__main__":
 
     # 2. Execute the graph using the .stream() method
     #    .stream() allows us to see the output of each node as it runs.
-    final_state = None
-    for step in app.stream(initial_state):
-        # The output of stream() is a dictionary with one key, which is the name of the node that just ran
-        node_name = list(step.keys())[0]
-        node_output = step[node_name]
-        
-        print(f"--- Finished Node: {node_name} ---")
-        # You can uncomment the line below to see the full state after each step
-        # print(node_output)
-        
-        # Keep track of the last state
-        final_state = node_output
-
+    final_state = app.invoke(initial_state)
     print("\n" + "="*30)
-    print("✅ Pipeline run finished!")
+    print("✅ Pipeline run finished! Inspecting final state...")
     print("="*30)
 
-    # 3. Print the final state to inspect the results
+    # 3. 使用 json.dumps 美化輸出，讓我們能清楚地看到所有欄位
     if final_state:
-        print("\n--- Final State ---")
-        # Pretty print the final state dictionary
-        import pprint
-        pprint.pprint(final_state)
+        # ensure_ascii=False 確保中文字符能正確顯示
+        # indent=2 讓 JSON 格式更易讀
+        print(json.dumps(final_state, indent=2, ensure_ascii=False))
     else:
         print("Pipeline did not produce a final state.")
