@@ -1,27 +1,32 @@
+# app/main.py (Final Integrated Version)
 import os
 import streamlit as st
-import json
 import glob 
+from pathlib import Path
+import streamlit.components.v1 as components
 
-# --- 可視化相關 (保持不變) ---
+# --- 視覺化相關 ---
 from nilearn import plotting
 from nilearn import image as nimg
-import matplotlib.pyplot as plt 
 
-# ---【修改 1】替換 Imports ---
+# ---### 變更點 1: 匯入 LangGraph App ###---
 from app.graph.workflow import app
 
-# --- 快取函式 (保持不變) ---
-@st.cache_data
-def load_and_process_nifti(path: str):
+# ---### 變更點 2: 更新快取函式以處理 4D 數據 ###---
+@st.cache_resource(show_spinner="正在載入並處理 NIfTI 檔案...")
+def load_4d_nifti(path: str):
     """
-    載入一個 NIfTI 檔案，並將其轉換為一個 3D 平均影像。
+    載入 4D NIfTI 檔案並回傳 nilearn 影像物件和時間點總數。
     """
-    img_4d = nimg.load_img(path)
-    img_3d = nimg.mean_img(img_4d, copy_header=True)
-    return img_3d
+    try:
+        img_4d = nimg.load_img(path)
+        num_time_points = img_4d.shape[3]
+        return img_4d, num_time_points
+    except Exception as e:
+        st.error(f"載入或處理 4D 檔案失敗: {path}. 錯誤: {e}")
+        return None, 0
 
-# --- STREAMLIT 前端介面 (保持不變) ---
+# --- STREAMLIT 前端介面 (文字與佈局保持您提供的版本) ---
 
 st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
@@ -56,12 +61,11 @@ Data used in preparation of this article were obtained from the Alzheimer's Dise
 st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 
 
-# --- 分析與結果顯示邏輯 ---
+# --- 分析邏輯 (保持不變) ---
 if start_button:
     st.session_state.viewer_expanded = True
     with st.spinner('Analysis in progress... This may take a few minutes. Please wait.'):
         try:
-            # --- 這部分尋找檔案的邏輯保持不變 ---
             model_paths_map = { "CapsNetRNN": "model/capsnet/best_capsnet_rnn.pth" }
             model_path = model_paths_map.get(selected_model)
             if not model_path: raise FileNotFoundError(f"找不到模型 '{selected_model}' 的路徑設定。")
@@ -72,51 +76,43 @@ if start_button:
             nii_path = nii_file_list[0]
             st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
 
-            # ---【修改 2】替換後端呼叫邏輯 ---
-            # 1. 準備 LangGraph 的輸入
             initial_state = {
                 "subject_id": selected_subject,
                 "fmri_scan_path": nii_path,
                 "model_path": model_path,
             }
-            # 2. 呼叫 LangGraph app (使用 .invoke() 來模擬原本的同步行為)
             final_state = app.invoke(initial_state)
             
-            # 3. 將回傳的 state (一個字典) 存入 session
             if final_state:
                 st.session_state['nii_path'] = nii_path 
-                st.session_state['final_state'] = final_state # 我們將整個 state 字典存起來
+                st.session_state['final_state'] = final_state
                 st.session_state['ground_truth_label'] = ground_truth_label
                 st.session_state['run_complete'] = True
             else:
                 st.error("Analysis finished but the agent returned no content.")
                 st.session_state['run_complete'] = False
-            # --- 修改結束 ---
                 
         except Exception as e:
             st.error("Please try again later.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
 
-
 # --- 結果顯示區塊 ---
-if 'run_complete' in st.session_state and st.session_state['run_complete']:
-    # ---【修改 3】更新結果讀取方式 ---
-    # 從 session state 讀取我們儲存的 final_state 字典
+if st.session_state.get('run_complete', False):
     final_state = st.session_state['final_state']
     report_ground_truth = st.session_state.get('ground_truth_label', "N/A")
     
     st.markdown("---")
     st.header("Analysis Results")
+    
+    # 活化圖與預測結果顯示 (保持不變)
     st.subheader("Subject Activation overlay on brain.")
     try:
-        # 從字典中安全地獲取數據
         viz_path = final_state.get("visualization_paths", [])[0]
         st.image(viz_path, caption=f"Activation map for subject {selected_subject}")
-    except (IndexError, TypeError, FileNotFoundError) as e:
+    except Exception as e:
         st.error(f"Cannot display image. Path is missing or invalid: {e}")
     
-    # 預測結果比對
     predicted_label = final_state.get("classification_result", "N/A")
     st.subheader("Prediction Verification")
     col1, col2 = st.columns(2)
@@ -125,30 +121,48 @@ if 'run_complete' in st.session_state and st.session_state['run_complete']:
     if report_ground_truth == predicted_label: st.success("✅ Prediction is Correct")
     else: st.error("❌ Prediction is Incorrect")
     
-    # 互動式原始檔案檢視器 (保持不變)
+    # ---### 變更點 3: 整合最終版互動式檢視器 ###---
     is_expanded_default = st.session_state.get('viewer_expanded', False)
     with st.expander("Explore Original fMRI Scan (Interactive Slicer)", expanded=is_expanded_default):
-        # ... (這部分的程式碼與您原本的完全相同，無需修改) ...
         nii_path = st.session_state.get('nii_path')
-        if nii_path and os.path.exists(nii_path):
-            img_3d = load_and_process_nifti(nii_path)
-            st.info("Use the sliders below to freely explore the subject's brain anatomy.")
-            coords = img_3d.shape
-            x_c, y_c, z_c = st.columns(3)
-            x = x_c.slider('X (Sagittal)', int(-coords[0]/2), int(coords[0]/2), 0)
-            y = y_c.slider('Y (Coronal)', int(-coords[1]/2), int(coords[1]/2), 0)
-            z = z_c.slider('Z (Axial)', int(-coords[2]/2), int(coords[2]/2), 0)
-            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-            fig.patch.set_facecolor('black')
-            plotting.plot_anat(img_3d, display_mode='x', cut_coords=[x], axes=axes[0], title=f"Sagittal (X={x})", black_bg=True)
-            plotting.plot_anat(img_3d, display_mode='y', cut_coords=[y], axes=axes[1], title=f"Coronal (Y={y})", black_bg=True)
-            plotting.plot_anat(img_3d, display_mode='z', cut_coords=[z], axes=axes[2], title=f"Axial (Z={z})", black_bg=True)
-            st.pyplot(fig)
+        if nii_path and Path(nii_path).exists():
+            # 呼叫新的 4D 數據載入函數
+            img_4d, num_time_points = load_4d_nifti(nii_path)
+            
+            if img_4d and num_time_points > 0:
+                # 顯示時間軸滑桿，讓使用者可以選擇
+                # 為了讓使用者介面從 1 開始，我們設定 min_value=1, max_value=num_time_points
+                selected_time_point_display = st.slider(
+                    'Time Point (Volume)', 
+                    min_value=1, 
+                    max_value=num_time_points, 
+                    value=1,
+                    help=f"This fMRI scan has {num_time_points} volumes."
+                )
+                
+                # 在後端處理時，我們需要將使用者的 1-based 索引轉換為 0-based 索引
+                selected_time_point_index = selected_time_point_display - 1
+                
+                # 根據選擇的時間點，產生對應的 3D 檢視器
+                img_3d_at_t = nimg.index_img(img_4d, selected_time_point_index)
+
+                viewer = plotting.view_img(
+                    img_3d_at_t, 
+                    bg_img=None, 
+                    cmap='gray', 
+                    threshold=None, 
+                    title=f"Volume at T={selected_time_point_display}", # 顯示 1-based 的時間點
+                    resampling_interpolation='nearest',
+                    colorbar=False,
+                    annotate=True,
+                    black_bg=True
+                )
+                
+                components.html(viewer.html, height=600, scrolling=False)
         else:
             st.warning("Could not find the original NIfTI file for this viewer.")
 
-    # 中英文報告分頁
-    # 從 final_state 中的 generated_reports 字典讀取報告
+    # 中英文報告分頁 (保持不變)
     reports = final_state.get("generated_reports", {})
     report_en = reports.get("en", "No English report was generated.")
     report_zh = reports.get("zh", "沒有生成中文報告。")
