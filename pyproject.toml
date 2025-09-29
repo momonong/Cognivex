@@ -34,6 +34,7 @@ dependencies = [
     "litellm (>=1.76.3,<2.0.0)",
     "ollama (>=0.5.3,<0.6.0)",
     "plotly (>=6.3.0,<7.0.0)",
+    "fmriprep-docker (>=25.1.4,<26.0.0)",
 ]
 
 [tool.poe.tasks]
