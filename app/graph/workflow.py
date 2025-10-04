@@ -24,7 +24,7 @@ workflow = StateGraph(AgentState)
 workflow.add_node("inference", run_inference_and_classification)
 workflow.add_node("filtering", filter_layers_dynamically)
 workflow.add_node("post_processing", run_post_processing)
-workflow.add_node("entity_linker", link_entities) # <-- 2. Add new node
+workflow.add_node("entity_linker", link_entities)
 workflow.add_node("knowledge_reasoner", enrich_with_knowledge_graph)
 workflow.add_node("image_explainer", explain_image)
 workflow.add_node("report_generator", generate_final_report)
