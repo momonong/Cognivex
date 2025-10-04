@@ -26,13 +26,13 @@ def load_4d_nifti(path: str):
         st.error(f"載入或處理 4D 檔案失敗: {path}. 錯誤: {e}")
         return None, 0
 
-# --- STREAMLIT 前端介面 (文字與佈局保持您提供的版本) ---
+# --- STREAMLIT 前端介面 ---
 
 st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
 st.markdown("An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data.")
 
-# --- 側邊欄控制項 (保持不變) ---
+# --- 側邊欄控制項 ---
 st.sidebar.header("Analysis Controls")
 subject_folders = glob.glob("data/raw/*/sub-*")
 subject_labels = {} 
@@ -61,7 +61,7 @@ Data used in preparation of this article were obtained from the Alzheimer's Dise
 st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 
 
-# --- 分析邏輯 (保持不變) ---
+# --- 分析邏輯 ---
 if start_button:
     st.session_state.viewer_expanded = True
     with st.spinner('Analysis in progress... This may take a few minutes. Please wait.'):
@@ -105,7 +105,7 @@ if st.session_state.get('run_complete', False):
     st.markdown("---")
     st.header("Analysis Results")
     
-    # 活化圖與預測結果顯示 (保持不變)
+    # 活化圖與預測結果顯示
     st.subheader("Subject Activation overlay on brain.")
     try:
         viz_path = final_state.get("visualization_paths", [])[0]
@@ -121,7 +121,7 @@ if st.session_state.get('run_complete', False):
     if report_ground_truth == predicted_label: st.success("✅ Prediction is Correct")
     else: st.error("❌ Prediction is Incorrect")
     
-    # ---### 變更點 3: 整合最終版互動式檢視器 ###---
+    # ---### 整合最終版互動式檢視器 ###---
     is_expanded_default = st.session_state.get('viewer_expanded', False)
     with st.expander("Explore Original fMRI Scan (Interactive Slicer)", expanded=is_expanded_default):
         nii_path = st.session_state.get('nii_path')
@@ -137,7 +137,7 @@ if st.session_state.get('run_complete', False):
                     min_value=1, 
                     max_value=num_time_points, 
                     value=1,
-                    help=f"這個 fMRI 掃描共有 {num_time_points} 個時間點 (volumes)。"
+                    help=f"This fMRI scan has {num_time_points} volumes."
                 )
                 
                 # 在後端處理時，我們需要將使用者的 1-based 索引轉換為 0-based 索引
@@ -162,7 +162,7 @@ if st.session_state.get('run_complete', False):
         else:
             st.warning("Could not find the original NIfTI file for this viewer.")
 
-    # 中英文報告分頁 (保持不變)
+    # 中英文報告分頁
     reports = final_state.get("generated_reports", {})
     report_en = reports.get("en", "No English report was generated.")
     report_zh = reports.get("zh", "沒有生成中文報告。")

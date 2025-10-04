@@ -4,15 +4,16 @@ import streamlit as st
 import glob 
 from pathlib import Path
 import streamlit.components.v1 as components
+import pandas as pd  # <--- 新增的匯入
 
 # --- 視覺化相關 ---
 from nilearn import plotting
 from nilearn import image as nimg
 
-# ---### 變更點 1: 匯入 LangGraph App ###---
+# --- LangGraph App ---
 from app.graph.workflow import app
 
-# ---### 變更點 2: 更新快取函式以處理 4D 數據 ###---
+# --- 快取函式 ---
 @st.cache_resource(show_spinner="正在載入並處理 NIfTI 檔案...")
 def load_4d_nifti(path: str):
     """
@@ -26,16 +27,20 @@ def load_4d_nifti(path: str):
         st.error(f"載入或處理 4D 檔案失敗: {path}. 錯誤: {e}")
         return None, 0
 
-# --- STREAMLIT 前端介面 (文字與佈局保持您提供的版本) ---
+# --- STREAMLIT 前端介面 ---
 
 st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
 st.markdown("An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data.")
 
+<<<<<<< HEAD
 # 初始化 session state 來追蹤分析狀態
 if 'analysis_running' not in st.session_state:
     st.session_state.analysis_running = False
 # --- 側邊欄控制項 (保持不變) ---
+=======
+# --- 側邊欄控制項 ---
+>>>>>>> daf3348b89ab2a20161e0ca3548e843966c36c62
 st.sidebar.header("Analysis Controls")
 subject_folders = glob.glob("data/raw/*/sub-*")
 subject_labels = {} 
@@ -109,82 +114,99 @@ if st.session_state.get('analysis_running', False):
             st.session_state.analysis_running = False
             st.rerun()
 
-# --- 結果顯示區塊 ---
+# --- 結果顯示區塊 (儀表板版本) ---
 if st.session_state.get('run_complete', False):
     final_state = st.session_state['final_state']
-    report_ground_truth = st.session_state.get('ground_truth_label', "N/A")
     
+    # 從新的 JSON 結構中獲取報告
+    report_data = final_state.get("final_report_json")
+    
+    if not report_data:
+        st.error("分析完成，但未生成結構化報告。請檢查 Agent 狀態。")
+        st.json(final_state) # 顯示原始狀態以供偵錯
+        st.stop()
+
     st.markdown("---")
-    st.header("Analysis Results")
-    
-    # 活化圖與預測結果顯示 (保持不變)
-    st.subheader("Subject Activation overlay on brain.")
-    try:
-        viz_path = final_state.get("visualization_paths", [])[0]
-        st.image(viz_path, caption=f"Activation map for subject {selected_subject}")
-    except Exception as e:
-        st.error(f"Cannot display image. Path is missing or invalid: {e}")
-    
-    predicted_label = final_state.get("classification_result", "N/A")
-    st.subheader("Prediction Verification")
-    col1, col2 = st.columns(2)
-    col1.metric("Ground Truth", report_ground_truth)
-    col2.metric("Model Prediction", predicted_label)
-    if report_ground_truth == predicted_label: st.success("✅ Prediction is Correct")
-    else: st.error("❌ Prediction is Incorrect")
-    
-    # ---### 變更點 3: 整合最終版互動式檢視器 ###---
-    is_expanded_default = st.session_state.get('viewer_expanded', False)
-    with st.expander("Explore Original fMRI Scan (Interactive Slicer)", expanded=is_expanded_default):
-        nii_path = st.session_state.get('nii_path')
-        if nii_path and Path(nii_path).exists():
-            # 呼叫新的 4D 數據載入函數
-            img_4d, num_time_points = load_4d_nifti(nii_path)
-            
-            if img_4d and num_time_points > 0:
-                # 顯示時間軸滑桿，讓使用者可以選擇
-                # 為了讓使用者介面從 1 開始，我們設定 min_value=1, max_value=num_time_points
-                selected_time_point_display = st.slider(
-                    'Time Point (Volume)', 
-                    min_value=1, 
-                    max_value=num_time_points, 
-                    value=1,
-                    help=f"This fMRI scan has {num_time_points} volumes."
-                )
-                
-                # 在後端處理時，我們需要將使用者的 1-based 索引轉換為 0-based 索引
-                selected_time_point_index = selected_time_point_display - 1
-                
-                # 根據選擇的時間點，產生對應的 3D 檢視器
-                img_3d_at_t = nimg.index_img(img_4d, selected_time_point_index)
+    st.header("📊 Analysis Dashboard")
 
-                viewer = plotting.view_img(
-                    img_3d_at_t, 
-                    bg_img=None, 
-                    cmap='gray', 
-                    threshold=None, 
-                    title=f"Volume at T={selected_time_point_display}", # 顯示 1-based 的時間點
-                    resampling_interpolation='nearest',
-                    colorbar=False,
-                    annotate=True,
-                    black_bg=True
-                )
-                
-                components.html(viewer.html, height=600, scrolling=False)
+    # --- 區塊 1: 診斷摘要 (Diagnostic Summary) ---
+    st.subheader("📋 Diagnostic Summary")
+    summary = report_data.get("diagnostic_summary", {})
+    pred = summary.get("prediction", "N/A")
+    truth = st.session_state.get('ground_truth_label', "N/A")
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Ground Truth", truth)
+    col2.metric("Model Prediction", pred)
+    with col3:
+        if truth == pred:
+            st.success("✅ Prediction Correct")
         else:
-            st.warning("Could not find the original NIfTI file for this viewer.")
+            st.error("❌ Prediction Incorrect")
 
-    # 中英文報告分頁 (保持不變)
-    reports = final_state.get("generated_reports", {})
-    report_en = reports.get("en", "No English report was generated.")
-    report_zh = reports.get("zh", "沒有生成中文報告。")
+    with st.expander("Show Key Finding / 核心發現", expanded=True):
+        finding_en = summary.get("key_finding", {}).get("en", "N/A")
+        finding_zh = summary.get("key_finding", {}).get("zh", "N/A")
+        st.write(f"**EN:** {finding_en}")
+        st.write(f"**ZH:** {finding_zh}")
+
+    # --- 區塊 2: 視覺化與互動檢視器 ---
+    st.subheader("🧠 Brain Scans & Activation Maps")
+    col1, col2 = st.columns([0.9, 1.1]) 
+    with col1:
+        st.markdown("**Activation Map**")
+        try:
+            viz_path = report_data.get("visualization_paths", {}).get("brain_map_png")
+            if viz_path and Path(viz_path).exists():
+                st.image(viz_path, caption=f"Activation map for subject {selected_subject}")
+            else:
+                st.warning("找不到活化圖影像。")
+        except Exception as e:
+            st.error(f"無法顯示影像: {e}")
+
+    with col2:
+        with st.expander("Explore Original fMRI Scan (Interactive Slicer)", expanded=True):
+            nii_path = st.session_state.get('nii_path')
+            if nii_path and Path(nii_path).exists():
+                img_4d, num_time_points = load_4d_nifti(nii_path)
+                if img_4d and num_time_points > 0:
+                    selected_time_point_display = st.slider(
+                        'Time Point (Volume)', min_value=1, max_value=num_time_points, value=1
+                    )
+                    selected_time_point_index = selected_time_point_display - 1
+                    img_3d_at_t = nimg.index_img(img_4d, selected_time_point_index)
+                    viewer = plotting.view_img(
+                        img_3d_at_t, cmap='gray', title=f"Volume at T={selected_time_point_display}",
+                        colorbar=False, black_bg=True
+                    )
+                    components.html(viewer.html, height=450, scrolling=False)
+            else:
+                st.warning("找不到原始 NIfTI 檔案。")
+
+    # --- 區塊 3: 腦區活化分析 (Activation Analysis) ---
+    st.subheader("📈 Brain Region Activation Analysis")
+    analysis_data = report_data.get("activation_analysis", {})
+    regions_list = analysis_data.get("regions", [])
+    if regions_list:
+        regions_df = pd.DataFrame(regions_list)
+        # 設定欄位順序以獲得更好的可讀性
+        display_columns = ["name", "network", "function", "activation"]
+        regions_df = regions_df[display_columns]
+        st.dataframe(regions_df, use_container_width=True)
+    else:
+        st.info("No significant brain region activations were identified.")
+
+    # --- 區塊 4: 臨床推理 (Clinical Reasoning) ---
+    st.subheader("🔬 Clinical Reasoning")
+    reasoning = report_data.get("clinical_reasoning", {})
+    narrative_en = reasoning.get("narrative", {}).get("en", "N/A")
+    narrative_zh = reasoning.get("narrative", {}).get("zh", "N/A")
     
-    tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
+    tab_en, tab_zh = st.tabs(["English Reasoning", "中文推理說明"])
     with tab_en:
-        st.subheader("Clinical Report (English)")
-        st.markdown(report_en, unsafe_allow_html=True)
+        st.markdown(narrative_en)
     with tab_zh:
-        st.subheader("臨床分析報告 (繁體中文)")
-        st.markdown(report_zh, unsafe_allow_html=True)
+        st.markdown(narrative_zh)
+
 else:
     st.info("Please select a subject and model, then click 'Start Analysis' in the sidebar to view results.")
