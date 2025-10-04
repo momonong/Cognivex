@@ -33,14 +33,10 @@ st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
 st.markdown("An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data.")
 
-<<<<<<< HEAD
 # 初始化 session state 來追蹤分析狀態
 if 'analysis_running' not in st.session_state:
     st.session_state.analysis_running = False
 # --- 側邊欄控制項 (保持不變) ---
-=======
-# --- 側邊欄控制項 ---
->>>>>>> daf3348b89ab2a20161e0ca3548e843966c36c62
 st.sidebar.header("Analysis Controls")
 subject_folders = glob.glob("data/raw/*/sub-*")
 subject_labels = {} 
