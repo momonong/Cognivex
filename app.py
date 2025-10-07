@@ -39,18 +39,32 @@ if 'analysis_running' not in st.session_state:
 
 st.sidebar.header("Analysis Controls")
 
-# 如果分析正在執行，顯示禁用訊息
+# 如果分析正在執行，顯示禁用訊息和當前設定
 if st.session_state.analysis_running:
-    st.sidebar.warning("Analysis in progress... Please wait until completion.")
-    st.sidebar.markdown("**Status:** Running")
-    # 顯示當前選擇但禁用所有控制項
-    if 'selected_subject' in st.session_state:
-        st.sidebar.markdown(f"**Current Subject:** {st.session_state.selected_subject}")
-        st.sidebar.markdown(f"**Current Model:** {st.session_state.get('selected_model_display', 'N/A')}")
-        st.sidebar.markdown(f"**Ground Truth:** `{st.session_state.get('ground_truth_label', 'N/A')}`")
+    # 禁用的主題選擇器（只讀顯示）
+    st.sidebar.selectbox(
+        'Select Subject:', 
+        [st.session_state.get('selected_subject', 'N/A')],
+        disabled=True,
+        help="Subject selection is locked during analysis."
+    )
     
-    # 新增緊急停止按鈕
-    st.sidebar.markdown("---")
+    # 禁用的模型選擇器（只讀顯示）
+    st.sidebar.selectbox(
+        'Select Inference Model:', 
+        [st.session_state.get('selected_model_display', 'N/A')],
+        disabled=True,
+        help="Model selection is locked during analysis."
+    )
+    
+    # 禁用的開始按鈕
+    st.sidebar.button(
+        'Analysis Running...', 
+        disabled=True,
+        help="Please wait for current analysis to complete."
+    )
+    
+    # 緊急停止按鈕
     if st.sidebar.button('Force Stop Analysis', type="secondary"):
         st.session_state.analysis_running = False
         st.session_state.run_complete = False
@@ -58,7 +72,7 @@ if st.session_state.analysis_running:
         st.rerun()
     start_button = False
 else:
-    # 正常狀態下的控制項
+    # 受試者選擇
     subject_folders = glob.glob("data/raw/*/sub-*")
     subject_labels = {} 
     for folder_path in subject_folders:
@@ -71,16 +85,43 @@ else:
     if not subject_list:
         st.sidebar.error("在 'data/raw' 路徑下找不到任何 'AD/sub-XX' 或 'NC/sub-XX' 資料夾。")
         st.stop()
-    selected_subject = st.sidebar.selectbox('Select Subject:', subject_list)
+    
+    # 保持當前選擇（如果存在）
+    current_subject = st.session_state.get('selected_subject')
+    if current_subject and current_subject in subject_list:
+        default_index = subject_list.index(current_subject)
+    else:
+        default_index = 0
+    
+    selected_subject = st.sidebar.selectbox(
+        'Select Subject:', 
+        subject_list,
+        index=default_index,
+        help="Choose a subject for fMRI analysis."
+    )
     ground_truth_label = subject_labels.get(selected_subject, "N/A")
     st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
     
-    # 支援多種模型選擇
+    # 模型選擇
     models = {
-        "CapsNet (3D Capsule Network)": "capsnet",
-        "MCADNNet (2D CNN)": "mcadnnet"
+        "CapsNet": "capsnet",
+        "MCADNNet": "mcadnnet"
     }
-    selected_model_display = st.sidebar.selectbox('Select Inference Model:', list(models.keys()))
+    
+    # 保持當前模型選擇（如果存在）
+    current_model = st.session_state.get('selected_model_display')
+    model_list = list(models.keys())
+    if current_model and current_model in model_list:
+        default_model_index = model_list.index(current_model)
+    else:
+        default_model_index = 0
+    
+    selected_model_display = st.sidebar.selectbox(
+        'Select Inference Model:', 
+        model_list,
+        index=default_model_index,
+        help="Choose the neural network model for fMRI classification."
+    )
     selected_model_key = models[selected_model_display]
     
     # 顯示模型詳細信息
@@ -108,18 +149,13 @@ else:
     st.session_state.selected_model_key = selected_model_key
     st.session_state.ground_truth_label = ground_truth_label
     
-    start_button = st.sidebar.button('Start Analysis', type="primary")
-
-# 新增重設按鈕
-if st.session_state.get('run_complete', False):
-    st.sidebar.markdown("---")
-    if st.sidebar.button('♾️ Reset Analysis', type="secondary"):
-        # 清除所有分析相關的 session state
-        keys_to_remove = ['run_complete', 'final_state', 'nii_path', 'analysis_running']
-        for key in keys_to_remove:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.rerun()
+    # 改進的開始按鈕
+    start_button = st.sidebar.button(
+        'Start Analysis', 
+        type="primary",
+        use_container_width=True,
+        help=f"Start analysis for {selected_subject} using {selected_model_display}"
+    )
 
 st.sidebar.markdown("---") 
 adni_acknowledgement = """
@@ -139,13 +175,22 @@ if start_button:
     st.rerun()
 
 # 檢查是否有正在進行的分析
-if st.session_state.get('analysis_running', False) and not st.session_state.get('run_complete', False):
-    with st.spinner('Analysis in progress... This may take a few minutes. Please wait.'):
+if st.session_state.get('analysis_running', False) and not st.session_state.get('run_complete', False):    
+    # 進度條和狀態更新
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    with st.spinner('Analyzing brain patterns... This may take a few minutes.'):
         try:
             # 從 session state 取得設定值
             selected_subject = st.session_state.selected_subject
             selected_model_key = st.session_state.selected_model_key
             ground_truth_label = st.session_state.ground_truth_label
+            
+            # 進度階段更新
+            import time
+            status_text.text("Preparing analysis...")
+            progress_bar.progress(10)
             
             model_paths_map = { 
                 "capsnet": "model/capsnet/best_capsnet_rnn.pth",
@@ -155,11 +200,17 @@ if st.session_state.get('analysis_running', False) and not st.session_state.get(
             if not model_path: 
                 raise FileNotFoundError(f"找不到模型 '{selected_model_key}' 的路徑設定。")
             
+            status_text.text("Loading data files...")
+            progress_bar.progress(20)
+            
             nii_search_pattern = f"data/raw/*/{selected_subject}/*.nii.gz"
             nii_file_list = glob.glob(nii_search_pattern)
             if not nii_file_list: raise FileNotFoundError(f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。")
             nii_path = nii_file_list[0]
             st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
+            
+            status_text.text("Starting brain analysis workflow...")
+            progress_bar.progress(30)
 
             initial_state = {
                 "subject_id": selected_subject,
@@ -167,23 +218,42 @@ if st.session_state.get('analysis_running', False) and not st.session_state.get(
                 "model_path": model_path,
                 "model_name": selected_model_key,  # 新增模型名稱
             }
+            
+            status_text.text("Running AI analysis pipeline...")
+            progress_bar.progress(50)
+            
             final_state = app.invoke(initial_state)
             
+            status_text.text("Finalizing results...")
+            progress_bar.progress(90)
+            
             if final_state:
+                status_text.text("Analysis completed successfully!")
+                progress_bar.progress(100)
+                
                 st.session_state['nii_path'] = nii_path 
                 st.session_state['final_state'] = final_state
                 st.session_state['ground_truth_label'] = ground_truth_label
                 st.session_state['run_complete'] = True
                 # 分析完成，恢復正常狀態
                 st.session_state.analysis_running = False
-                st.success("✅ Analysis completed successfully!")
+                
+                time.sleep(1)  # 稍微等待讓用戶看到完成狀態
+                st.success("Analysis completed successfully!")
                 st.rerun()
             else:
+                status_text.text("Analysis completed with issues")
+                progress_bar.progress(100)
+                
                 st.error("Analysis finished but the agent returned no content.")
                 st.session_state['run_complete'] = False
                 st.session_state.analysis_running = False
                 
         except Exception as e:
+            # 錯誤時的進度更新
+            status_text.text("Analysis failed")
+            progress_bar.progress(0)
+            
             st.error("Please try again later.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
@@ -195,6 +265,9 @@ if st.session_state.get('run_complete', False):
     final_state = st.session_state['final_state']
     report_ground_truth = st.session_state.get('ground_truth_label', "N/A")
     
+    # 從 session state 取得分析時使用的 subject_id
+    analyzed_subject = final_state.get('subject_id', st.session_state.get('selected_subject', 'Unknown'))
+    
     st.markdown("---")
     st.header("Analysis Results")
     
@@ -202,7 +275,7 @@ if st.session_state.get('run_complete', False):
     st.subheader("Subject Activation overlay on brain.")
     try:
         viz_path = final_state.get("visualization_paths", [])[0]
-        st.image(viz_path, caption=f"Activation map for subject {selected_subject}")
+        st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}")
     except Exception as e:
         st.error(f"Cannot display image. Path is missing or invalid: {e}")
     
