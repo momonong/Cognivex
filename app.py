@@ -133,6 +133,19 @@ if selected_model_key in model_info:
     st.sidebar.markdown(f"**Description:** {info['description']}")
     st.sidebar.markdown(f"**Best for:** {info['best_for']}")
 
+# 檢查是否有參數變更，如果有則重置分析狀態
+prev_subject = st.session_state.get('selected_subject')
+prev_model = st.session_state.get('selected_model_key')
+
+if (prev_subject and prev_subject != selected_subject) or (prev_model and prev_model != selected_model_key):
+    # 參數有變更，重置完成狀態以允許重新分析
+    st.session_state.run_complete = False
+    # 清除舊的結果
+    if 'final_state' in st.session_state:
+        del st.session_state['final_state']
+    if 'nii_path' in st.session_state:
+        del st.session_state['nii_path']
+
 # 儲存當前選擇到 session state
 st.session_state.selected_subject = selected_subject
 st.session_state.selected_model_display = selected_model_display
@@ -180,9 +193,17 @@ st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 
 # --- 分析邏輯 ---
 if start_button:
-    # 設定分析狀態為執行中
+    # 重置所有分析狀態，尤其是 run_complete
     st.session_state.analysis_running = True
+    st.session_state.run_complete = False  # 重置完成狀態
     st.session_state.viewer_expanded = True
+    
+    # 清除之前的結果狀態（防止干擾）
+    if 'final_state' in st.session_state:
+        del st.session_state['final_state']
+    if 'nii_path' in st.session_state:
+        del st.session_state['nii_path']
+    
     # 強制重新載入頁面以更新側邊欄狀態
     st.rerun()
 
