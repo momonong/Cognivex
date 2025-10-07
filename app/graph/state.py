@@ -19,6 +19,7 @@ class AgentState(TypedDict):
     subject_id: str
     fmri_scan_path: str
     model_path: Optional[str]
+    model_name: Optional[str]  # 新增: 模型名稱 ("capsnet", "mcadnnet", etc.)
 
     # === 2. Intermediate Data ===
     # Data passed between internal nodes of the fMRI analysis pipeline.
