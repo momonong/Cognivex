@@ -34,7 +34,8 @@ def run_post_processing(state: AgentState) -> dict:
     print("\n--- Node: 3. Post-processing Layers ---")
     subject_id = state['subject_id']
     nii_path = state['fmri_scan_path']
-    final_layers = state.get('final_layers', [])
+    # Try to get final_layers first, fallback to validated_layers if filtering wasn't run
+    final_layers = state.get('final_layers', state.get('validated_layers', []))
     save_name_prefix = subject_id  # Use the clean subject_id
     output_prefix = os.path.join(OUTPUT_DIR, save_name_prefix)
     

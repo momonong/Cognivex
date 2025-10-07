@@ -24,19 +24,29 @@ def parse_summary_text(summary_text: str):
 def inspect_torch_model(model, input_shape: tuple, device: str) -> list[dict]:
     """
     Return layer information from PyTorch model using named_modules, matched with torchsummary.
-    :param MODEL: PyTorch model instance
+    :param model: PyTorch model instance
     :param input_shape: tuple of input shape (excluding batch size)
+    :param device: device to use for inspection
     :return: list of layers with name, class_name, output_shape (from summary), and params
     """
 
-    # Determine the actual device to use based on availability
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # Get summary string
-    buffer = io.StringIO()
-    with redirect_stdout(buffer):
-        summary(model, input_size=input_shape, device=device)
-    summary_text = buffer.getvalue()
+    # Ensure model is on the specified device and device is compatible with torchsummary
+    original_device = next(model.parameters()).device if len(list(model.parameters())) > 0 else torch.device('cpu')
+    
+    # torchsummary only accepts 'cuda' or 'cpu', not 'mps'
+    summary_device = "cuda" if device == "cuda" else "cpu"
+    
+    model = model.to(summary_device)
+    
+    try:
+        # Get summary string
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            summary(model, input_size=input_shape, device=summary_device)
+        summary_text = buffer.getvalue()
+    finally:
+        # Restore original device
+        model = model.to(original_device)
     parsed_layers = parse_summary_text(summary_text)
 
     # Get named modules
