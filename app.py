@@ -33,6 +33,9 @@ st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
 st.title("Explainable fMRI Analysis for Alzheimer's Disease")
 st.markdown("An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data.")
 
+# 初始化 session state 來追蹤分析狀態
+if 'analysis_running' not in st.session_state:
+    st.session_state.analysis_running = False
 # --- 側邊欄控制項 ---
 st.sidebar.header("Analysis Controls")
 subject_folders = glob.glob("data/raw/*/sub-*")
@@ -47,12 +50,12 @@ subject_list = sorted(subject_labels.keys())
 if not subject_list:
     st.sidebar.error("在 'data/raw' 路徑下找不到任何 'AD/sub-XX' 或 'NC/sub-XX' 資料夾。")
     st.stop()
-selected_subject = st.sidebar.selectbox('Select Subject:', subject_list)
+selected_subject = st.sidebar.selectbox('Select Subject:', subject_list, disabled=st.session_state.analysis_running)
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
 models = ["CapsNetRNN"] 
-selected_model = st.sidebar.selectbox('Select Inference Model:', models)
-start_button = st.sidebar.button('Start Analysis', type="primary")
+selected_model = st.sidebar.selectbox('Select Inference Model:', models, disabled=st.session_state.analysis_running)
+start_button = st.sidebar.button('Start Analysis', type="primary", disabled=st.session_state.analysis_running)
 st.sidebar.markdown("---") 
 adni_acknowledgement = """
 <div style="font-size: 0.75rem; color: grey;">
@@ -64,7 +67,12 @@ st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 
 # --- 分析邏輯 ---
 if start_button:
-    st.session_state.viewer_expanded = True
+    st.session_state.analysis_running = True
+    st.rerun()
+
+# 如果狀態為正在分析，則執行分析流程
+if st.session_state.get('analysis_running', False):
+    st.session_state.viewer_expanded = True # 確保 viewer 預設展開
     with st.spinner('Analysis in progress... This may take a few minutes. Please wait.'):
         try:
             model_paths_map = { "CapsNetRNN": "model/capsnet/best_capsnet_rnn.pth" }
@@ -97,6 +105,10 @@ if start_button:
             st.error("Please try again later.")
             st.error(f"Critical error occurred during analysis: {e}")
             st.session_state['run_complete'] = False
+        finally:
+            # 分析結束後，將狀態設回 False 並重新整理，以重新啟用側邊欄
+            st.session_state.analysis_running = False
+            st.rerun()
 
 # --- 結果顯示區塊 (儀表板版本) ---
 if st.session_state.get('run_complete', False):
