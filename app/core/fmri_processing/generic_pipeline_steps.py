@@ -464,9 +464,6 @@ class GenericInferencePipeline:
             print(f"ERROR: {error_message}")
             results["error"] = error_message
             return results
-            print(f"ERROR: {error_message}")
-            results["error"] = error_message
-            return results
 
 # Convenience functions for backward compatibility
 def run_inference_and_classification(state: Dict[str, Any], 
