@@ -53,19 +53,18 @@ def activation_to_nifti(
     ref_shape = ref_img.shape[:3]
     # print(f"[Reference image shape] {ref_shape}")
 
-    # Step 3: FIXED - Interpolate with correct dimension mapping
-    # Activation is [D, H, W], we want to map it to reference [X, Y, Z]
-    # Assume activation [D, H, W] corresponds to [X, Y, Z] respectively
+    # Step 3: Interpolate alignment
     act_tensor = act.unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
     resized = F.interpolate(
         act_tensor,
-        size=ref_shape,  # (X, Y, Z) - direct mapping
+        size=(ref_shape[2], ref_shape[0], ref_shape[1]),  # Z, X, Y
         mode="trilinear",
         align_corners=False,
-    )  # [1, 1, X, Y, Z]
+    )  # [1, 1, Z, X, Y]
 
-    # Step 4: FIXED - No transpose needed since we already have [X, Y, Z]
-    nii_data = resized.squeeze().numpy()  # [X, Y, Z]
+    # Step 4: Reshape to [X, Y, Z]
+    resized = resized.squeeze().numpy()
+    nii_data = np.transpose(resized, (1, 2, 0))  # [X, Y, Z]
 
     # Step 5: Normalize + threshold
     nii_data = (nii_data - nii_data.min()) / (nii_data.max() - nii_data.min() + 1e-8)

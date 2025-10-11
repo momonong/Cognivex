@@ -6,10 +6,8 @@ from dotenv import load_dotenv
 from google import genai
 from typing import Optional, Any, Type
 from google.genai import types
-from google.genai.types import HttpOptions
 
-from agents.client.utils import build_gemini_config
-from agents.client.utils import prepare_image_parts_from_paths
+from app.services.utils import build_gemini_config, prepare_image_parts_from_paths
 
 load_dotenv()
 GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
