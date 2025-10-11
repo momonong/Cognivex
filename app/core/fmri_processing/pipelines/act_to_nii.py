@@ -1,8 +1,8 @@
 import torch
 import nibabel as nib
 import numpy as np
+import torch.nn.functional as F
 import os
-from nilearn.image import resample_to_img
 
 
 def select_strongest_channel(act: torch.Tensor, norm_type: str = "l2") -> int:
@@ -25,7 +25,7 @@ def activation_to_nifti(
     reference_nii_path: str,
     output_path: str,
     norm_type: str = "l2",
-    threshold_percentile: float = 95.0,
+    threshold_percentile: float = 99.0,
 ):
     """
     Convert activation tensor to NIfTI file aligned with original fMRI.
@@ -49,42 +49,34 @@ def activation_to_nifti(
 
     # Step 2: Load reference image
     ref_img = nib.load(reference_nii_path)
-    high_res_affine = ref_img.affine
-    high_res_shape = ref_img.shape[:3]
+    affine = ref_img.affine
+    ref_shape = ref_img.shape[:3]
     # print(f"[Reference image shape] {ref_shape}")
 
-    # Step 3: FIXED - Interpolate with correct dimension mapping
-    # Activation is [D, H, W], we want to map it to reference [X, Y, Z]
-    # Assume activation [D, H, W] corresponds to [X, Y, Z] respectively
-    low_res_shape = act.shape
-    scaling_factors = np.array(high_res_shape) / np.array(low_res_shape)
-    
-    activation_affine = high_res_affine.copy()
-    for i in range(3):
-        # 根據尺寸比例，放大 affine 的對角線元素 (代表 voxel 尺寸)
-        activation_affine[i, i] *= scaling_factors[i]
-        
-    # --- 步驟 4 (新): 使用 nilearn 執行【專業的空間重採樣】 ---
-    # 這一步取代了 F.interpolate 和 np.transpose
-    source_nii = nib.Nifti1Image(act.cpu().numpy(), activation_affine)
-    resampled_nii = resample_to_img(
-        source_img=source_nii, 
-        target_img=ref_img, 
-        interpolation='continuous',
-        force_resample=True,
-        copy_header=True,
-    )
-    nii_data = resampled_nii.get_fdata()
+    # Step 3: Interpolate alignment
+    act_tensor = act.unsqueeze(0).unsqueeze(0)  # [1, 1, D, H, W]
+    resized = F.interpolate(
+        act_tensor,
+        size=(ref_shape[2], ref_shape[0], ref_shape[1]),  # Z, X, Y
+        mode="trilinear",
+        align_corners=False,
+    )  # [1, 1, Z, X, Y]
+
+    # Step 4: Reshape to [X, Y, Z]
+    resized = resized.squeeze().numpy()
+    nii_data = np.transpose(resized, (1, 2, 0))  # [X, Y, Z]
 
     # Step 5: Normalize + threshold
-    positive_values = nii_data[nii_data > 0]
-    if positive_values.size > 0:
-        threshold = np.percentile(positive_values, threshold_percentile)
-        nii_data[nii_data < threshold] = 0
+    nii_data = (nii_data - nii_data.min()) / (nii_data.max() - nii_data.min() + 1e-8)
+    threshold = np.percentile(nii_data, threshold_percentile)
+    nii_masked = np.where(nii_data >= threshold, nii_data, 0).astype(np.float32)
 
     # Step 6: Save
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    nib.save(nib.Nifti1Image(nii_data.astype(np.float32), resampled_nii.affine), output_path)
+    nib.save(nib.Nifti1Image(nii_masked, affine), output_path)
+    # print("Saved filtered, strongest channel activation.")
+    # print("path:", output_path)
+
 
 if __name__ == "__main__":
     # Example usage
