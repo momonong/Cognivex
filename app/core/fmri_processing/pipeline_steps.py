@@ -33,8 +33,8 @@ from app.core.fmri_processing.pipelines.visualize import (
     visualize_activation_map,
 )
 
-from scripts.capsnet.model import CapsNetRNN
-from scripts.macadnnet.model import MCADNNet
+from model.capsnet.model import CapsNetRNN
+from model.macadnnet.model import MCADNNet
 
 DEVICE = (
     "cuda"

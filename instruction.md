@@ -1,4 +1,4 @@
-# Neuro-Compass 使用手冊與完整教學指南
+# Cognivex 使用手冊與完整教學指南
 
 ## 📖 目錄
 
@@ -19,7 +19,7 @@
 
 ## 系統概述
 
-**Neuro-Compass** 是一個基於多智能體的可解釋人工智慧框架，專門用於阿茲海默症的功能性磁振造影（fMRI）分析。系統整合了深度學習模型、知識圖譜推理、以及大型語言模型，提供完整的從原始 fMRI 數據到臨床報告的自動化分析流程。
+**Cognivex** 是一個基於多智能體的可解釋人工智慧框架，專門用於阿茲海默症的功能性磁振造影（fMRI）分析。系統整合了深度學習模型、知識圖譜推理、以及大型語言模型，提供完整的從原始 fMRI 數據到臨床報告的自動化分析流程。
 
 ### 🎯 核心功能
 
@@ -53,7 +53,7 @@ graph LR
     F --> G[影像解釋節點<br/>Image Explanation Node]
     G --> H[報告生成節點<br/>Report Generation Node]
     H --> I[END]
-    
+  
     style A fill:#f0f0f0
     style B fill:#e1f5fe
     style C fill:#f3e5f5
@@ -107,11 +107,11 @@ flowchart LR
     E --> F[知識圖譜<br/>Neo4j]
     F --> G[影像解釋<br/>Gemini LLM]
     G --> H[最終報告<br/>中英文]
-    
+  
     B --> B1[分類結果<br/>AD/CN]
     D --> D1[活化圖]
     F --> F1[腦區知識]
-    
+  
     style A fill:#e3f2fd
     style B fill:#e1f5fe
     style C fill:#f3e5f5
@@ -129,12 +129,14 @@ flowchart LR
 ### 📋 系統需求
 
 #### 硬體需求
+
 - **GPU**: NVIDIA GPU 配備 CUDA 支援（推薦用於訓練/推理）
 - **記憶體**: 16GB+ RAM 用於處理 fMRI 資料
 - **儲存空間**: 50GB+ 用於資料集和模型權重
 - **Neo4j 資料庫**: 運行中的 Neo4j 資料庫實例（本地或遠端）
 
 #### 軟體需求
+
 - **作業系統**: Ubuntu 20.04+ / macOS 12+ / Windows 11
 - **Python**: 3.11+ (配置為 `>=3.11,<3.14`)
 - **CUDA**: CUDA 11.8+ (用於 GPU 加速)
@@ -409,7 +411,7 @@ find data/raw/CN -name "*.nii.gz" | wc -l
 
 ### 🌐 主要使用方式
 
-Neuro-Compass 提供兩種主要的使用方式：
+Cognivex 提供兩種主要的使用方式：
 
 1. **Web 介面**（推薦新用戶）: 透過 Streamlit 圖形化介面
 2. **命令列介面**（適合批次處理）: 直接執行 Python 腳本
@@ -433,22 +435,23 @@ poetry run streamlit run app.py
 對於急於看到結果的用戶，以下是最快的分析流程：
 
 1. **確保環境準備就緒**:
+
    - Neo4j 資料庫運行中
    - `.env` 檔案配置正確
    - fMRI 資料和模型權重已下載
-
 2. **啟動 Web 介面**:
+
    ```bash
    streamlit run app.py
    ```
-
 3. **在 Web 介面中**:
+
    - 選擇受試者（例如 `sub-01`）
    - 選擇模型（推薦 `CapsNet`）
    - 點擊 "Start Analysis"
    - 等待分析完成（約 3-5 分鐘）
-
 4. **檢視結果**:
+
    - 查看腦區活化圖
    - 閱讀中英文臨床報告
    - 使用互動式腦部檢視器
@@ -462,12 +465,14 @@ poetry run streamlit run app.py
 Streamlit Web 介面包含以下主要區域：
 
 #### 側邊欄控制區
+
 - **受試者選擇器**: 從可用的 fMRI 資料中選擇受試者
 - **模型選擇器**: 選擇分析模型（CapsNet / MCADNNet）
 - **分析控制按鈕**: 開始分析和緊急停止功能
 - **模型資訊顯示**: 顯示選中模型的詳細資訊
 
 #### 主要顯示區域
+
 - **進度追蹤**: 即時分析進度和狀態更新
 - **結果展示**: 分析完成後的結果顯示區域
 - **互動式檢視器**: 可展開的 3D 腦部影像檢視器
@@ -490,15 +495,16 @@ streamlit run app.py
 #### 步驟 2: 選擇分析參數
 
 1. **選擇受試者**:
+
    - 在側邊欄的 "Select Subject" 下拉選單中選擇
    - 系統會自動顯示受試者的真實標籤（AD 或 CN）
    - 受試者 ID 格式通常為 `sub-01`, `sub-02` 等
-
 2. **選擇推理模型**:
+
    - **CapsNet**: 3D 膠囊網絡，適合複雜 3D fMRI 模式
    - **MCADNNet**: 2D 卷積神經網絡，計算效率高
-
 3. **檢視模型資訊**:
+
    - 系統會顯示選中模型的類型、描述和適用場景
 
 #### 步驟 3: 開始分析
@@ -520,21 +526,22 @@ streamlit run app.py
 分析完成後，結果區域將顯示：
 
 1. **腦區活化圖**:
+
    - 高解析度的大腦活化熱力圖
    - 疊加在標準腦部解剖結構上
    - 顯示 fMRI 分析中檢測到的活化區域
-
 2. **預測驗證**:
+
    - 並排顯示真實標籤和模型預測
    - 綠色勾號（✅）表示預測正確
    - 紅色叉號（❌）表示預測錯誤
-
 3. **互動式 fMRI 檢視器**:
+
    - 可展開的區域，顯示原始 fMRI 掃描
    - 時間點滑桿：選擇不同的 fMRI 時間體積
    - 3D 腦部切片檢視器，支援多方向檢視
-
 4. **雙語臨床報告**:
+
    - **English Report**: 完整的英文臨床分析報告
    - **中文報告**: 繁體中文臨床分析報告
    - 報告包含：
@@ -546,11 +553,13 @@ streamlit run app.py
 ### 🛡️ 安全功能
 
 #### 智能狀態管理
+
 - **分析期間鎖定**: 分析運行時，所有控制項自動禁用
 - **參數變更檢測**: 改變受試者或模型會自動重置結果
 - **緊急停止**: 提供 "Force Stop Analysis" 按鈕中斷長時間運行的分析
 
 #### 錯誤處理
+
 - 檔案缺失自動檢測和錯誤提示
 - 網絡連接問題的友好錯誤訊息
 - 分析失敗時的自動狀態恢復
@@ -558,13 +567,16 @@ streamlit run app.py
 ### 🎛️ 高級功能
 
 #### 互動式腦部檢視器
+
 - **4D fMRI 支援**: 自動檢測並處理 4D fMRI 資料
 - **時間軸導航**: 滑桿控制檢視不同時間點的腦部活動
 - **多視角檢視**: 支援軸狀面、冠狀面、矢狀面檢視
 - **顏色映射**: 可調整的顏色對比和閾值設定
 
 #### 結果匯出
+
 雖然 Web 介面主要用於檢視，但可以：
+
 - 右鍵保存腦部活化圖
 - 複製文本報告內容
 - 使用瀏覽器的列印功能保存完整報告
@@ -705,10 +717,10 @@ results = {}
 for subject_path in subjects:
     subject_id = subject_path.split('/')[-1]
     nii_files = glob.glob(f"{subject_path}/*.nii.gz")
-    
+  
     if nii_files:
         print(f"Processing {subject_id}...")
-        
+    
         state = {
             "subject_id": subject_id,
             "fmri_scan_path": nii_files[0],
@@ -716,7 +728,7 @@ for subject_path in subjects:
             "error_log": [],
             "trace_log": []
         }
-        
+    
         try:
             result = app.invoke(state)
             results[subject_id] = {
@@ -749,12 +761,14 @@ python batch_analysis.py
 #### 1. CUDA/GPU 相關問題
 
 **問題**: CUDA 不可用或 GPU 記憶體不足
+
 ```bash
 RuntimeError: CUDA out of memory
 torch.cuda.is_available() returns False
 ```
 
 **解決方案**:
+
 ```bash
 # 檢查 CUDA 安裝
 nvidia-smi
@@ -771,11 +785,13 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 #### 2. Neo4j 資料庫連接問題
 
 **問題**: Neo4j 連接失敗
+
 ```bash
 ServiceUnavailable: Failed to establish connection to Neo4j database
 ```
 
 **解決方案**:
+
 ```bash
 # 檢查 Neo4j 服務狀態
 sudo systemctl status neo4j
@@ -797,11 +813,13 @@ cat .env | grep NEO4J
 #### 3. Google API 金鑰問題
 
 **問題**: Google API 認證失敗
+
 ```bash
 google.api_core.exceptions.Unauthenticated: Request is missing required authentication credential
 ```
 
 **解決方案**:
+
 ```bash
 # 檢查 API 金鑰設定
 echo $GOOGLE_API_KEY
@@ -822,12 +840,14 @@ print('API key is valid')
 #### 4. 檔案路徑和權限問題
 
 **問題**: 找不到檔案或權限被拒
+
 ```bash
 FileNotFoundError: No such file or directory
 PermissionError: [Errno 13] Permission denied
 ```
 
 **解決方案**:
+
 ```bash
 # 檢查檔案存在性
 ls -la data/raw/
@@ -847,12 +867,14 @@ mkdir -p data/raw/{AD,CN} model/{capsnet,macadnnet} output/{activations,brain_ma
 #### 5. 記憶體不足問題
 
 **問題**: 系統記憶體不足
+
 ```bash
 MemoryError: Unable to allocate array
 RuntimeError: [enforce fail at alloc_cpu.cpp] out of memory
 ```
 
 **解決方案**:
+
 ```bash
 # 檢查系統記憶體使用
 free -h
@@ -876,12 +898,14 @@ sudo swapon /swapfile
 #### 6. Streamlit Web 應用問題
 
 **問題**: Web 應用無法啟動或載入緩慢
+
 ```bash
 streamlit run app.py
 ValueError: Session state is corrupted
 ```
 
 **解決方案**:
+
 ```bash
 # 清除 Streamlit 快取
 streamlit cache clear
@@ -965,7 +989,7 @@ def check_data_structure():
         'model/macadnnet',
         'output'
     ]
-    
+  
     all_good = True
     for dir_path in required_dirs:
         if Path(dir_path).exists():
@@ -973,13 +997,13 @@ def check_data_structure():
         else:
             print(f"❌ Directory missing: {dir_path}")
             all_good = False
-    
+  
     return all_good
 
 def main():
     print("🔍 Neuro-Compass System Health Check")
     print("="*40)
-    
+  
     checks = [
         check_python_version,
         check_cuda,
@@ -987,7 +1011,7 @@ def main():
         check_neo4j,
         check_data_structure
     ]
-    
+  
     results = []
     for check in checks:
         try:
@@ -997,12 +1021,12 @@ def main():
             print(f"❌ Error in {check.__name__}: {e}")
             results.append(False)
         print()
-    
+  
     if all(results):
         print("🎉 All checks passed! System is ready.")
     else:
         print("⚠️ Some issues found. Please address them before proceeding.")
-    
+  
     return all(results)
 
 if __name__ == "__main__":
@@ -1037,6 +1061,7 @@ grep -i warning analysis.log
 ### 🔄 定期維護任務
 
 #### 每週維護
+
 ```bash
 # 清理暫存檔案
 find output/ -name "*.tmp" -delete
@@ -1054,6 +1079,7 @@ echo "CALL dbms.procedures() YIELD name WHERE name CONTAINS 'monitor'" | cypher-
 ```
 
 #### 每月維護
+
 ```bash
 # 完整系統備份
 tar -czf neuro_compass_backup_$(date +%Y%m%d).tar.gz \
@@ -1152,7 +1178,7 @@ def optimize_memory():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
+  
 # 在關鍵位置呼叫
 optimize_memory()
 ```
@@ -1278,13 +1304,13 @@ class AgentState(TypedDict):
     fmri_scan_path: str                       # fMRI 檔案路徑
     model_path: Optional[str]                 # 模型權重路徑
     model_name: Optional[str]                 # 模型名稱
-    
+  
     # 中間處理結果
     validated_layers: Optional[List[Dict]]    # 驗證的模型層
     final_layers: Optional[List[Dict]]        # 篩選後的層
     post_processing_results: Optional[List]   # 後處理結果
     clean_region_names: Optional[List[str]]   # 清理的腦區名稱
-    
+  
     # 最終輸出
     classification_result: Optional[str]      # AD/CN 分類結果
     activated_regions: Optional[List[BrainRegionInfo]]  # 活化腦區
@@ -1292,7 +1318,7 @@ class AgentState(TypedDict):
     image_explanation: Optional[Dict]         # 影像解釋
     rag_summary: Optional[str]               # 知識摘要
     generated_reports: Optional[Dict[str, str]]  # 中英文報告
-    
+  
     # 系統日誌
     error_log: List[str]                     # 錯誤日誌
     trace_log: List[str]                     # 執行追蹤
@@ -1311,18 +1337,18 @@ from typing import Any, Dict
 
 def custom_analysis_node(state: AgentState) -> Dict[str, Any]:
     """自定義分析節點"""
-    
+  
     # 從狀態取得輸入
     subject_id = state["subject_id"]
     current_results = state.get("post_processing_results", [])
-    
+  
     # 執行自定義分析
     custom_results = perform_custom_analysis(current_results)
-    
+  
     # 更新狀態
     state["trace_log"].append(f"Custom analysis completed for {subject_id}")
     state["custom_results"] = custom_results
-    
+  
     return state
 
 def perform_custom_analysis(input_data):
@@ -1353,13 +1379,13 @@ workflow.add_edge("custom_analyzer", "entity_linker")
 # app/core/fmri_processing/model_config.py 擴展
 class CustomModelConfig(ModelConfig):
     """自定義模型配置"""
-    
+  
     def __init__(self):
         super().__init__()
         self.model_name = "custom_model"
         self.layer_selection_strategy = "custom_strategy"
         self.target_layers = ["custom_layer_1", "custom_layer_2"]
-    
+  
     def validate_layers(self, model) -> List[Dict]:
         """驗證自定義模型的層"""
         # 實現層驗證邏輯
@@ -1403,14 +1429,14 @@ class TestWorkflow:
             "error_log": [],
             "trace_log": []
         }
-        
+    
         # 測試單個節點
         from app.agents.inference import run_inference_and_classification
         result = run_inference_and_classification(initial_state)
-        
+    
         assert "classification_result" in result
         assert result["classification_result"] in ["AD", "CN"]
-    
+  
     def test_full_workflow(self):
         """測試完整工作流"""
         initial_state = {
@@ -1420,16 +1446,16 @@ class TestWorkflow:
             "error_log": [],
             "trace_log": []
         }
-        
+    
         result = app.invoke(initial_state)
-        
+    
         # 驗證所有必要欄位存在
         required_fields = [
             "classification_result",
             "activated_regions",
             "generated_reports"
         ]
-        
+    
         for field in required_fields:
             assert field in result
             assert result[field] is not None
@@ -1455,21 +1481,21 @@ class TestIntegration:
             test_dir = Path(temp_dir)
             (test_dir / "data/raw/CN/sub-test").mkdir(parents=True)
             (test_dir / "model/capsnet").mkdir(parents=True)
-            
+        
             yield test_dir
-    
+  
     def test_neo4j_integration(self):
         """測試 Neo4j 整合"""
         from app.services.neo4j_connector import Neo4jConnector
-        
+    
         connector = Neo4jConnector()
         result = connector.test_connection()
         assert result is True
-    
+  
     def test_llm_integration(self):
         """測試 LLM 服務整合"""
         from app.services.llm_provider import LLMProvider
-        
+    
         provider = LLMProvider()
         response = provider.generate_text("Test prompt")
         assert len(response) > 0
@@ -1489,19 +1515,19 @@ from app.graph.workflow import app
 
 def measure_performance():
     """測量系統效能"""
-    
+  
     # 記錄系統狀態
     cpu_percent = psutil.cpu_percent(interval=1)
     memory_info = psutil.virtual_memory()
     gpu_memory = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
-    
+  
     print(f"初始 CPU 使用率: {cpu_percent}%")
     print(f"初始記憶體使用: {memory_info.percent}%")
     print(f"初始 GPU 記憶體: {gpu_memory / 1024**2:.2f} MB")
-    
+  
     # 執行分析並測量時間
     start_time = time.time()
-    
+  
     initial_state = {
         "subject_id": "perf_test",
         "fmri_scan_path": "data/raw/CN/sub-01/scan.nii.gz",
@@ -1509,16 +1535,16 @@ def measure_performance():
         "error_log": [],
         "trace_log": []
     }
-    
+  
     result = app.invoke(initial_state)
-    
+  
     end_time = time.time()
-    
+  
     # 記錄最終狀態
     final_cpu = psutil.cpu_percent(interval=1)
     final_memory = psutil.virtual_memory()
     final_gpu_memory = torch.cuda.memory_allocated() if torch.cuda.is_available() else 0
-    
+  
     print(f"\n分析完成時間: {end_time - start_time:.2f} 秒")
     print(f"最終 CPU 使用率: {final_cpu}%")
     print(f"最終記憶體使用: {final_memory.percent}%")
@@ -1555,6 +1581,7 @@ kernprof -l -v your_script.py
 
 **Q: 分析一個受試者需要多長時間？**
 A: 通常需要 3-5 分鐘，具體取決於：
+
 - 硬體配置（GPU 加速可大幅縮短時間）
 - fMRI 資料大小
 - 選擇的模型複雜度
@@ -1562,6 +1589,7 @@ A: 通常需要 3-5 分鐘，具體取決於：
 
 **Q: 系統支援哪些 fMRI 資料格式？**
 A: 目前支援：
+
 - NIfTI 格式（.nii, .nii.gz）
 - 4D fMRI 資料（時間序列）
 - ADNI 資料集格式
@@ -1569,12 +1597,14 @@ A: 目前支援：
 
 **Q: 可以同時分析多個受試者嗎？**
 A: Web 介面一次只能分析一個受試者，但可使用命令列進行批次處理：
+
 ```bash
 python batch_analysis.py  # 自定義批次腳本
 ```
 
 **Q: 如何解釋分析結果？**
 A: 系統提供多層次解釋：
+
 1. **分類結果**: AD（阿茲海默症）或 CN（認知正常）
 2. **腦區活化圖**: 顯示異常活化區域
 3. **知識圖譜關聯**: 解釋活化區域與疾病的關係
@@ -1584,6 +1614,7 @@ A: 系統提供多層次解釋：
 
 **Q: 遇到 "CUDA out of memory" 錯誤怎麼辦？**
 A: 解決步驟：
+
 1. 檢查 GPU 記憶體使用: `nvidia-smi`
 2. 關閉其他使用 GPU 的程式
 3. 重新啟動 Python 程序
@@ -1591,6 +1622,7 @@ A: 解決步驟：
 
 **Q: Neo4j 連接失敗怎麼辦？**
 A: 檢查順序：
+
 1. 確認 Neo4j 服務運行: `sudo systemctl status neo4j`
 2. 檢查連接埠: `netstat -an | grep 7687`
 3. 驗證 `.env` 檔案中的認證資訊
@@ -1598,6 +1630,7 @@ A: 檢查順序：
 
 **Q: 為什麼我的分析結果中只檢測到很少的腦區？**
 A: 這可能是由於：
+
 1. **模型權重問題**: 確保使用正確的預訓練權重
 2. **資料品質**: 檢查 fMRI 資料的預處理品質
 3. **座標系統**: 新版系統已修正座標映射問題
@@ -1610,6 +1643,7 @@ A: 目前支援中英文雙語報告。如需其他語言，需要修改 `app/ag
 
 **Q: Python 版本要求是什麼？**
 A: 需要 Python 3.11 或更高版本（< 3.14）。檢查版本：
+
 ```bash
 python --version
 python3 --version
@@ -1617,12 +1651,14 @@ python3 --version
 
 **Q: 可以在沒有 GPU 的環境下運行嗎？**
 A: 可以，但會較慢。系統會自動偵測硬體並選擇適當的執行方式：
+
 - CUDA GPU（最快）
 - Apple Silicon MPS（Mac M1/M2）
 - CPU（最慢但穩定）
 
 **Q: Docker 部署支援嗎？**
 A: 目前主要支援原生安裝，但可以使用 Docker 運行 Neo4j：
+
 ```bash
 docker run -d --name neo4j-fmri -p 7474:7474 -p 7687:7687 \
     -e NEO4J_AUTH=neo4j/password neo4j:5.28.2
@@ -1630,6 +1666,7 @@ docker run -d --name neo4j-fmri -p 7474:7474 -p 7687:7687 \
 
 **Q: 在 Windows 上能運行嗎？**
 A: 可以，但建議：
+
 1. 使用 WSL2（Windows Subsystem for Linux）
 2. 或在 Windows 上直接使用 Python 3.11+
 3. 確保正確安裝 CUDA（如使用 GPU）
@@ -1638,6 +1675,7 @@ A: 可以，但建議：
 
 **Q: 如何提升分析速度？**
 A: 優化建議：
+
 1. **使用 GPU**: 確保 CUDA 正確安裝
 2. **增加記憶體**: 至少 16GB RAM
 3. **SSD 儲存**: 將資料和模型存於 SSD
@@ -1646,6 +1684,7 @@ A: 優化建議：
 
 **Q: 系統記憶體使用量很大怎麼辦？**
 A: 記憶體管理：
+
 ```python
 # 在分析後清理記憶體
 import gc
@@ -1657,6 +1696,7 @@ torch.cuda.empty_cache()
 
 **Q: 可以在雲端運行嗎？**
 A: 可以，推薦配置：
+
 - **AWS**: p3.2xlarge 或 g4dn.xlarge
 - **Google Cloud**: n1-highmem-4 + T4 GPU
 - **Azure**: Standard_NC6s_v3
@@ -1665,6 +1705,7 @@ A: 可以，推薦配置：
 
 **Q: 如何取得預訓練模型權重？**
 A: 從提供的雲端連結下載：
+
 ```bash
 # 下載並放置到正確目錄
 wget [model-download-url] -O model/capsnet/best_capsnet_rnn.pth
@@ -1672,6 +1713,7 @@ wget [model-download-url] -O model/capsnet/best_capsnet_rnn.pth
 
 **Q: 可以使用自己的 fMRI 資料嗎？**
 A: 可以，但需要確保：
+
 1. 格式為 NIfTI（.nii 或 .nii.gz）
 2. 座標系統為 MNI 空間
 3. 檔案結構符合要求：
@@ -1681,6 +1723,7 @@ A: 可以，但需要確保：
 
 **Q: 如何訓練自定義模型？**
 A: 使用提供的訓練腳本：
+
 ```bash
 # CapsNet-RNN 訓練
 python -m scripts.capsnet.train
@@ -1691,6 +1734,7 @@ python -m scripts.macadnnet.train
 
 **Q: 支援其他疾病的分析嗎？**
 A: 目前專注於阿茲海默症，但架構是可擴展的。要支援其他疾病需要：
+
 1. 相應的訓練資料
 2. 特定疾病的知識圖譜
 3. 修改分類標籤和報告模板
@@ -1699,6 +1743,7 @@ A: 目前專注於阿茲海默症，但架構是可擴展的。要支援其他�
 
 **Q: 如何新增自定義分析步驟？**
 A: 參考開發者指南，主要步驟：
+
 1. 建立新的節點函數
 2. 更新 AgentState 類型定義
 3. 修改工作流圖結構
@@ -1706,6 +1751,7 @@ A: 參考開發者指南，主要步驟：
 
 **Q: 可以整合其他 LLM 服務嗎？**
 A: 可以，修改 `app/services/llm_provider.py`：
+
 ```python
 class CustomLLMProvider:
     def generate_text(self, prompt: str) -> str:
@@ -1715,6 +1761,7 @@ class CustomLLMProvider:
 
 **Q: 如何客製化知識圖譜？**
 A: 修改 `tools/build_neo4j.py` 和相關的圖資料檔案：
+
 1. 準備新的節點和關係資料
 2. 更新 Cypher 查詢模板
 3. 重新建置圖資料庫

@@ -129,9 +129,9 @@ model_info = {
 }
 if selected_model_key in model_info:
     info = model_info[selected_model_key]
-    st.sidebar.markdown(f"**Model Type:** {info['type']}")
-    st.sidebar.markdown(f"**Description:** {info['description']}")
-    st.sidebar.markdown(f"**Best for:** {info['best_for']}")
+    st.sidebar.caption(f"**Model Type:** {info['type']}")
+    st.sidebar.caption(f"**Description:** {info['description']}")
+    st.sidebar.caption(f"**Best for:** {info['best_for']}")
 
 # 檢查是否有參數變更，如果有則重置分析狀態
 prev_subject = st.session_state.get('selected_subject')
