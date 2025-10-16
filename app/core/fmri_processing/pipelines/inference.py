@@ -2,7 +2,7 @@ import torch
 import nibabel as nib
 import numpy as np
 import os
-from scripts.capsnet.model import CapsNetRNN
+from model.capsnet.model import CapsNetRNN
 
 
 def load_nifti_and_preprocess(path: str, window: int, stride: int) -> torch.Tensor:
