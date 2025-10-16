@@ -1,12 +1,9 @@
-# app/agents/report_generation.py
 from typing import List
 from app.graph.state import AgentState, BrainRegionInfo
-# 導入我們真實的 LLM 服務
-from app.services.llm_provider import llm_response
+from app.services.llm_providers import llm_response
 
 
 def format_regions_for_prompt(regions: List[BrainRegionInfo]) -> str:
-    # ... (這個輔助函數保持不變)
     if not regions:
         return "No significant brain region activations were identified."
 

@@ -86,7 +86,11 @@ semantic-KG/
 │   │   ├── state.py          # AgentState 狀態架構
 │   │   └── workflow.py       # 完整管道工作流
 │   └── services/             # 外部服務連接器
-│       ├── llm_provider.py   # Gemini/Ollama LLM 服務
+│       ├── llm_providers/    # 模組化 LLM 供應商
+│       │   ├── __init__.py   # 統一呼叫介面
+│       │   ├── gemini.py     # Google Vertex AI Gemini
+│       │   ├── bedrock.py    # AWS Bedrock Claude
+│       │   └── ollama.py     # Ollama 本地推理
 │       └── neo4j_connector.py # Neo4j 資料庫介面
 ├── agents/                   # 舊版 Google ADK 系統（向後兼容）
 ├── data/                     # fMRI 資料集 (AD/CN 受試者)
@@ -105,12 +109,13 @@ flowchart LR
     C --> D[後處理<br/>NIfTI]
     D --> E[實體連結<br/>腦區識別]
     E --> F[知識圖譜<br/>Neo4j]
-    F --> G[影像解釋<br/>Gemini LLM]
+    F --> G[多模態分析<br/>LLM Providers]
     G --> H[最終報告<br/>中英文]
   
     B --> B1[分類結果<br/>AD/CN]
     D --> D1[活化圖]
     F --> F1[腦區知識]
+    G --> G1[Gemini/Bedrock/Ollama]
   
     style A fill:#e3f2fd
     style B fill:#e1f5fe
@@ -120,6 +125,31 @@ flowchart LR
     style F fill:#fce4ec
     style G fill:#f1f8e9
     style H fill:#e3f2fd
+    style G1 fill:#fff9c4
+```
+
+### 🤖 LLM 供應商架構
+
+```mermaid
+flowchart TD
+    A[統一 LLM 介面] --> B[llm_response\n純文字]
+    A --> C[llm_image_response\n多模態]
+    
+    B --> D[Gemini Provider]
+    B --> E[Bedrock Provider]
+    B --> F[Ollama Provider]
+    
+    C --> D
+    C --> E
+    
+    D --> D1[Vertex AI<br/>gemini-1.5-flash]
+    E --> E1[AWS Bedrock<br/>Claude Haiku]
+    F --> F1[本地模型<br/>gpt-oss-20b]
+    
+    style A fill:#e1f5fe
+    style D fill:#e8f5e8
+    style E fill:#fff3e0
+    style F fill:#fce4ec
 ```
 
 ---
@@ -201,6 +231,57 @@ python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
 
 #### 步驟 4: Neo4j 資料庫設置
 
+#### 步驟 4: LLM 服務設定
+
+**Google Vertex AI 設定（推薦）**
+
+```bash
+# 下載 GCP 服務帳號金鑰（JSON 檔案）
+# 放置在專案根目錄：gcp-service-account.json
+
+# 設定環境變數
+export GOOGLE_APPLICATION_CREDENTIALS="./gcp-service-account.json"
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+
+# 驗證 Vertex AI 連接
+python -c "from app.services.llm_providers.gemini import handle_chat; print('Vertex AI connected')"
+```
+
+**AWS Bedrock 設定（可選）**
+
+```bash
+# 設定 AWS 認證
+export AWS_ACCESS_KEY_ID="your_access_key"
+export AWS_SECRET_ACCESS_KEY="your_secret_key"
+export AWS_DEFAULT_REGION="us-east-1"
+
+# 安裝 AWS CLI
+pip install boto3
+
+# 驗證 Bedrock 連接
+python -c "from app.services.llm_providers.bedrock import handle_text; print('Bedrock ready')"
+```
+
+**Ollama 本地設定（可選）**
+
+```bash
+# 安裝 Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# 啓動 Ollama 服務
+ollama serve
+
+# 下載模型
+ollama pull llama3.2
+ollama pull qwen2.5:14b
+
+# 驗證連接
+curl http://localhost:11434/api/tags
+```
+
+#### 步驟 5: Neo4j 資料庫設置
+
 **選項 A: 使用 Docker（推薦）**
 
 ```bash
@@ -231,7 +312,7 @@ sudo systemctl start neo4j
 sudo systemctl status neo4j
 ```
 
-#### 步驟 5: 環境變數配置
+#### 步驟 6: 環境變數配置
 
 創建專案根目錄下的 `.env` 檔案：
 
@@ -239,21 +320,50 @@ sudo systemctl status neo4j
 # .env 檔案配置
 # Neo4j 知識圖譜設定
 NEO4J_URI=bolt://localhost:7687
-NEO4J_USERNAME=neo4j
+NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_neo4j_password
 
-# Google AI/LLM 服務
-GOOGLE_API_KEY=your_google_api_key
+# 主要 LLM 供應商：Google Vertex AI
+GOOGLE_CLOUD_PROJECT=your_gcp_project_id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=./gcp-service-account.json
+GOOGLE_GENAI_USE_VERTEXAI=1
+
+# 備用 LLM 供應商：AWS Bedrock
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+AWS_DEFAULT_REGION=us-east-1
+
+# 本地 LLM 供應商：Ollama
+OLLAMA_BASE_URL=http://localhost:11434
 
 # 可選：雲端部署設定
 PROJECT_ID=your_gcp_project_id
 LOCATION=your_gcp_location
 BUCKET_ID=your_gcp_bucket
-
-# 可選：其他 LLM 服務
-GROQ_API_KEY=your_groq_api_key  # 使用 Groq 時
-OLLAMA_BASE_URL=http://localhost:11434  # 使用本地 Ollama 時
 ```
+
+### 🤖 LLM 供應商選擇指南
+
+Cognivex 支援多種 LLM 供應商，您可以根據需求選擇：
+
+#### 1. **Google Vertex AI Gemini**（推薦）
+- **優點**：優異的多模態能力，特別適合影像分析
+- **支援模型**：`gemini-1.5-flash`、`gemini-1.5-pro`
+- **適用場景**：生產環境、需要多模態分析
+- **成本**：中等（按使用量計費）
+
+#### 2. **AWS Bedrock Claude**（備用）
+- **優點**：優異的文本理解和生成能力
+- **支援模型**：`anthropic.claude-haiku-4-5-20251001-v1:0`
+- **適用場景**：需要高品質文本生成、企業環境
+- **成本**：低（Haiku 模型相對便宜）
+
+#### 3. **Ollama 本地推理**（開發/離線）
+- **優點**：完全本地化、無網路成本、數據隱私
+- **支援模型**：`llama3.2`、`qwen2.5:14b`、其他開源模型
+- **適用場景**：開發測試、離線環境、數據盧欧嚴格
+- **成本**：無（但需要本地 GPU 資源）
 
 ---
 
@@ -306,6 +416,11 @@ python -m tests.nii_check
 
 # 測試 LLM 服務連接
 python -m tests.image_explain
+
+# 測試多種 LLM 供應商
+python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello', llm_provider='gemini'))"
+python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello', llm_provider='aws_bedrock'))" 
+python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello', llm_provider='gpt-oss-20b', model='llama3.2'))"
 
 # 測試完整管道（使用範例資料）
 python -m tests.vertex
@@ -1750,13 +1865,29 @@ A: 參考開發者指南，主要步驟：
 4. 測試新功能
 
 **Q: 可以整合其他 LLM 服務嗎？**
-A: 可以，修改 `app/services/llm_provider.py`：
+A: 可以！新的模組化架構讓 LLM 整合更容易：
 
 ```python
-class CustomLLMProvider:
-    def generate_text(self, prompt: str) -> str:
-        # 實現自定義 LLM 呼叫
-        pass
+# 在 app/services/llm_providers/ 中新增 custom_provider.py
+def handle_text(prompt: str, *, model: str, **kwargs) -> str:
+    """自定義 LLM 呼叫實現。"""
+    # 實現你的 LLM API 呼叫
+    pass
+
+def handle_image(prompt: str, *, image_path, model: str, **kwargs) -> str:
+    """自定義多模態呼叫實現（如果支援）。"""
+    # 實現多模態功能
+    pass
+```
+
+然後在 `__init__.py` 中註冊:
+```python
+from app.services.llm_providers import custom_provider
+
+def llm_response(prompt, *, llm_provider, model=None, **kwargs):
+    if llm_provider == "custom":
+        return custom_provider.handle_text(prompt=prompt, model=model, **kwargs)
+    # ... 其他供應商
 ```
 
 **Q: 如何客製化知識圖譜？**
@@ -1772,13 +1903,28 @@ A: 目前主要提供 Web 介面和命令列工具。如需 API，可以基於�
 ```python
 # api.py 範例
 from fastapi import FastAPI
+from pydantic import BaseModel
 from app.graph.workflow import app as workflow_app
 
 app = FastAPI()
 
+class AnalysisRequest(BaseModel):
+    subject_id: str
+    fmri_scan_path: str
+    model_path: str
+    llm_provider: str = "gemini"  # 允許選擇 LLM 供應商
+
 @app.post("/analyze")
 async def analyze_fmri(request: AnalysisRequest):
-    result = workflow_app.invoke(request.dict())
+    state = {
+        "subject_id": request.subject_id,
+        "fmri_scan_path": request.fmri_scan_path,
+        "model_path": request.model_path,
+        "llm_provider": request.llm_provider,
+        "error_log": [],
+        "trace_log": []
+    }
+    result = workflow_app.invoke(state)
     return result
 ```
 

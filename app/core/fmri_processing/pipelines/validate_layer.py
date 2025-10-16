@@ -1,7 +1,7 @@
 import json
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-from app.services.llm_provider import llm_response
+from app.services.llm_providers import llm_response
 
 # ==============================================================================
 #  PART 1: The Instruction (System Prompt) - AI 的工作手冊
