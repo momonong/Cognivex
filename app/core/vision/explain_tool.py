@@ -1,9 +1,6 @@
-# app/core/vision/explain_tool.py
-
 from pydantic import BaseModel
 from typing import List, Dict, Any
-# 確保 import 路徑正確
-from app.services.llm_provider import gemini_image 
+from app.services.llm_providers import llm_image_response
 
 
 INSTRUCTION = """
@@ -37,7 +34,7 @@ def explain_activation_map(
     """
     Analyzes fMRI activation maps by synthesizing structured data and visual information.
     """
-    print("  - Calling Gemini Vision to explain activation map...")
+    print("  - Calling Vision LM to explain activation map...")
     prompt = f"""
     Please analyze the provided fMRI data and images according to my instructions.
 
@@ -58,7 +55,7 @@ def explain_activation_map(
     Now, using the OVERALL CLASSIFICATION as crucial context, generate the detailed clinical explanation in the required JSON format.
     """
     
-    raw_response_str = gemini_image(
+    raw_response_str = llm_image_response(
         prompt=prompt,
         image_path=image_paths,
         system_instruction=INSTRUCTION,
@@ -68,7 +65,7 @@ def explain_activation_map(
 
     # Parse the raw JSON string into an ActivationExplanation object
     response_object = ActivationExplanation.model_validate_json(raw_response_str)
-    print("  - Gemini Vision analysis complete.")
+    print("  - Vision LM analysis complete.")
     
     return {
         "text": response_object.text,

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from app.services.llm_provider import llm_response
+from app.services.llm_providers import llm_response
 
 
 # Strategy-based layer selection instructions

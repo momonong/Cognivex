@@ -1,8 +1,7 @@
-# in tools/linker_tool.py
 import json
 from typing import List
 
-from app.services.llm_provider import llm_response
+from app.services.llm_providers import llm_response
 from app.services.neo4j_connector import get_neo4j_driver
 
 driver = get_neo4j_driver()
