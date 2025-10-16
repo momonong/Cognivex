@@ -14,21 +14,15 @@ DEFAULT_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 # --- Helper Functions ---
 
 def _image_to_base64(image_path: Union[str, Path]) -> str:
-    """
-    將圖片檔案轉換為 Base64 編碼字串，並確保有正確的填充 (padding)。
-    """
+    """將圖片檔案轉換為 Base64 編碼字串，並確保有正確的填充 (padding)。"""
     try:
         with open(image_path, "rb") as image_file:
             encoded_bytes = base64.b64encode(image_file.read())
             encoded_string = encoded_bytes.decode("utf-8")
-            
-            # --- 核心修正點 #2：確保 Base64 填充 ---
-            # AWS API 要求 Base64 字串長度必須是 4 的倍數。
             missing_padding = len(encoded_string) % 4
             if missing_padding:
                 encoded_string += '=' * (4 - missing_padding)
             return encoded_string
-            
     except Exception as e:
         raise IOError(f"無法讀取或編碼圖片: {image_path}") from e
 
@@ -54,43 +48,76 @@ def _convert_schema_if_needed(schema: Any) -> Optional[Dict[str, Any]]:
         raise TypeError(f"Unsupported type for response_schema: {type(schema)}.")
     return {"type": "object", "properties": {"output": target_schema}, "required": ["output"]}
 
+
+def _extract_json_from_string(text: str) -> Optional[Union[Dict, List]]:
+    """
+    從可能混雜了其他文字的字串中，精準地提取出第一個完整的 JSON 物件或陣列。
+    """
+    first_bracket_pos = -1
+    first_brace_pos = text.find('{')
+    first_square_pos = text.find('[')
+
+    if first_brace_pos == -1:
+        first_bracket_pos = first_square_pos
+    elif first_square_pos == -1:
+        first_bracket_pos = first_brace_pos
+    else:
+        first_bracket_pos = min(first_brace_pos, first_square_pos)
+        
+    if first_bracket_pos == -1:
+        return None
+
+    start_char = text[first_bracket_pos]
+    end_char = '}' if start_char == '{' else ']'
+    
+    open_brackets = 0
+    for i in range(first_bracket_pos, len(text)):
+        if text[i] == start_char:
+            open_brackets += 1
+        elif text[i] == end_char:
+            open_brackets -= 1
+        
+        if open_brackets == 0:
+            potential_json = text[first_bracket_pos : i + 1]
+            try:
+                return json.loads(potential_json)
+            except json.JSONDecodeError:
+                return None
+    
+    return None
+
 def _parse_bedrock_response(response_body_bytes: bytes) -> Union[str, Dict, List]:
     """從 Bedrock 回傳中解析出純文字或 Python 物件，並能從混雜文字中提取 JSON。"""
     if not response_body_bytes:
         raise ValueError("從 AWS Bedrock API 收到空的回傳 body。")
 
-    try:
-        response_body = json.loads(response_body_bytes)
-    except json.JSONDecodeError:
-        raise ValueError(f"無法從 Bedrock 解析 JSON。原始回傳內容: {response_body_bytes.decode('utf-8')}")
-
+    response_body = json.loads(response_body_bytes.decode('utf-8'))
     content_list = response_body.get("content", [])
     
     if response_body.get("stop_reason") == "tool_use":
         tool_use_block = next((block for block in content_list if block.get("type") == "tool_use"), None)
         if tool_use_block and "input" in tool_use_block:
-            response_input = tool_use_block["input"]
-            return response_input.get("output", response_input)
+            output_data = tool_use_block["input"].get("output", tool_use_block["input"])
+            
+            # --- 核心修正點：無差別淨化程序 ---
+            # 如果 tool_use 的輸出是個字串，就必須把它當成髒數據，送進提取器淨化
+            if isinstance(output_data, str):
+                return _extract_json_from_string(output_data)
+            
+            # 如果它已經是個 dict 或 list，就直接回傳
+            return output_data
 
     text_block = next((block for block in content_list if block.get("type") == "text"), None)
     if text_block and "text" in text_block:
         raw_text = text_block["text"]
         
-        # --- 核心修正點 #1：智慧提取 JSON ---
-        # 嘗試從文字中尋找 ```json ... ``` 區塊或獨立的 [ ... ] / { ... }
-        json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```|(\[[\s\S]*\]|\{[\s\S]*\})', raw_text, re.DOTALL)
-        if json_match:
-            # 優先選擇第一個捕獲組 (```json...```)，否則選擇第二個 ([...])
-            json_str = json_match.group(1) or json_match.group(2)
-            try:
-                # 驗證它是否是有效的 JSON
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                # 如果提取的不是有效 JSON，則回傳原始文字
-                return raw_text
+        extracted_json = _extract_json_from_string(raw_text)
+        if extracted_json is not None:
+            return extracted_json
+        
         return raw_text
 
-    raise ValueError(f"在 Bedrock 的回傳中找不到有效的 'text' 或 'tool_use' 區塊。Stop Reason: '{response_body.get('stop_reason')}'.")
+    raise ValueError(f"在 Bedrock 的回傳中找不到有效的 'text' 或 'tool_use' 區塊。")
 
 # --- 公開處理函式 ---
 
@@ -98,7 +125,6 @@ def handle_text(
     prompt: str | list, *, model_id: str = DEFAULT_BEDROCK_MODEL_ID,
     system_instruction: Optional[str] = None, response_schema: Optional[Any] = None, **kwargs
 ) -> str:
-    """呼叫 AWS Bedrock API，並確保回傳乾淨、可用的 JSON 字串或一般字串。"""
     schema_dict = _convert_schema_if_needed(response_schema)
     prompt_text = str(prompt[-1]) if isinstance(prompt, list) else str(prompt)
     messages = [{"role": "user", "content": [{"type": "text", "text": prompt_text}]}]
@@ -128,7 +154,6 @@ def handle_image(
     model_id: str = DEFAULT_BEDROCK_MODEL_ID, system_instruction: Optional[str] = None,
     response_schema: Optional[Any] = None, **kwargs
 ) -> str:
-    """呼叫 AWS Bedrock API 處理圖片，並確保回傳乾淨、可用的 JSON 字串或一般字串。"""
     schema_dict = _convert_schema_if_needed(response_schema)
     image_paths = [image_path] if isinstance(image_path, (str, Path)) else image_path
     content_blocks = [{"type": "text", "text": prompt}]
