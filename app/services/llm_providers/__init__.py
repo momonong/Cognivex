@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.services.llm_providers import gemini, bedrock, ollama
 
-DEFAULT_LLM_PROVIDER = "aws_bedrock"
+DEFAULT_LLM_PROVIDER = "gemini"
 
 def llm_response(
     prompt: str | list,

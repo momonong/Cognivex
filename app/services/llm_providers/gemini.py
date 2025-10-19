@@ -28,8 +28,14 @@ def build_gemini_config(
     seed: int = 42,
     **kwargs,  
 ) -> types.GenerateContentConfig:
+
+    if response_schema:
+        final_mime_type = "application/json"
+    else:
+        final_mime_type = mime_type
+
     config_kwargs = {
-        "response_mime_type": mime_type,
+        "response_mime_type": final_mime_type,
         "system_instruction": system_instruction,
         "response_schema": response_schema,
         "temperature": temperature,
