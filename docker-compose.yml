@@ -1,0 +1,34 @@
+# docker-compose.yml (Optimized for Deployment)
+
+version: '3.8'
+
+services:
+  # Your application service
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    # IMPORTANT: The 'volumes' section is REMOVED for the deployment build.
+    # This ensures that only the files copied via Dockerfile are included in the container.
+    env_file:
+      - .env
+    depends_on:
+      - neo4j
+    command: streamlit run app.py --server.address=0.0.0.0
+
+  # Neo4j database service
+  neo4j:
+    image: neo4j:latest
+    ports:
+      - "7480:7474" # <--- 新的 Web 介面端口
+      - "7690:7687" # <--- 新的 Bolt 連接端口
+    # This ensures the Neo4j container can also read the password from the .env file
+    env_file:
+      - .env
+    environment:
+      # This reads the NEO4J_PASSWORD from the env_file and sets it for the database
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD}
+    # For a hackathon demo, a persistent volume is not necessary.
+    # In a real production setup, you would add a volume here:
+    # volumes:
+    #   - neo4j_data:/data

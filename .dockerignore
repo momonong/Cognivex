@@ -1,0 +1,22 @@
+# .dockerignore
+
+# Ignore Python virtual environment
+.venv
+
+# Ignore Git directory
+.git
+.gitignore
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore test files and other development artifacts
+tests/
+scripts/
+.pytest_cache/
+.mypy_cache/
+
+# CRITICAL: Ignore large data and model directories that are not needed inside the image
