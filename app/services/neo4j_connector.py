@@ -1,5 +1,7 @@
 import os
 from neo4j import GraphDatabase
+from dotenv import load_dotenv
+load_dotenv()
 
 # 從環境變數讀取 Neo4j 的連接資訊
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
