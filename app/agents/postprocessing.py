@@ -58,7 +58,7 @@ def run_post_processing(state: AgentState) -> dict:
             # (Step 6.4 - Unchanged)
             vis_output_path = visualize_activation_map_data(
                 activation_path=resampled_path,
-                output_path=os.path.join(vis_dir, f"map_{layer_name.replace('.', '_')}.png"),
+                output_path=os.path.join(vis_dir, f"{subject_id}_map_{layer_name.replace('.', '_')}.png"),
                 threshold=VIS_THRESHOLD_PERCENTILE,
                 title=f"Activation Map - {layer_name}"
             )
