@@ -28,27 +28,25 @@ Solving the "black box" problem in neuroimaging AI by creating a trustworthy, au
 
 ```mermaid
 graph LR
-    A[START] --> B[Inference Node]
-    B --> C[Filtering Node] 
-    C --> D[Post-processing Node]
-    D --> E[Entity Linking Node]
-    E --> F[Knowledge Reasoning Node]
-    F --> G[Image Explanation Node]
-    G --> H[Report Generation Node]
+    A[START] --> B[推理節點<br/>Inference Node]
+    B --> C[篩選節點<br/>Filtering Node] 
+    C --> D[後處理節點<br/>Post-processing Node]
+    D --> E[實體連結節點<br/>Entity Linking Node]
+    E --> F[知識推理節點<br/>Knowledge Reasoning Node]
+    F --> G[影像解釋節點<br/>Image Explanation Node]
+    G --> H[報告生成節點<br/>Report Generation Node]
     H --> I[END]
 ```
 
 ## 📋 System Requirements
 
 ### Hardware Requirements
-
 - **GPU**: NVIDIA GPU with CUDA support (recommended for training/inference)
 - **Memory**: 16GB+ RAM for fMRI data processing
 - **Storage**: 50GB+ for datasets and model weights
 - **Database**: Running Neo4j database instance (local or remote)
 
 ### Software Requirements
-
 - **OS**: Ubuntu 20.04+ / macOS 12+ / Windows 11
 - **Python**: 3.11+ (configured: `>=3.11,<3.14`)
 - **CUDA**: CUDA 11.8+ (for GPU acceleration)
@@ -100,10 +98,24 @@ NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_neo4j_password
 
+# Primary LLM Provider: Google Vertex AI
+GOOGLE_CLOUD_PROJECT=your_gcp_project_id
+GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_APPLICATION_CREDENTIALS=./gcp-service-account.json
+GOOGLE_GENAI_USE_VERTEXAI=1
+
 # Backup LLM Provider: AWS Bedrock
 AWS_ACCESS_KEY_ID=your_aws_access_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret_key
 AWS_DEFAULT_REGION=us-east-1
+
+# Local LLM Provider: Ollama
+OLLAMA_BASE_URL=http://localhost:11434
+
+# Optional: Cloud deployment
+PROJECT_ID=your_gcp_project_id
+LOCATION=your_gcp_location
+BUCKET_ID=your_gcp_bucket
 ```
 
 ## 🤖 LLM Provider Selection Guide
@@ -113,26 +125,35 @@ Cognivex supports multiple LLM providers. Choose based on your requirements:
 ### 🌟 Primary: Google Vertex AI Gemini (Recommended)
 
 **Advantages:**
-
 - Superior multimodal capabilities (text + image analysis)
 - Optimized for clinical imaging tasks
 - Enterprise-grade reliability and security
 
-### 🏭 AWS Bedrock Claude
+**Models Supported:**
+- `gemini-1.5-flash`: Fast inference, cost-effective
+- `gemini-1.5-pro`: Advanced reasoning, higher accuracy
+
+**Setup:**
+```bash
+# Download GCP service account key (JSON file)
+# Place in project root: gcp-service-account.json
+
+# Verify connection
+python -c "from app.services.llm_providers.gemini import handle_chat; print('Vertex AI ready')"
+```
+
+### 🏭 Backup: AWS Bedrock Claude
 
 **Advantages:**
-
 - Excellent text understanding and generation
 - Cost-effective for text-only tasks
 - Strong enterprise support
 
 **Models Supported:**
-
 - `anthropic.claude-haiku-4-5-20251001-v1:0`: Fast, economical
 - Other Claude variants available
 
 **Setup:**
-
 ```bash
 # Configure AWS credentials
 export AWS_ACCESS_KEY_ID="your_access_key"
@@ -141,6 +162,32 @@ export AWS_DEFAULT_REGION="us-east-1"
 
 # Verify connection
 python -c "from app.services.llm_providers.bedrock import handle_text; print('Bedrock ready')"
+```
+
+### 🖥️ Local: Ollama (Development/Offline)
+
+**Advantages:**
+- Complete privacy and data security
+- No internet dependency
+- No per-use costs
+
+**Models Supported:**
+- `llama3.2`: General-purpose reasoning
+- `qwen2.5:14b`: Advanced Chinese/English bilingual
+- Custom fine-tuned models
+
+**Setup:**
+```bash
+# Install and start Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama serve
+
+# Download models
+ollama pull llama3.2
+ollama pull qwen2.5:14b
+
+# Verify connection
+curl http://localhost:11434/api/tags
 ```
 
 ### ⚙️ Runtime Provider Selection
@@ -153,16 +200,26 @@ from app.services.llm_providers import llm_response, llm_image_response
 # Text-only analysis
 result = llm_response(
     prompt="Analyze this clinical data...",
-    llm_provider="aws_bedrock"  
+    llm_provider="gemini"  # or "aws_bedrock", "gpt-oss-20b"
 )
 
 # Multimodal analysis (text + images)
 result = llm_image_response(
     prompt="Explain this fMRI activation map...",
     image_path="/path/to/brain_scan.png",
-    llm_provider="aws_bedrock"   images
+    llm_provider="gemini"  # Only Gemini and Bedrock support images
 )
 ```
+
+**Provider Comparison:**
+
+| Provider | Text | Images | Cost | Privacy | Offline |
+|----------|------|---------|------|---------|----------|
+| **Gemini** | ✅ Excellent | ✅ Best | 🟡 Medium | 🟡 Cloud | ❌ No |
+| **Bedrock** | ✅ Excellent | ✅ Good | ✅ Low | 🟡 Cloud | ❌ No |
+| **Ollama** | 🟡 Good | ❌ No | ✅ Free | ✅ Complete | ✅ Yes |
+
+---
 
 ## 📂 Data Directory Structure
 
@@ -187,7 +244,9 @@ semantic-KG/
 │   └── services/             # External service connectors
 │       ├── llm_providers/    # Modular LLM provider system
 │       │   ├── __init__.py   # Unified call interface  
+│       │   ├── gemini.py     # Google Vertex AI Gemini
 │       │   ├── bedrock.py    # AWS Bedrock Claude
+│       │   └── ollama.py     # Ollama local inference
 │       └── neo4j_connector.py # Neo4j database interface
 ├── data/                     # fMRI datasets (AD/CN subjects)
 │   ├── raw/                  # Original fMRI data
@@ -250,7 +309,9 @@ python -m tools.build_neo4j
 python -c "from app.services.neo4j_connector import Neo4jConnector; client = Neo4jConnector(); print('Neo4j connected successfully!')"
 
 # Test LLM providers
+python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello world', llm_provider='gemini'))"
 python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello world', llm_provider='aws_bedrock'))"
+python -c "from app.services.llm_providers import llm_response; print(llm_response('Hello world', llm_provider='gpt-oss-20b', model='llama3.2'))"
 ```
 
 ### 3. Launch Web Interface
@@ -365,14 +426,12 @@ python -m tests.test_complete_pipeline
 The Streamlit web interface provides an intuitive way to interact with Cognivex:
 
 #### Sidebar Controls
-
 - **Subject Selector**: Choose from available fMRI data subjects
 - **Model Selector**: Select analysis model (CapsNet / MCADNNet)
 - **Analysis Control**: Start analysis and emergency stop functionality
 - **Model Information**: Display selected model details
 
 #### Main Display Area
-
 - **Progress Tracking**: Real-time analysis progress and status updates
 - **Results Display**: Analysis results presentation area
 - **Interactive Viewer**: Expandable 3D brain image viewer
@@ -381,18 +440,17 @@ The Streamlit web interface provides an intuitive way to interact with Cognivex:
 ### Usage Flow
 
 1. **Launch Application**:
-
    ```bash
    streamlit run app.py
    # Access at http://localhost:8501
    ```
-2. **Select Analysis Parameters**:
 
+2. **Select Analysis Parameters**:
    - Choose subject from dropdown (format: `sub-01`, `sub-02`, etc.)
    - Select inference model (CapsNet recommended)
    - Review model information displayed
-3. **Start Analysis**:
 
+3. **Start Analysis**:
    - Click "Start Analysis" button
    - System locks all controls during analysis
    - Progress updates through stages:
@@ -402,8 +460,8 @@ The Streamlit web interface provides an intuitive way to interact with Cognivex:
      - Running AI analysis pipeline... (50%)
      - Completing results... (90%)
      - Analysis successfully completed! (100%)
-4. **Review Results**:
 
+4. **Review Results**:
    - **Brain Activation Maps**: High-resolution brain activation heatmaps
    - **Prediction Validation**: True label vs model prediction comparison
    - **Interactive fMRI Viewer**: 4D fMRI data with time slider
@@ -414,34 +472,32 @@ The Streamlit web interface provides an intuitive way to interact with Cognivex:
 ## 🛠️ Technology Stack
 
 ### 🤖 AI/ML Framework
-
 - **Agent Platform**: LangGraph 0.4.10 for workflow orchestration
 - **LLM Architecture**: Modular provider system with unified interface
+  - **Google Vertex AI Gemini**: Primary provider for multimodal analysis
   - **AWS Bedrock Claude**: Enterprise-grade text generation
+  - **Ollama**: Local inference for privacy-sensitive environments
 - **Deep Learning**: PyTorch 2.8.0, torchvision, torchinfo 1.8.0
 - **Explainability**: grad-cam 1.5.5, custom activation analysis
 
 ### 🧠 Neuroimaging
-
-- **Data Processing**:
+- **Data Processing**: 
   - nibabel 5.3.2 (NIfTI file handling)
   - nilearn 0.11.1 (neuroimaging analysis)
   - scikit-image 0.25.2 (image processing)
-- **Visualization**:
+- **Visualization**: 
   - matplotlib 3.10.6 (plotting)
   - seaborn 0.13.2 (statistical visualization)
   - plotly 6.3.0+ (interactive plots)
 - **Brain Atlas**: AAL3 brain parcellation system
 
 ### 🕸️ Knowledge Management
-
 - **Graph Database**: Neo4j 5.28.2 with Python driver
 - **Graph Processing**: NetworkX 3.5 for analysis
 - **Query Engine**: Custom GraphRAG implementation
 - **Data Formats**: GraphML, CSV exports
 
 ### 🖥️ User Interface & Services
-
 - **Web App**: Streamlit 1.49.1+ for interactive analysis
 - **Backend**: Custom async runner with LangGraph workflows
 - **API Capabilities**: FastAPI integration ready
@@ -456,14 +512,12 @@ The Streamlit web interface provides an intuitive way to interact with Cognivex:
 #### 1. CUDA/GPU Issues
 
 **Problem**: CUDA unavailable or GPU memory insufficient
-
 ```bash
 RuntimeError: CUDA out of memory
 torch.cuda.is_available() returns False
 ```
 
 **Solutions**:
-
 ```bash
 # Check CUDA installation
 nvidia-smi
@@ -482,13 +536,11 @@ python -c "import torch; torch.cuda.empty_cache()"
 #### 2. Neo4j Connection Issues
 
 **Problem**: Neo4j connection failures
-
 ```bash
 ServiceUnavailable: Failed to establish connection to Neo4j database
 ```
 
 **Solutions**:
-
 ```bash
 # Check Neo4j service status
 sudo systemctl status neo4j
@@ -510,7 +562,6 @@ grep NEO4J .env
 #### 3. LLM Provider Issues
 
 **Problem**: LLM provider authentication or connection failures
-
 ```bash
 ValueError: 不支援的 LLM 供應商: invalid_provider
 google.auth.exceptions.DefaultCredentialsError: Could not automatically determine credentials
@@ -518,14 +569,23 @@ boto3.exceptions.NoCredentialsError: Unable to locate credentials
 ```
 
 **Solutions**:
-
 ```bash
-# Test provider 
+# Test each provider individually
+
+# Gemini (Vertex AI)
+export GOOGLE_APPLICATION_CREDENTIALS="./gcp-service-account.json"
+export GOOGLE_CLOUD_PROJECT="your-project-id"
+python -c "from app.services.llm_providers.gemini import handle_chat; print(handle_chat('test'))"
 
 # Bedrock (AWS)
 export AWS_ACCESS_KEY_ID="your_key"
 export AWS_SECRET_ACCESS_KEY="your_secret"
 python -c "from app.services.llm_providers.bedrock import handle_text; print(handle_text('test'))"
+
+# Ollama (Local)
+ollama serve &
+ollama pull llama3.2
+python -c "from app.services.llm_providers.ollama import handle_text; print(handle_text('test', model='llama3.2'))"
 
 # Check unified interface
 python -c "from app.services.llm_providers import llm_response; print(llm_response('test', llm_provider='gemini'))"
@@ -534,14 +594,12 @@ python -c "from app.services.llm_providers import llm_response; print(llm_respon
 #### 4. Memory Issues
 
 **Problem**: Insufficient system memory
-
 ```bash
 MemoryError: Unable to allocate array
 RuntimeError: out of memory
 ```
 
 **Solutions**:
-
 ```bash
 # Monitor memory usage
 free -h
@@ -558,14 +616,12 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 #### 5. File Path & Permission Issues
 
 **Problem**: File not found or permission denied
-
 ```bash
 FileNotFoundError: No such file or directory
 PermissionError: Permission denied
 ```
 
 **Solutions**:
-
 ```bash
 # Check file structure
 ls -la data/raw/
@@ -582,14 +638,12 @@ mkdir -p data/raw/{AD,CN} model/{capsnet,macadnnet} output/{activations,brain_ma
 #### 6. Streamlit Web App Issues
 
 **Problem**: Web application fails to start or loads slowly
-
 ```bash
 streamlit run app.py
 ValueError: Session state is corrupted
 ```
 
 **Solutions**:
-
 ```bash
 # Clear Streamlit cache
 streamlit cache clear
@@ -615,29 +669,29 @@ from pathlib import Path
 def health_check():
     print("🔍 Cognivex System Health Check")
     print("=" * 40)
-  
+    
     # Python version
     version = sys.version_info
     print(f"{'✅' if version >= (3, 11) else '❌'} Python {version.major}.{version.minor}.{version.micro}")
-  
+    
     # CUDA availability
     cuda_available = torch.cuda.is_available()
     print(f"{'✅' if cuda_available else '⚠️'} CUDA: {cuda_available}")
-  
+    
     # Environment file
     env_exists = Path('.env').exists()
     print(f"{'✅' if env_exists else '❌'} .env file: {env_exists}")
-  
+    
     # Neo4j connection
     try:
         response = requests.get('http://localhost:7474', timeout=5)
         print(f"✅ Neo4j web interface: {response.status_code}")
     except:
         print("❌ Neo4j not accessible")
-  
+    
     # LLM Provider connectivity
     print("\n🤖 LLM Provider Status:")
-  
+    
     # Test Gemini
     try:
         from app.services.llm_providers.gemini import handle_chat
@@ -645,7 +699,7 @@ def health_check():
         print("  ✅ Gemini (Vertex AI): Connected")
     except Exception as e:
         print(f"  ❌ Gemini: {str(e)[:50]}...")
-  
+    
     # Test Bedrock
     try:
         from app.services.llm_providers.bedrock import handle_text
@@ -653,7 +707,7 @@ def health_check():
         print("  ✅ Bedrock (AWS): Connected")
     except Exception as e:
         print(f"  ⚠️ Bedrock: {str(e)[:50]}...")
-  
+    
     # Test Ollama
     try:
         import ollama
@@ -661,7 +715,7 @@ def health_check():
         print("  ✅ Ollama: Connected")
     except Exception as e:
         print(f"  ⚠️ Ollama: {str(e)[:50]}...")
-  
+    
     # Directory structure
     print("\n📁 Directory Structure:")
     required_dirs = ['data/raw/AD', 'data/raw/CN', 'model/capsnet', 'output', 'app/services/llm_providers']
@@ -674,7 +728,6 @@ if __name__ == "__main__":
 ```
 
 Run health check:
-
 ```bash
 python health_check.py
 ```
@@ -686,15 +739,15 @@ python health_check.py
 ### Hardware Recommendations
 
 **Optimal Configuration**:
-
 - **CPU**: Intel i7/i9 or AMD Ryzen 7/9
 - **GPU**: NVIDIA RTX 3080/4080 or better (12GB+ VRAM)
 - **RAM**: 32GB+ (minimum 16GB)
 - **Storage**: NVMe SSD for data and models
 
 **Cloud Deployment**:
-
 - **AWS**: `p3.2xlarge` or `g4dn.xlarge`
+- **Google Cloud**: `n1-highmem-4` + T4 GPU
+- **Azure**: `Standard_NC6s_v3`
 
 ### Performance Tuning
 
@@ -757,7 +810,6 @@ See `license.txt` for details.
 For detailed usage instructions, see `instruction.md` (available in Chinese).
 
 For technical issues:
-
 1. Check this README's troubleshooting section
 2. Run the system health check script
 3. Review logs in the `output/` directory
