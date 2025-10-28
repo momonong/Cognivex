@@ -18,9 +18,9 @@ from app.core.fmri_processing.model_config import (
 )
 
 # Import existing pipeline components
-from app.core.fmri_processing.pipelines.inspect_model import inspect_torch_model
+from app.core.fmri_processing.pipelines.inspector import inspect_torch_model
 from app.core.fmri_processing.pipelines.choose_layer import select_visualization_layers
-from app.core.fmri_processing.pipelines.attach_hook import prepare_model_with_hooks as attach_hooks_to_model
+from app.core.fmri_processing.pipelines.attach_hook import prepare_model_with_hooks
 from app.core.fmri_processing.pipelines.validate_layer import validate_layers_by_llm
 from app.core.fmri_processing.pipelines.filter_layer import filter_layers_by_llm
 
@@ -174,7 +174,7 @@ class GenericInferencePipeline:
             self.model = self.adapter.create_model()
         
         # Attach hooks to selected layers
-        model_with_hooks = attach_hooks_to_model(self.model, selected_layers)
+        model_with_hooks = prepare_model_with_hooks(self.model, selected_layers)
         
         # Load model weights if provided
         if self.model_path:

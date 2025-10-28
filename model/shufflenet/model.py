@@ -14,12 +14,15 @@ from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, confusion_m
 import math
 import warnings
 from tqdm import tqdm  # 用於顯示進度條
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- 0. 全局配置 (Global Configuration) ---
 
 # --- 請根據您的環境修改以下路徑 ---
 # 您的 .nii 檔案所在的基礎資料夾
-DATA_DIR = r"C:\阿茲海默\sMRI_data"
+DATA_DIR = os.getenv("DATA_DIR")
 # 您的兩個類別的資料夾名稱
 CLASS_A_NAME = "AD"  # 標籤為 1
 CLASS_B_NAME = "NC"  # 標籤為 0
@@ -47,7 +50,7 @@ DROPOUT_RATE = 0.2
 TRIPLET_MARGIN = 1.0
 
 # 設定 torch 設備
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
 print(f"將在 {DEVICE} 設備上運行")
 
 # 忽略不必要的警告
