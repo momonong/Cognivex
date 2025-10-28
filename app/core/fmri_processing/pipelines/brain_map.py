@@ -70,10 +70,41 @@ def analyze_brain_activation(
 
 
 if __name__ == "__main__":
-    df_result = analyze_brain_activation(
-        activation_path="output/capsnet/resampled/module_test/module_test_resampled.nii.gz",
-        atlas_path="data/aal3/AAL3v1_1mm.nii.gz",
-        label_path="data/aal3/AAL3v1_1mm.nii.txt",
-    )
+    import os 
+    # --- UPDATED Paths for ROI Analysis ---
+    
+    # Input: The final heatmap, resampled and aligned to the atlas grid
+    #        (Output from the previous 'resample.py' step)
+    FINAL_HEATMAP_PATH = "output/single_subject_final_resampled/heatmap_3D_MNI_ants_resampled_to_AAL3v1_1mm.nii.gz"
+    
+    # Atlas: The NIfTI file defining the brain regions
+    ATLAS_NIFTI_PATH = "data/aal3/AAL3v1_1mm.nii.gz" 
+    
+    # Labels: The text file mapping atlas integer labels to region names
+    ATLAS_LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt" # Make sure this file exists!
+
+    # --- Check files ---
+    if not os.path.exists(FINAL_HEATMAP_PATH):
+        print(f"Error: Final heatmap NIfTI not found at {FINAL_HEATMAP_PATH}")
+    elif not os.path.exists(ATLAS_NIFTI_PATH):
+        print(f"Error: Atlas NIfTI not found at {ATLAS_NIFTI_PATH}")
+    elif not os.path.exists(ATLAS_LABEL_PATH):
+        print(f"Error: Atlas label file not found at {ATLAS_LABEL_PATH}")
+    else:
+        print("--- Running Brain Activation Analysis ---")
+        df_result = analyze_brain_activation(
+            activation_path=FINAL_HEATMAP_PATH,
+            atlas_path=ATLAS_NIFTI_PATH,
+            label_path=ATLAS_LABEL_PATH,
+        )
+
+        print("\n--- Analysis Results (Top 10 Regions by Total Activation) ---")
+        # Display the top results
+        print(df_result.head(10).to_string()) 
+        
+        # (Optional) Save the full results to a CSV file
+        output_csv_path = "output/single_subject_final_resampled/roi_activation_analysis.csv"
+        df_result.to_csv(output_csv_path, index=False)
+        print(f"\nFull results saved to: {output_csv_path}")
 
     print(df_result)
