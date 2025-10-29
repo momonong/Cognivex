@@ -65,13 +65,13 @@ def resample_activation_to_atlas( # This is the ORIGINAL function
 if __name__ == "__main__":
     
     # Input: The MNI-normalized heatmap from the ANTs step
-    MNI_HEATMAP_PATH = "output/single_subject_normalized_ants/heatmap_3D_MNI_ants.nii.gz"
-    
+    MNI_HEATMAP_PATH = "output/single_subject_normalized_ants_masked/subject_008_ants_heatmap_MNI_masked_accurate.nii.gz" 
+
     # Target: Your AAL atlas in MNI space
     ATLAS_PATH = "data/aal3/AAL3v1_1mm.nii.gz" 
     
     # Output: Final heatmap precisely aligned with the atlas grid
-    OUTPUT_DIR = "output/single_subject_final_resampled" 
+    OUTPUT_DIR = "output/single_subject_final_resampled_accurate"
     
     # --- Check files ---
     if not os.path.exists(MNI_HEATMAP_PATH):

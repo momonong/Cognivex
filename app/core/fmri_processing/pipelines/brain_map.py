@@ -49,39 +49,44 @@ def analyze_brain_activation(
 
     # Construct result table
     results = []
-    for label_id in sorted(label_activation_sum.keys(), key=lambda k: label_activation_sum[k], reverse=True):
+    for label_id in sorted(
+        label_activation_sum.keys(), key=lambda k: label_activation_sum[k], reverse=True
+    ):
         name = id_to_label.get(label_id, "Unknown")
         total = label_activation_sum[label_id]
         count = label_voxel_count[label_id]
         avg = total / count if count > 0 else 0
-        results.append({
-            "Label ID": label_id,
-            "Region Name": name,
-            "Voxel Count": count,
-            "Total Activation": total,
-            "Mean Activation": avg
-        })
+        results.append(
+            {
+                "Label ID": label_id,
+                "Region Name": name,
+                "Voxel Count": count,
+                "Total Activation": total,
+                "Mean Activation": avg,
+            }
+        )
 
     df = pd.DataFrame(results)
     if not df.empty:
-        df = df.sort_values("Total Activation", ascending=False).reset_index(drop=True)
+        df = df.sort_values("Mean Activation", ascending=False).reset_index(drop=True)
 
     return df
 
 
 if __name__ == "__main__":
-    import os 
+    import os
+
     # --- UPDATED Paths for ROI Analysis ---
-    
+
     # Input: The final heatmap, resampled and aligned to the atlas grid
     #        (Output from the previous 'resample.py' step)
-    FINAL_HEATMAP_PATH = "output/single_subject_final_resampled/heatmap_3D_MNI_ants_resampled_to_AAL3v1_1mm.nii.gz"
-    
+    FINAL_HEATMAP_PATH = "output/single_subject_final_resampled_accurate/subject_008_ants_heatmap_MNI_accurate_resampled_to_AAL3v1_1mm.nii.gz"
+
     # Atlas: The NIfTI file defining the brain regions
-    ATLAS_NIFTI_PATH = "data/aal3/AAL3v1_1mm.nii.gz" 
-    
+    ATLAS_NIFTI_PATH = "data/aal3/AAL3v1_1mm.nii.gz"
+
     # Labels: The text file mapping atlas integer labels to region names
-    ATLAS_LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt" # Make sure this file exists!
+    ATLAS_LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt"  # Make sure this file exists!
 
     # --- Check files ---
     if not os.path.exists(FINAL_HEATMAP_PATH):
@@ -100,10 +105,12 @@ if __name__ == "__main__":
 
         print("\n--- Analysis Results (Top 10 Regions by Total Activation) ---")
         # Display the top results
-        print(df_result.head(10).to_string()) 
-        
+        print(df_result.head(10).to_string())
+
         # (Optional) Save the full results to a CSV file
-        output_csv_path = "output/single_subject_final_resampled/roi_activation_analysis.csv"
+        output_csv_path = (
+            "output/single_subject_final_resampled/roi_activation_analysis.csv"
+        )
         df_result.to_csv(output_csv_path, index=False)
         print(f"\nFull results saved to: {output_csv_path}")
 

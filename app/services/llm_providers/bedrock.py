@@ -20,7 +20,7 @@ REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 chat_client = ChatBedrock(
     model_id=DEFAULT_BEDROCK_MODEL_ID,
     region_name=REGION,
-    model_kwargs={"temperature": 0.1, "max_tokens": 4096},
+    model_kwargs={"temperature": 0.1},
 )
 
 

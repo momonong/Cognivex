@@ -4,162 +4,158 @@ import os
 import time
 from typing import Optional
 
-def normalize_native_heatmap_to_mni(
+def normalize_native_heatmap_to_mni_accurate_masked( # Renamed function
     t1_native_path: str,
     heatmap_native_path: str,
-    mni_template_path: str,
-    output_path: str,
-    transform_type: str = 'SyN',
+    mni_template_path: str, # Should be skull-stripped MNI T1
+    output_prefix: str, 
+    transform_type: str = 'SyN', 
     interpolator: str = 'linear'
-) -> bool:
+) -> Optional[str]: 
     """
-    Normalizes a native-space NIfTI heatmap to MNI space using ANTs.
-
-    Args:
-        t1_native_path (str): Path to the original T1 NIfTI in native space.
-        heatmap_native_path (str): Path to the heatmap NIfTI in native space.
-        mni_template_path (str): Path to the MNI T1 template NIfTI.
-        output_path (str): Path to save the normalized MNI-space heatmap.
-        transform_type (str): ANTs registration type (e.g., 'SyN', 'Affine').
-        interpolator (str): ANTs interpolation type (e.g., 'linear', 'nearestNeighbor').
-
-    Returns:
-        bool: True if normalization was successful, False otherwise.
+    [ACCURATE VERSION v3 - WITH MASKING]
+    Normalizes native heatmap to MNI space using multi-stage ANTs 
+    with initial brain extraction for improved accuracy.
+    (Concise logging version)
     """
-    print(f"\n--- Running Spatial Normalization (ANTs) ---")
-    print(f"  Native T1: {os.path.basename(t1_native_path)}")
-    print(f"  Native Heatmap: {os.path.basename(heatmap_native_path)}")
-    print(f"  MNI Template: {os.path.basename(mni_template_path)}")
+    print(f"\n--- Running Accurate Spatial Normalization (ANTs + Brain Masking) ---")
+    start_total_time = time.time()
     
+    output_dir = os.path.dirname(output_prefix)
+    if output_dir: os.makedirs(output_dir, exist_ok=True)
+    
+    final_output_path = f"{output_prefix}_heatmap_MNI_masked_accurate.nii.gz"
+
     # --- Check Input Files ---
     if not all(os.path.exists(p) for p in [t1_native_path, heatmap_native_path, mni_template_path]):
-        print("Error: One or more input files not found.")
-        return False
+        print("  Error: One or more input files not found.")
+        return None
 
     try:
         # --- Load Images ---
-        print("  Loading images for ANTs...")
-        fixed_mni = ants.image_read(mni_template_path)
-        moving_t1 = ants.image_read(t1_native_path)
+        # print("  Loading images...") # Removed for brevity
+        fixed_mni_brain = ants.image_read(mni_template_path) # Skull-stripped template
+        moving_t1_full = ants.image_read(t1_native_path)     # Original T1 with skull
         heatmap_native_ants = ants.image_read(heatmap_native_path)
 
-        # --- Calculate Transformation ---
-        print(f"  Calculating registration (Transform: {transform_type})...")
-        start_time = time.time()
-        transform = ants.registration(fixed=fixed_mni, 
-                                      moving=moving_t1, 
-                                      type_of_transform=transform_type) 
-        reg_time = time.time() - start_time
-        print(f"  Registration calculated in {reg_time:.2f} seconds.")
+        # --- Step 1: Brain Extraction (Masking) ---
+        print("  Step 1: Performing brain extraction on native T1...")
+        # start_time = time.time() # Removed for brevity
+        try:
+            moving_t1_mask = ants.get_mask(moving_t1_full, low_thresh=moving_t1_full.mean() * 0.3, high_thresh=moving_t1_full.max(), cleanup=2)
+            moving_t1_brain = ants.mask_image(moving_t1_full, moving_t1_mask)
+            # masking_time = time.time() - start_time # Removed for brevity
+            # print(f"  Brain extraction finished in {masking_time:.2f} seconds.") # Removed for brevity
+        except Exception as mask_error:
+             print(f"  Warning: ants.get_mask failed ({mask_error}). Proceeding with unmasked T1.")
+             moving_t1_brain = moving_t1_full # Fallback
+
+        # --- Step 2: Multi-Stage Registration (Masked T1 -> Masked MNI) ---
+        print(f"  Step 2: Calculating {transform_type} registration (this may take time)...")
+        # start_time = time.time() # Removed for brevity
         
-        # --- Apply Transformation to Heatmap ---
-        print(f"  Applying transform to heatmap (Interpolator: {interpolator})...")
-        start_time = time.time()
-        heatmap_normalized = ants.apply_transforms(fixed=fixed_mni, 
-                                                   moving=heatmap_native_ants,
-                                                   transformlist=transform['fwdtransforms'],
-                                                   interpolator=interpolator)
-        apply_time = time.time() - start_time
-        print(f"  Transform applied in {apply_time:.2f} seconds.")
+        transform = ants.registration(
+             fixed=fixed_mni_brain,
+             moving=moving_t1_brain,
+             type_of_transform=transform_type, 
+             aff_metric='Mattes',            
+             aff_sampling=32,                
+             aff_random_sampling_rate=0.2,   
+             aff_iterations=(1000, 500, 250, 100), 
+             syn_metric='CC',                
+             syn_sampling=2,                 
+             reg_iterations=(100, 100, 70, 50, 20), 
+             # --- THIS IS THE KEY CHANGE ---
+             verbose=False # Set to False to suppress detailed ANTs output
+             # --- END OF KEY CHANGE ---
+        )
         
-        # --- Save Normalized Heatmap ---
-        output_dir = os.path.dirname(output_path)
-        if output_dir: os.makedirs(output_dir, exist_ok=True)
-        ants.image_write(heatmap_normalized, output_path)
-        print(f"  Normalized heatmap saved to: {output_path}")
-        return True
+        fwd_transforms = transform['fwdtransforms'] 
+        # print(f"  Forward transforms calculated: {fwd_transforms}") # Removed for brevity
+        # reg_time = time.time() - start_time # Removed for brevity
+        # print(f"  Registration calculated in {reg_time:.2f} seconds.") # Removed for brevity
+        
+        # --- Step 3: Apply Combined Transform to Heatmap ---
+        print(f"  Step 3: Applying transform to heatmap (Interpolator: {interpolator})...")
+        # start_time = time.time() # Removed for brevity
+        
+        heatmap_normalized = ants.apply_transforms(
+             fixed=fixed_mni_brain,
+             moving=heatmap_native_ants,
+             transformlist=fwd_transforms,
+             interpolator=interpolator         
+        )
+        # apply_time = time.time() - start_time # Removed for brevity
+        # print(f"  Transform applied in {apply_time:.2f} seconds.") # Removed for brevity
+        
+        # --- Step 4: Save Normalized Heatmap ---
+        ants.image_write(heatmap_normalized, final_output_path)
+        print(f"  Normalized heatmap saved: {final_output_path}")
+        
+        # --- Step 5: (Optional) Save Warped T1 for QC ---
+        warped_t1_path = f"{output_prefix}_t1_warped_to_MNI_masked.nii.gz"
+        print(f"  QC T1 warped image saved: {warped_t1_path}")
+        
+        ants.apply_transforms(
+             fixed=fixed_mni_brain, 
+             moving=moving_t1_full,
+             transformlist=fwd_transforms, 
+             interpolator='linear', 
+             output_filename=warped_t1_path,
+             # Suppress verbose output from apply_transforms as well
+             verbose=False
+        )
+
+        total_time = time.time() - start_total_time
+        print(f"--- Accurate Normalization Finished in {total_time:.2f} seconds ---")
+        return final_output_path # Return the path
 
     except Exception as e:
-        print(f"  Error during ANTs normalization: {e}")
-        return False
+        print(f"  Error during ANTs accurate normalization: {e}")
+        import traceback
+        traceback.print_exc() 
+        return None
 
 
+# --- Main Test Block (Calls the new masked function) ---
 if __name__ == "__main__":
-    print("--- Starting ANTs Normalization Test ---")
-    import numpy as np
-    import nibabel as nib
-    from typing import Optional, Tuple
+    print("--- Starting ANTs Accurate Normalization Test (with Masking) ---")
+    
     # --- Configuration ---
-    TEST_OUTPUT_DIR = "output/test_ants_normalization"
-    os.makedirs(TEST_OUTPUT_DIR, exist_ok=True)
-
-    # Define mock file paths
-    MOCK_T1_PATH = os.path.join(TEST_OUTPUT_DIR, "mock_t1_native.nii.gz")
-    MOCK_HEATMAP_PATH = os.path.join(TEST_OUTPUT_DIR, "mock_heatmap_native.nii.gz")
-    MNI_TEMPLATE_PATH = "data/affine/mni152_template.nii.gz" # Use a known template path
-
-    # Final output path for verification
-    FINAL_OUTPUT_PATH = os.path.join(TEST_OUTPUT_DIR, "heatmap_MNI_final.nii.gz")
-
-    # 1. Create Mock Input Files
-    # Note: Using small shapes for speed, but ANTs prefers realistic shapes.
-    # We will use slightly larger, more typical MNI-like shapes here for better registration
-    NATIVE_SHAPE = (180, 200, 180) # Example of a common T1 size
+    T1_NATIVE_PATH = "/Volumes/3T-disk/fMRI/Model/sMRI_data/AD/T1_3D_MPRAGE_SAG_0003_008/T1_3D_MPRAGE_SAG_0003_008_T1_3D_mprage_SAG_20231213144131_3b.nii" 
+    # Use the native heatmap generated previously
+    HEATMAP_NATIVE_PATH = "output/pipeline_test_run_test_subject_008/test_subject_008_backbone_stage4_1_gconv2_native_heatmap.nii.gz" 
+    MNI_TEMPLATE_PATH = "data/affine/mni152_template.nii.gz" # Skull-stripped
     
-    def create_mock_nifti(path: str, shape: Tuple[int, int, int], value: int = 100) -> bool:
-        """Creates a simple NIfTI file with a known affine for testing."""
-        if os.path.exists(path):
-            return True
-        
-        # Create a simple, known affine matrix (e.g., identity matrix with 1mm spacing)
-        # This affine is crucial for ANTs to work.
-        affine = np.array([
-            [-1, 0, 0, 90],
-            [0, 1, 0, -126],
-            [0, 0, 1, -72],
-            [0, 0, 0, 1]
-        ])
-        
-        # Create random data and center a non-zero block for better registration likelihood
-        data = np.zeros(shape, dtype=np.float32)
-        center = [s // 4 for s in shape]
-        data[center[0]:center[0]+shape[0]//2, center[1]:center[1]+shape[1]//2, center[2]:center[2]+shape[2]//2] = value
+    OUTPUT_PREFIX = "output/single_subject_normalized_ants_masked/subject_008_ants" # New output folder/prefix
 
-        try:
-            img = nib.Nifti1Image(data, affine)
-            nib.save(img, path)
-            print(f"Created mock NIfTI: {os.path.basename(path)} with shape {shape}")
-            return True
-        except Exception as e:
-            print(f"Error creating mock NIfTI {path}: {e}")
-            return False
-
-    # Check if MNI Template path exists (critical path check)
-    if not os.path.exists(MNI_TEMPLATE_PATH):
-        print(f"CRITICAL ERROR: MNI template not found at {MNI_TEMPLATE_PATH}")
-        print("Please ensure this path is correct and the file exists on your system.")
-        exit()
-        
-    # Create T1 and Heatmap mocks
-    success_mock_t1 = create_mock_nifti(MOCK_T1_PATH, NATIVE_SHAPE, value=150)
-    success_mock_heatmap = create_mock_nifti(MOCK_HEATMAP_PATH, NATIVE_SHAPE, value=0.8) # Heatmap values are small (0-1)
-
-    if not (success_mock_t1 and success_mock_heatmap):
-        print("Test aborted due to mock file creation failure.")
+    # --- Check Input Files ---
+    if not all(os.path.exists(p) for p in [T1_NATIVE_PATH, HEATMAP_NATIVE_PATH, MNI_TEMPLATE_PATH]):
+        print("Error: One or more input files not found. Check paths.")
         exit()
 
-    # 2. Run the Normalization Function
-    print("\nRunning normalize_native_heatmap_to_mni...")
-    
+    # --- Run the Accurate Normalization Function with Masking ---
+    print("\nRunning normalize_native_heatmap_to_mni_accurate_masked (Concise Log)...")
     start_time_total = time.time()
     
-    normalization_success = normalize_native_heatmap_to_mni(
-        t1_native_path=MOCK_T1_PATH,
-        heatmap_native_path=MOCK_HEATMAP_PATH,
-        mni_template_path=MNI_TEMPLATE_PATH, # Should be the T1 Template
-        output_path=FINAL_OUTPUT_PATH,
-        transform_type='Affine', # Use Affine for faster testing than SyN
+    final_output_file = normalize_native_heatmap_to_mni_accurate_masked(
+        t1_native_path=T1_NATIVE_PATH,
+        heatmap_native_path=HEATMAP_NATIVE_PATH,
+        mni_template_path=MNI_TEMPLATE_PATH, 
+        output_prefix=OUTPUT_PREFIX, 
+        transform_type='SyN', 
         interpolator='linear'
     )
     
     end_time_total = time.time()
     
-    # 3. Verification
+    # --- Verification ---
     print("\n--- Test Summary ---")
-    if normalization_success and os.path.exists(FINAL_OUTPUT_PATH):
-        print("✅ SUCCESS: Normalization completed and output file was saved.")
-        print(f"   Output: {FINAL_OUTPUT_PATH}")
+    if final_output_file and os.path.exists(final_output_file):
+        print("✅ SUCCESS: Accurate Normalization with Masking completed.")
+        print(f"   Normalized Heatmap Output: {final_output_file}")
+        print(f"   (Check for transform files and warped T1 QC near '{OUTPUT_PREFIX}')")
         print(f"   Total Time: {end_time_total - start_time_total:.2f} seconds.")
     else:
-        print("❌ FAILURE: Normalization process failed or output file not found.")
-        print(f"   Check ANTs configuration and output folder.")
+        print("❌ FAILURE: Accurate Normalization with Masking process failed.")
+        print(f"   Check ANTs configuration and error messages above.")
