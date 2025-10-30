@@ -65,8 +65,9 @@ class GenericInferencePipeline:
     def __init__(
         self,
         model_config: Union[ModelConfig, str],
-        model_weights_path: Optional[str] = None, 
+        model_weights_path: Optional[str] = None,
         output_dir: str = DEFAULT_OUTPUT_DIR,
+        layer_selection_strategy: Optional[str] = None, # Allow overriding strategy
     ):
         """
         Initialize the pipeline with a model configuration.
@@ -75,7 +76,7 @@ class GenericInferencePipeline:
         if isinstance(model_config, str):
             print(f"Loading configuration: '{model_config}'")
             try:
-                self.config = get_config_by_name(model_config) 
+                self.config = get_config_by_name(model_config)
             except ValueError as e:
                  print(f"Error: {e}")
                  raise
@@ -98,45 +99,56 @@ class GenericInferencePipeline:
         self.adapter = ModelFactory.create_adapter(self.config)
         self.model_weights_path = model_weights_path
         self.output_dir = output_dir
+        self.layer_selection_strategy = layer_selection_strategy # Store the strategy
         os.makedirs(self.output_dir, exist_ok=True) # Ensure base output dir exists
 
         # Initialize model components
         self.model: Optional[torch.nn.Module] = None
-        self.prepared_model: Optional[torch.nn.Module] = None 
+        self.prepared_model: Optional[torch.nn.Module] = None
         self.activation_handles: List[torch.utils.hooks.RemovableHandle] = [] 
 
-    def inspect_and_select_layers(self) -> Tuple[List[Dict], List[str]]: 
+    def inspect_and_select_layers(self) -> Tuple[List[Dict], List[str]]:
         """
         Step 1: Inspect model structure and use LLM to select layers.
+        (With custom override for PaperModel/CNN_2D)
         """
         print(f"\n--- Step 1: Inspecting {self.config.model_type.value} & Selecting Layers ---")
-        
+
         if self.model is None:
             self.model = self.adapter.create_model()
-        
-        # Use simple inspector (no input_shape needed)
-        layers = inspect_torch_model(self.model) 
+
+        layers = inspect_torch_model(self.model)
         if not layers:
             raise RuntimeError("inspect_torch_model returned no layers.")
         print(f"Inspected {len(layers)} potential layers.")
-        
-        # Use model-specific layer selection strategy from adapter
-        strategy = self.adapter.get_layer_selection_strategy() 
-        print(f"Using selection strategy: '{strategy}' via LLM...")
-        try:
-            response_str = select_visualization_layers(layers, strategy=strategy)
-            # Ensure response is treated as a string before loading
-            selected_layers = json.loads(str(response_str)) 
-        except json.JSONDecodeError:
-             print(f"Error: LLM selector response was not valid JSON: {response_str}")
-             raise ValueError("Layer selection failed: Invalid LLM JSON response.")
-        except Exception as e:
-            print(f"Error during layer selection LLM call: {e}")
-            raise ValueError(f"Layer selection failed: {e}")
+
+        # Determine the selection strategy
+        strategy = self.layer_selection_strategy or self.adapter.get_layer_selection_strategy()
+        print(f"Using selection strategy: '{strategy}'")
+
+        # --- CUSTOM MODIFICATION FOR SHUFFLENET/PAPERMODEL ---
+        from app.core.fmri_processing.model_config import ModelType
+        if strategy == "force_select_stage2" and self.config.model_type == ModelType.CNN_2D:
+            print("INFO: PaperModel (CNN_2D) detected with 'force_select_stage2' strategy. Bypassing LLM.")
+            forced_layer_path = "backbone.stage2"
+            selected_layers = [{"model_path": forced_layer_path, "output_shape": "N/A", "reason": "Forced selection for better resolution."}]
+            print(f"Force-selected layer: {forced_layer_path}")
+        else:
+            # --- ORIGINAL LLM-BASED SELECTION FOR OTHER MODELS ---
+            print("Using LLM-based selection...")
+            try:
+                response_str = select_visualization_layers(layers, strategy=strategy)
+                selected_layers = json.loads(str(response_str))
+            except json.JSONDecodeError:
+                print(f"Error: LLM selector response was not valid JSON: {response_str}")
+                raise ValueError("Layer selection failed: Invalid LLM JSON response.")
+            except Exception as e:
+                print(f"Error during layer selection LLM call: {e}")
+                raise ValueError(f"Layer selection failed: {e}")
 
         if not selected_layers or not isinstance(selected_layers, list):
-             raise ValueError(f"LLM selector did not return a valid list of layers. Response: {selected_layers}")
-             
+            raise ValueError(f"Selector did not return a valid list of layers. Response: {selected_layers}")
+
         # Basic validation
         all_layer_paths = {layer["model_path"] for layer in layers}
         validated_selection = []
@@ -147,15 +159,18 @@ class GenericInferencePipeline:
                 validated_selection.append(layer)
                 selected_layer_names.append(path)
             else:
-                 print(f"Warning: Selector chose non-existent layer '{path}'. Ignoring.")
-                 
-        if not validated_selection:
-             raise ValueError("None of the layers selected by the LLM were valid or found in the model.")
+                # If we forced selection, this error is critical.
+                if self.config.model_type == ModelType.CNN_2D:
+                    raise ValueError(f"Forced layer '{path}' not found in model's layers.")
+                print(f"Warning: Selector chose non-existent layer '{path}'. Ignoring.")
 
-        print(f"LLM selected {len(validated_selection)} valid layer(s):")
+        if not validated_selection:
+            raise ValueError("None of the selected layers were valid or found in the model.")
+
+        print(f"Final selected {len(validated_selection)} valid layer(s):")
         for layer in validated_selection:
             print(f"  - {layer['model_path']} (Reason: {layer.get('reason', 'N/A')})")
-            
+
         return validated_selection, selected_layer_names
 
     def prepare_model(self) -> torch.nn.Module: 

@@ -102,7 +102,7 @@ class CapsNet3DAdapter(BaseModelAdapter):
         return torch.randn(dummy_shape[1:]) # Return (1, T, D, H, W)
 
     def get_layer_selection_strategy(self) -> str:
-        return "shufflenet_focused_v3" # Use improved capsule layer selection strategy
+        return "improved_capsule" # Use improved capsule layer selection strategy
     
     def postprocess_prediction(self, 
                                model_output: torch.Tensor,
@@ -166,7 +166,7 @@ class PaperModelAdapter(BaseModelAdapter):
 
     def get_layer_selection_strategy(self) -> str:
         # Use the latest, most specific strategy for this model
-        return "shufflenet_focused_v3" 
+        return "improved_shufflenet" 
     
     def postprocess_prediction(self, 
                                model_output: Tuple[torch.Tensor, torch.Tensor], # Expects (logits, embeddings)
