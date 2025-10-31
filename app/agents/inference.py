@@ -28,15 +28,54 @@ def run_inference_and_classification(state: AgentState) -> dict:
     Args:
         state: AgentState containing the workflow state (including model_name if specified)
     """
-    # Get model name from state, default to capsnet
-    model_name = state.get('model_name', 'capsnet')
+    # Get model name from state, default to shufflenet
+    model_name = state.get('model_name', 'shufflenet')
+    model_path = state.get('model_path')
+    nii_path = state.get('fmri_scan_path')
+    subject_id = state.get('subject_id', 'unknown_subject')
     
     print(f"\n--- Node: 1. Running Generic Inference & Classification ({model_name}) ---")
     
-    # Use the new generic inference function - this is all you need!
-    result = generic_run_inference(state, model_config=model_name)
+    if not nii_path:
+        return {"error_log": state.get("error_log", []) + ["Missing fMRI scan path in state"]}
     
-    return result
+    try:
+        # Create and run the full generic pipeline
+        config = get_config_by_name(model_name)
+        pipeline = GenericInferencePipeline(
+            model_config=config,
+            model_weights_path=model_path,
+            output_dir=f"output/generic_pipeline/{subject_id}"
+        )
+        
+        # Run the full pipeline with post-processing to get all XAI results
+        results = pipeline.run_full_pipeline(
+            nii_path=nii_path,
+            save_name=subject_id,
+            include_post_processing=True,
+            target_class_index=1  # AD class
+        )
+        
+        if "error" in results:
+            return {"error_log": state.get("error_log", []) + [results["error"]]}
+        
+        trace = f"Node 1: Generic inference complete. Prediction: {results.get('prediction_result')}"
+        
+        # Return comprehensive results for the rest of the pipeline
+        return {
+            "classification_result": results.get("prediction_result"),
+            "validated_layers": results.get("selected_layers", []),
+            "activated_regions": results.get("activated_regions", []),
+            "visualization_paths": results.get("visualization_paths", {}),
+            "final_heatmap_paths": results.get("final_heatmap_paths", {}),
+            "activation_gradient_files": results.get("activation_gradient_files", {}),
+            "trace_log": state.get("trace_log", []) + [trace]
+        }
+        
+    except Exception as e:
+        error_message = f"Node 1 (Generic Inference) Error: {e}"
+        print(f"\n[ERROR] {error_message}")
+        return {"error_log": state.get("error_log", []) + [error_message]}
 
 # Alternative: More flexible version that allows custom configurations
 def run_inference_with_custom_config(state: AgentState, model_config: ModelConfig) -> dict:

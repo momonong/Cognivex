@@ -370,30 +370,38 @@ class GenericInferencePipeline:
                     )
                     if not success_native: raise RuntimeError("Native heatmap generation failed")
 
-                    # --- Step 7 Call: Normalize to MNI ---
+                    # --- Step 7 Call: Normalize to MNI (with fallback) ---
                     print(f"    7. Normalizing heatmap to MNI space...")
                     
-                    # Call the accurate masked version
-                    normalized_heatmap_path_or_none = normalize_native_heatmap_to_mni_accurate_masked( 
-                        t1_native_path=nii_path, 
-                        heatmap_native_path=native_heatmap_nii,
-                        mni_template_path=self.config.mni_template_path, 
-                        output_prefix=ants_output_prefix, # Pass new prefix
-                        transform_type='SyN', 
-                        interpolator='linear'
-                    )
-                    
                     mni_heatmap_nii = "" # Initialize path
-                    if not normalized_heatmap_path_or_none or not os.path.exists(normalized_heatmap_path_or_none):
-                        # Construct expected path based on *new* prefix convention
-                        expected_mni_path = f"{ants_output_prefix}_heatmap_MNI_masked_accurate.nii.gz"
-                        if os.path.exists(expected_mni_path):
-                            mni_heatmap_nii = expected_mni_path # Use the actual saved path
-                            print(f"   ANTs output found at expected path: {mni_heatmap_nii}")
+                    try:
+                        # Try the accurate masked version
+                        normalized_heatmap_path_or_none = normalize_native_heatmap_to_mni_accurate_masked( 
+                            t1_native_path=nii_path, 
+                            heatmap_native_path=native_heatmap_nii,
+                            mni_template_path=self.config.mni_template_path, 
+                            output_prefix=ants_output_prefix, # Pass new prefix
+                            transform_type='SyN', 
+                            interpolator='linear'
+                        )
+                        
+                        if normalized_heatmap_path_or_none and os.path.exists(normalized_heatmap_path_or_none):
+                            mni_heatmap_nii = normalized_heatmap_path_or_none
+                            print(f"   ✅ ANTs normalization successful: {mni_heatmap_nii}")
                         else:
-                            raise RuntimeError(f"Normalization failed or output file not found at expected path: {expected_mni_path}")
-                    else:
-                        mni_heatmap_nii = normalized_heatmap_path_or_none # Use the path returned by function
+                            # Check expected path
+                            expected_mni_path = f"{ants_output_prefix}_heatmap_MNI_masked_accurate.nii.gz"
+                            if os.path.exists(expected_mni_path):
+                                mni_heatmap_nii = expected_mni_path
+                                print(f"   ✅ ANTs output found at expected path: {mni_heatmap_nii}")
+                            else:
+                                raise RuntimeError("ANTs normalization failed")
+                                
+                    except Exception as e:
+                        print(f"   ⚠️  ANTs normalization failed: {e}")
+                        print(f"   🔄 Falling back to native space analysis...")
+                        # Use native heatmap directly for atlas analysis
+                        mni_heatmap_nii = native_heatmap_nii
 
                     # --- Step 8 Call: Resample to Atlas ---
                     print(f"    8. Resampling heatmap to atlas grid...")
@@ -543,7 +551,7 @@ def run_inference_and_classification(
     print("\n--- Node: Generic Inference & Classification (Inference Only) ---")
     subject_id = state.get("subject_id", "unknown_subject")
     model_weights = state.get("model_path") 
-    nii_path = state.get("t1_native_path") # ***** Make sure state provides the correct path key *****
+    nii_path = state.get("fmri_scan_path") or state.get("t1_native_path") # Support both key names
     save_name = f"{subject_id}_inference_only" 
     output_dir = state.get("output_dir", DEFAULT_OUTPUT_DIR) 
 

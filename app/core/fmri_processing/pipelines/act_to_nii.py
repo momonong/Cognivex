@@ -151,7 +151,13 @@ def activation_and_gradient_to_nifti( # Renamed function
     try: # ... (logic unchanged) ...
         ref_img = nib.load(reference_nii_path)
         affine = ref_img.affine
-        ref_3d_shape = ref_img.shape 
+        # Handle both 3D and 4D data - take only spatial dimensions
+        if len(ref_img.shape) == 4:
+            ref_3d_shape = ref_img.shape[:3]  # Take only spatial dimensions (X, Y, Z)
+            print(f"4D reference data detected, using spatial shape: {ref_3d_shape}")
+        else:
+            ref_3d_shape = ref_img.shape
+            print(f"3D reference data detected, shape: {ref_3d_shape}") 
         orientation_info = get_orientation_info(affine)
         if orientation_info is None: return False 
         sagittal_dim, y_dim, z_dim = orientation_info

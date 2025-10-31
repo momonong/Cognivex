@@ -142,27 +142,71 @@ class PaperModelAdapter(BaseModelAdapter):
         return model
     
     def preprocess_data(self, data_path: str) -> torch.Tensor:
-        """Preprocess Original T1 NIfTI using the model's own function"""
-        # Import the specific preprocessing function
-        from model.shufflenet.model import preprocess_nii_to_slices 
+        """Preprocess fMRI NIfTI data for ShuffleNet (handles both 3D and 4D data)"""
+        import nibabel as nib
+        import numpy as np
+        import cv2
         
-        # 1. Call the preprocessing function (returns numpy array)
-        # Shape: (N_slices, 1, H, W) e.g., (10, 1, 128, 128)
-        slices_array = preprocess_nii_to_slices(data_path)
-        
-        if slices_array is None:
-            raise ValueError(f"Preprocessing failed for NIfTI file: {data_path}")
-
-        # 2. Convert to PyTorch Tensor and normalize 0-1
-        # Shape: (10, 1, 128, 128)
-        slices_tensor = torch.tensor(slices_array, dtype=torch.float32) / 255.0
-        
-        # 3. Add the batch dimension (B=1)
-        # Shape: (1, 10, 1, 128, 128) - Matches config.input_shape
-        input_tensor = slices_tensor.unsqueeze(0) 
-        
-        # The pipeline will move this tensor to the correct device
-        return input_tensor # Shape (1, 10, 1, 128, 128)
+        try:
+            # 1. Load NIfTI data
+            img = nib.load(data_path)
+            data = img.get_fdata()
+            
+            # 2. Handle 4D fMRI data by taking temporal mean
+            if len(data.shape) == 4:
+                print(f"4D fMRI data detected with shape {data.shape}, taking temporal mean")
+                data = np.mean(data, axis=3)  # Average over time dimension
+                print(f"After temporal averaging: {data.shape}")
+            elif len(data.shape) == 3:
+                print(f"3D structural data detected with shape {data.shape}")
+            else:
+                raise ValueError(f"Unsupported data dimensions: {data.shape}")
+            
+            # 3. Extract sagittal slices (same as original preprocess_nii_to_slices)
+            sagittal_dim = 0
+            num_total_slices = data.shape[sagittal_dim]
+            
+            if num_total_slices < 10:  # NUM_SLICES_PER_SUBJECT
+                raise ValueError(f"Not enough sagittal slices: {num_total_slices} < 10")
+            
+            # Find center 10 slices
+            center_slice_index = num_total_slices // 2
+            start_index = center_slice_index - 5  # 10 // 2
+            end_index = start_index + 10
+            
+            selected_slices_data = data[start_index:end_index, :, :]
+            
+            # 4. Process each slice
+            processed_slices = []
+            for i in range(10):
+                slice_2d = selected_slices_data[i, :, :]
+                
+                # Rotate image for correct orientation
+                slice_2d = np.rot90(slice_2d)
+                
+                # Normalize to 0-255
+                if np.max(slice_2d) > 0:
+                    slice_2d = (slice_2d - np.min(slice_2d)) / (np.max(slice_2d) - np.min(slice_2d))
+                slice_2d_uint8 = (slice_2d * 255).astype(np.uint8)
+                
+                # Resize to 128x128
+                resized_slice = cv2.resize(slice_2d_uint8, (128, 128), interpolation=cv2.INTER_CUBIC)
+                processed_slices.append(resized_slice)
+            
+            # 5. Stack and convert to tensor
+            stacked_slices = np.stack(processed_slices)  # (10, 128, 128)
+            stacked_slices = stacked_slices[:, np.newaxis, :, :]  # (10, 1, 128, 128)
+            
+            # Convert to tensor and normalize 0-1
+            slices_tensor = torch.tensor(stacked_slices, dtype=torch.float32) / 255.0
+            
+            # Add batch dimension: (1, 10, 1, 128, 128)
+            input_tensor = slices_tensor.unsqueeze(0)
+            
+            return input_tensor
+            
+        except Exception as e:
+            raise ValueError(f"Preprocessing failed for {data_path}: {e}")
 
     def get_layer_selection_strategy(self) -> str:
         # Use the latest, most specific strategy for this model
@@ -261,6 +305,8 @@ def get_config_by_name(config_name: str) -> ModelConfig:
     configs = {
         "capsnet": CAPSNET_CONFIG,
         "papermodel": PAPERMODEL_CONFIG, # Add papermodel config
+        "shufflenet": PAPERMODEL_CONFIG, # Add shufflenet as alias for papermodel
+        "mcadnnet": PAPERMODEL_CONFIG,   # Add mcadnnet as alias for papermodel (2D CNN)
     }
     
     config_name_lower = config_name.lower() # Make lookup case-insensitive

@@ -10,12 +10,12 @@ def resample_activation_to_atlas( # This is the ORIGINAL function
     interpolation: str = "linear" # Default to linear for heatmaps
 ) -> Optional[str]:
     """
-    [ORIGINAL VERSION]
-    Resamples an activation map (NIfTI, assumed to be in MNI space)
-    to match the exact grid (shape and affine) of an atlas NIfTI (also in MNI space).
+    [UPDATED VERSION]
+    Resamples an activation map (NIfTI) to match the exact grid (shape and affine) 
+    of an atlas NIfTI, with proper coordinate system alignment.
 
     Args:
-        act_path (str): Path to activation NIfTI (e.g., heatmap_3D_MNI_ants.nii.gz)
+        act_path (str): Path to activation NIfTI (e.g., heatmap_3D_native.nii.gz)
         atlas_path (str): Path to atlas NIfTI (e.g., AAL3v1_1mm.nii.gz)
         output_dir (str): Directory to save resampled output
         interpolation (str): 'linear' (recommended for heatmaps) or 'nearest' (for labels)
@@ -23,7 +23,7 @@ def resample_activation_to_atlas( # This is the ORIGINAL function
     Returns:
         str: Output file path or None on failure
     """
-    print("Resampling MNI activation map to match atlas grid...")
+    print("Resampling activation map to match atlas grid...")
     
     try:
         act_img = nib.load(act_path)
@@ -32,15 +32,56 @@ def resample_activation_to_atlas( # This is the ORIGINAL function
         print(f"Error loading file: {e}")
         return None
 
-    # --- Resample directly to atlas ---
+    # Check coordinate system alignment
+    act_orient = nib.aff2axcodes(act_img.affine)
+    atlas_orient = nib.aff2axcodes(atlas_img.affine)
+    
+    print(f"Activation orientation: {act_orient}")
+    print(f"Atlas orientation: {atlas_orient}")
+    
+    # If orientations don't match, fix the coordinate system manually
+    if act_orient != atlas_orient:
+        print("⚠️  Coordinate systems don't match - applying coordinate transformation...")
+        
+        # Handle the specific case: L->R flip in first axis
+        if act_orient[0] == 'L' and atlas_orient[0] == 'R':
+            print("🔄 Flipping X-axis from L to R orientation...")
+            import numpy as np
+            
+            # Get the data and flip along the first axis
+            act_data = act_img.get_fdata()
+            act_data_flipped = np.flip(act_data, axis=0)
+            
+            # Create new affine matrix for R orientation
+            new_affine = act_img.affine.copy()
+            # Flip the X direction in the affine matrix
+            new_affine[0, 0] = -new_affine[0, 0]  # Flip X scaling
+            new_affine[0, 3] = -new_affine[0, 3]  # Flip X origin
+            
+            # Create new image with flipped data and corrected affine
+            act_img_reoriented = nib.Nifti1Image(act_data_flipped, new_affine, act_img.header)
+            print("✅ Applied L->R coordinate transformation")
+        else:
+            print(f"⚠️  Unsupported orientation change: {act_orient} -> {atlas_orient}")
+            print("Proceeding with original orientations...")
+            act_img_reoriented = act_img
+        
+        atlas_img_canonical = atlas_img
+    else:
+        print("✅ Coordinate systems match")
+        act_img_reoriented = act_img
+        atlas_img_canonical = atlas_img
+
+    # --- Resample to atlas ---
     try:
         resampled_img = resample_to_img(
-            source_img=act_img,      # Input is the MNI heatmap
-            target_img=atlas_img,    # Target is the atlas grid
+            source_img=act_img_reoriented,  # Use reoriented activation
+            target_img=atlas_img_canonical, # Use canonical atlas
             interpolation=interpolation,
-            force_resample=True,     # Ensure resampling happens
-            copy_header=True         # Copy atlas header info
+            force_resample=True,            # Ensure resampling happens
+            copy_header=True                # Copy atlas header info
         )
+        print("✅ Resampling completed successfully")
     except Exception as e:
         print(f"Error during resampling to atlas: {e}")
         return None
