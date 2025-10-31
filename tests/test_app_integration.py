@@ -24,12 +24,16 @@ def test_workflow_with_different_models():
             "model_display": "CapsNet (3D Capsule Network)",
             "description": "Testing with 3D Capsule Network"
         },
-        # Skip mcadnnet for now due to device issues
-        # {
-        #     "model_name": "mcadnnet", 
-        #     "model_display": "MCADNNet (2D CNN)",
-        #     "description": "Testing with 2D CNN"
-        # }
+        {
+            "model_name": "shufflenet", 
+            "model_display": "ShuffleNet (2D CNN)",
+            "description": "Testing with ShuffleNet 2D CNN"
+        },
+        {
+            "model_name": "papermodel", 
+            "model_display": "PaperModel (2D CNN)",
+            "description": "Testing with PaperModel alias"
+        }
     ]
     
     for i, test_case in enumerate(test_cases, 1):
@@ -55,7 +59,7 @@ def test_workflow_with_different_models():
             print(f"✅ Model config loaded successfully:")
             print(f"   Type: {config.model_type.value}")
             print(f"   Input shape: {config.input_shape}")
-            print(f"   Window/Stride: {config.window_size}/{config.stride}")
+            print(f"   Device: {config.device}")
             
         except Exception as e:
             print(f"❌ Failed to load model config: {e}")

@@ -1,521 +1,676 @@
+# File: app/core/fmri_processing/generic_pipeline_steps.py
 """
-Generic Pipeline Steps for fMRI Processing
+Generic Pipeline Steps for fMRI Processing with XAI capabilities.
 
-This module provides model-agnostic pipeline steps that work with any model
-through the ModelAdapter interface. This replaces the hardcoded pipeline_steps.py
-with a more flexible, extensible design.
+Provides a modular pipeline class `GenericInferencePipeline` that integrates
+model inference, Grad-CAM heatmap generation, spatial normalization (ANTs),
+atlas alignment, ROI analysis, and 2D visualization.
 """
 
 import torch
 import os
 import json
+import shutil  # For moving/renaming files in post-processing
+import time    # For timing steps if needed
+import traceback # For detailed error reporting
 from typing import Dict, Any, List, Tuple, Optional, Union
 
+# --- Configuration ---
 from app.core.fmri_processing.model_config import (
-    ModelConfig, 
+    ModelConfig,
     ModelFactory,
-    get_config_by_name
+    get_config_by_name,
 )
 
-# Import existing pipeline components
-from app.core.fmri_processing.pipelines.inspect_model import inspect_torch_model
-from app.core.fmri_processing.pipelines.choose_layer import select_visualization_layers
-from app.core.fmri_processing.pipelines.attach_hook import prepare_model_with_hooks as attach_hooks_to_model
-from app.core.fmri_processing.pipelines.validate_layer import validate_layers_by_llm
-from app.core.fmri_processing.pipelines.filter_layer import filter_layers_by_llm
+# --- Pipeline Component Imports ---
+# Step 1: Inspector (Simple version, no torchsummary)
+from app.core.fmri_processing.pipelines.inspector import inspect_torch_model 
+# Step 2: Selector (Uses LLM)
+from app.core.fmri_processing.pipelines.choose_layer import select_visualization_layers 
+# Step 3: Hook Manager (Includes gradient hooks)
+from app.core.fmri_processing.pipelines.attach_hook import (
+    prepare_model_with_hooks, 
+    attach_gradient_hooks, 
+    remove_hooks, 
+    _gradient_handles # Access global list for cleanup
+)
+# Step 6: Native Heatmap Generation (Grad-CAM version)
+from app.core.fmri_processing.pipelines.act_to_nii import activation_and_gradient_to_nifti 
+# Step 7: Spatial Normalization (ANTs)
+from app.core.fmri_processing.pipelines.spatial_normalizer import normalize_native_heatmap_to_mni_accurate_masked # Use the accurate masked version
+# Step 8: Resample to Atlas (Original version)
+from app.core.fmri_processing.pipelines.resample import resample_activation_to_atlas 
+# Step 9: ROI Analysis
+from app.core.fmri_processing.pipelines.brain_map import analyze_brain_activation 
+# Step 10: Visualization (New 2D version)
+from app.core.fmri_processing.pipelines.visualize import visualize_gradcam_2d 
 
-from app.core.fmri_processing.pipelines.act_to_nii import activation_to_nifti
-from app.core.fmri_processing.pipelines.resample import resample_activation_to_atlas
-from app.core.fmri_processing.pipelines.brain_map import analyze_brain_activation
-from app.core.fmri_processing.pipelines.visualize import visualize_activation_map
-
-# Global constants - these can be overridden by model config
-DEFAULT_OUTPUT_DIR = "output/langraph"
-DEFAULT_SAVE_NAME = "langraph_test"
-DEFAULT_VIS_DIR_PREFIX = "figures/langraph_test"
-DEFAULT_NORM_TYPE = "l2"
-DEFAULT_ACT_THRESHOLD_PERCENTILE = 95.0
-DEFAULT_ATLAS_PATH = "data/aal3/AAL3v1_1mm.nii.gz"
-DEFAULT_LABEL_PATH = "data/aal3/AAL3v1_1mm.nii.txt"
-DEFAULT_VIS_THRESHOLD_PERCENTILE = 0.1
+# Global constants (can be overridden by model config or pipeline init)
+DEFAULT_OUTPUT_DIR = "output/generic_pipeline" 
 
 class GenericInferencePipeline:
     """
-    A generic inference pipeline that can work with any model type
-    through the ModelAdapter interface.
+    A generic inference pipeline integrating XAI steps:
+    1. Inspect Model & Select Layer (LLM)
+    2. Prepare Model (Load Weights)
+    3. Run Inference & Capture Activations/Gradients (Hooks)
+    4. Post-Processing:
+        a. Generate Native Heatmap (Grad-CAM)
+        b. Normalize Heatmap to MNI (ANTs)
+        c. Resample Heatmap to Atlas Grid
+        d. Analyze ROI Activations
+        e. Visualize 2D Overlays
     """
-    
-    def __init__(self, 
-                 model_config: Union[ModelConfig, str],
-                 model_path: Optional[str] = None,
-                 output_dir: str = DEFAULT_OUTPUT_DIR):
+
+    def __init__(
+        self,
+        model_config: Union[ModelConfig, str],
+        model_weights_path: Optional[str] = None,
+        output_dir: str = DEFAULT_OUTPUT_DIR,
+        layer_selection_strategy: Optional[str] = None, # Allow overriding strategy
+    ):
         """
         Initialize the pipeline with a model configuration.
-        
-        Args:
-            model_config: Either a ModelConfig object or string name of predefined config
-            model_path: Path to trained model weights (optional)
-            output_dir: Directory for saving outputs
         """
+        print("\n--- Initializing GenericInferencePipeline ---")
         if isinstance(model_config, str):
-            self.config = get_config_by_name(model_config)
+            print(f"Loading configuration: '{model_config}'")
+            try:
+                self.config = get_config_by_name(model_config)
+            except ValueError as e:
+                 print(f"Error: {e}")
+                 raise
         else:
             self.config = model_config
-            
+            print(f"Using provided ModelConfig for type: {self.config.model_type}")
+
+        # Validate required paths in the loaded config
+        print("Validating configuration paths...")
+        required_paths = ["mni_template_path", "atlas_path", "atlas_label_path"]
+        missing_paths = []
+        for path_key in required_paths:
+            path_val = getattr(self.config, path_key, None)
+            if not path_val or not os.path.exists(path_val):
+                missing_paths.append(f"{path_key} (value: {path_val})")
+        if missing_paths:
+             raise FileNotFoundError(f"Missing or invalid required file paths in config: {', '.join(missing_paths)}")
+        print("Configuration paths validated.")
+
         self.adapter = ModelFactory.create_adapter(self.config)
-        self.model_path = model_path
+        self.model_weights_path = model_weights_path
         self.output_dir = output_dir
-        
+        self.layer_selection_strategy = layer_selection_strategy # Store the strategy
+        os.makedirs(self.output_dir, exist_ok=True) # Ensure base output dir exists
+
         # Initialize model components
-        self.model = None
-        self.prepared_model = None
-        self.selected_layers = None
-        
-    def inspect_model_structure(self) -> Tuple[List[Dict], List[str]]:
+        self.model: Optional[torch.nn.Module] = None
+        self.prepared_model: Optional[torch.nn.Module] = None
+        self.activation_handles: List[torch.utils.hooks.RemovableHandle] = [] 
+
+    def inspect_and_select_layers(self) -> Tuple[List[Dict], List[str]]:
         """
-        Inspect model structure and return selected layers.
-        
-        Returns:
-            Tuple of (selected_layers, selected_layer_names)
+        Step 1: Inspect model structure and use LLM to select layers.
+        (With custom override for PaperModel/CNN_2D)
         """
-        print(f"\n--- Inspecting {self.config.model_type.value} Model Structure ---")
-        
-        # Create model if not already created
+        print(f"\n--- Step 1: Inspecting {self.config.model_type.value} & Selecting Layers ---")
+
         if self.model is None:
             self.model = self.adapter.create_model()
-        
-        # Get layer information using existing inspect function
-        # For inspect_torch_model, we need to remove the batch dimension
-        inspect_input_shape = self.config.input_shape[1:]  # Remove batch dimension
-        print(f"Using input shape for inspection: {inspect_input_shape}")
-        
-        layers = inspect_torch_model(
-            self.model, 
-            inspect_input_shape,
-            self.config.device
-        )
-        
-        # Use model-specific layer selection strategy
-        strategy = self.adapter.get_layer_selection_strategy()
-        response = select_visualization_layers(layers, strategy=strategy)
-        selected_layers = json.loads(response)
-        
-        # Extract model paths
-        selected_layer_names = [item["model_path"] for item in selected_layers]
-        
-        print(f"Selected {len(selected_layers)} layers for {self.config.model_type.value} model")
-        
-        return selected_layers, selected_layer_names
-    
-    def validate_layers(self, selected_layers: List[Dict], all_layers_info: List[Dict]) -> List[Dict]:
-        """
-        Validate that selected layers exist in the model.
-        
-        Args:
-            selected_layers: List of layers selected by LLM
-            all_layers_info: Ground-truth list of all layers from model inspection
-            
-        Returns:
-            List of validated layers
-        """
-        print("\n--- Validating Selected Layers ---")
-        
-        # Basic existence validation
-        valid_layer_paths = {layer["model_path"] for layer in all_layers_info}
-        basic_validated_layers = []
-        
-        for layer in selected_layers:
-            model_path = layer.get("model_path")
-            if model_path in valid_layer_paths:
-                basic_validated_layers.append(layer)
-                print(f"✓ Valid: {model_path}")
-            else:
-                print(f"✗ Invalid: {model_path} - Layer does not exist")
-        
-        # Use LLM validation for additional checks
-        if basic_validated_layers:
-            llm_validated_results = validate_layers_by_llm(basic_validated_layers)
-            
-            # Map results back to original format
-            validated_model_paths = {item["model_path"] for item in llm_validated_results}
-            final_validated_layers = []
-            
-            for original_layer in basic_validated_layers:
-                if original_layer["model_path"] in validated_model_paths:
-                    llm_result = next(
-                        (item for item in llm_validated_results 
-                         if item["model_path"] == original_layer["model_path"]), 
-                        None
-                    )
-                    updated_layer = original_layer.copy()
-                    if llm_result:
-                        updated_layer["reason"] = llm_result["reason"]
-                    final_validated_layers.append(updated_layer)
-            
-            print(f"Final validation: {len(final_validated_layers)}/{len(selected_layers)} layers passed")
-            return final_validated_layers
+
+        layers = inspect_torch_model(self.model)
+        if not layers:
+            raise RuntimeError("inspect_torch_model returned no layers.")
+        print(f"Inspected {len(layers)} potential layers.")
+
+        # Determine the selection strategy
+        strategy = self.layer_selection_strategy or self.adapter.get_layer_selection_strategy()
+        print(f"Using selection strategy: '{strategy}'")
+
+        # --- CUSTOM MODIFICATION FOR SHUFFLENET/PAPERMODEL ---
+        from app.core.fmri_processing.model_config import ModelType
+        if strategy == "force_select_stage2" and self.config.model_type == ModelType.CNN_2D:
+            print("INFO: PaperModel (CNN_2D) detected with 'force_select_stage2' strategy. Bypassing LLM.")
+            forced_layer_path = "backbone.stage2"
+            selected_layers = [{"model_path": forced_layer_path, "output_shape": "N/A", "reason": "Forced selection for better resolution."}]
+            print(f"Force-selected layer: {forced_layer_path}")
         else:
-            print("No valid layers found after basic validation")
-            return []
-    
-    def prepare_model_for_inference(self, selected_layers: List[Dict]) -> torch.nn.Module:
+            # --- ORIGINAL LLM-BASED SELECTION FOR OTHER MODELS ---
+            print("Using LLM-based selection...")
+            try:
+                response_str = select_visualization_layers(layers, strategy=strategy)
+                selected_layers = json.loads(str(response_str))
+            except json.JSONDecodeError:
+                print(f"Error: LLM selector response was not valid JSON: {response_str}")
+                raise ValueError("Layer selection failed: Invalid LLM JSON response.")
+            except Exception as e:
+                print(f"Error during layer selection LLM call: {e}")
+                raise ValueError(f"Layer selection failed: {e}")
+
+        if not selected_layers or not isinstance(selected_layers, list):
+            raise ValueError(f"Selector did not return a valid list of layers. Response: {selected_layers}")
+
+        # Basic validation
+        all_layer_paths = {layer["model_path"] for layer in layers}
+        validated_selection = []
+        selected_layer_names = []
+        for layer in selected_layers:
+            path = layer.get("model_path")
+            if path in all_layer_paths:
+                validated_selection.append(layer)
+                selected_layer_names.append(path)
+            else:
+                # If we forced selection, this error is critical.
+                if self.config.model_type == ModelType.CNN_2D:
+                    raise ValueError(f"Forced layer '{path}' not found in model's layers.")
+                print(f"Warning: Selector chose non-existent layer '{path}'. Ignoring.")
+
+        if not validated_selection:
+            raise ValueError("None of the selected layers were valid or found in the model.")
+
+        print(f"Final selected {len(validated_selection)} valid layer(s):")
+        for layer in validated_selection:
+            print(f"  - {layer['model_path']} (Reason: {layer.get('reason', 'N/A')})")
+
+        return validated_selection, selected_layer_names
+
+    def prepare_model(self) -> torch.nn.Module: 
         """
-        Prepare model with hooks and load weights.
-        
-        Args:
-            selected_layers: List of validated layers to hook
-            
-        Returns:
-            Prepared model ready for inference
+        Step 2: Loads model weights and sets to evaluation mode.
         """
-        print(f"\n--- Preparing {self.config.model_type.value} Model for Inference ---")
+        print(f"\n--- Step 2: Preparing {self.config.model_type.value} Model ---")
         
         if self.model is None:
             self.model = self.adapter.create_model()
-        
-        # Attach hooks to selected layers
-        model_with_hooks = attach_hooks_to_model(self.model, selected_layers)
-        
+            
         # Load model weights if provided
-        if self.model_path:
-            print(f"Loading weights from: {self.model_path}")
-            model_with_hooks.load_state_dict(
-                torch.load(self.model_path, map_location=self.config.device)
-            )
-        
-        model_with_hooks.to(self.config.device).eval()
-        self.prepared_model = model_with_hooks
-        
-        return model_with_hooks
-    
-    def run_inference(self, 
+        if self.model_weights_path:
+            if not os.path.exists(self.model_weights_path):
+                 raise FileNotFoundError(f"Model weights not found at: {self.model_weights_path}")
+            print(f"Loading weights from: {self.model_weights_path}")
+            try:
+                # Ensure weights are loaded to the correct device specified in config
+                state_dict = torch.load(self.model_weights_path, map_location=self.config.device)
+                self.model.load_state_dict(state_dict)
+            except Exception as e:
+                 raise RuntimeError(f"Failed to load model weights from {self.model_weights_path}: {e}")
+        else:
+             print("Warning: No model weights path provided. Using initialized model (likely random predictions).")
+             
+        self.model.to(self.config.device).eval() # Move to device and set to eval mode
+        self.prepared_model = self.model
+        print(f"Model prepared on device '{self.config.device}' and set to evaluation mode.")
+        return self.prepared_model
+
+    def run_inference_with_hooks(self, 
                      nii_path: str, 
                      save_name: str, 
-                     selected_layer_names: List[str]) -> Union[str, int, float]:
+                     target_layers_info: List[Dict], 
+                     target_class_index: int = 1) -> Tuple[Any, Dict[str, str]]:
         """
-        Run inference using model-specific preprocessing and postprocessing.
-        
-        Args:
-            nii_path: Path to input NIfTI file
-            save_name: Base name for saved files
-            selected_layer_names: List of layer names to extract activations from
-            
-        Returns:
-            Processed prediction result
+        Step 3: Run inference, capture activations AND gradients for target layers.
         """
-        print(f"\n--- Running {self.config.model_type.value} Inference ---")
+        print(f"\n--- Step 3: Running Inference & Capturing Gradients ---")
         
         if self.prepared_model is None:
-            raise ValueError("Model not prepared. Call prepare_model_for_inference first.")
+            raise ValueError("Model not prepared. Call prepare_model first.")
         
-        # Use adapter for model-specific preprocessing
-        inputs = self.adapter.preprocess_data(nii_path)
-        print(f"Preprocessed input shape: {inputs.shape}")
+        model = self.prepared_model 
+        target_layer_paths = [layer["model_path"] for layer in target_layers_info]
         
-        # Run inference
-        with torch.no_grad():
-            outputs = self.prepared_model(inputs)
-        
-        # Use adapter for model-specific postprocessing
-        prediction_result = self.adapter.postprocess_prediction(outputs)
-        print(f"Prediction result: {prediction_result}")
-        
-        # Save activations if model has them
-        if hasattr(self.prepared_model, "activations") and isinstance(self.prepared_model.activations, dict):
-            os.makedirs(self.output_dir, exist_ok=True)
-            
-            for layer_name in selected_layer_names:
-                if layer_name in self.prepared_model.activations:
-                    act = self.prepared_model.activations[layer_name]
-                    filename = f"{save_name}_{layer_name.replace('.', '_')}.pt"
-                    save_path = os.path.join(self.output_dir, filename)
-                    torch.save(act.cpu(), save_path)
-                    print(f"Saved activation: {save_path}")
-        
-        return prediction_result
-    
-    def run_dynamic_filtering(self,
-                             validated_layers: List[Dict],
-                             save_name: str) -> List[Dict]:
-        """
-        Run dynamic layer filtering based on activation statistics.
-        
-        Args:
-            validated_layers: List of validated layers
-            save_name: Base name for saved files
-            
-        Returns:
-            List of filtered layers that passed LLM evaluation
-        """
-        print(f"\n--- Running Dynamic Layer Filtering ---")
-        
+        # --- Preprocessing ---
+        print(f"Preprocessing input NIfTI: {nii_path}")
         try:
-            # Use the same filtering logic as in the original system
-            keep_entries = filter_layers_by_llm(
-                validated_layers, 
-                self.output_dir, 
-                save_name, 
-                delete_rejected=True
-            )
+            inputs = self.adapter.preprocess_data(nii_path)
+            print(f"Preprocessed input shape: {inputs.shape}")
+            inputs = inputs.to(self.config.device)
+            inputs.requires_grad_(True) 
+        except Exception as e:
+             raise RuntimeError(f"Data preprocessing failed for {nii_path}: {e}")
+
+        # --- Attach Hooks ---
+        print(f"Attaching hooks to layers: {target_layer_paths}")
+        # Forward hooks (store handles for removal)
+        _ , activations, self.activation_handles = prepare_model_with_hooks(model, target_layers_info) 
+        # Backward hooks (handles managed globally in hook_manager)
+        gradients = {} 
+        attach_gradient_hooks(model, target_layer_paths, gradients) 
+
+        # --- Run Inference (Forward + Backward) ---
+        prediction_result = None
+        logits = None
+        try:
+            print("Running forward pass...")
+            outputs = model(inputs)
             
-            if not keep_entries:
-                print("  Warning: No layers passed filtering. Using first validated layer as fallback.")
-                keep_entries = validated_layers[:1]
+            # Postprocess prediction to get result and logits
+            prediction_result, logits = self.adapter.postprocess_prediction(outputs, return_logits=True)
+            print(f"Prediction result: {prediction_result}")
             
-            print(f"  Filtering complete: {len(keep_entries)}/{len(validated_layers)} layers kept")
-            return keep_entries
+            if logits is None:
+                 raise RuntimeError("Adapter did not return logits needed for backward pass.")
+                 
+            print(f"Running backward pass for class index {target_class_index}...")
+            model.zero_grad() 
+            # Ensure target score selection is robust
+            if logits.ndim > 1 and logits.shape[0] == 1 and logits.shape[1] > target_class_index:
+                 target_score = logits[0, target_class_index] 
+            elif logits.ndim == 1 and logits.shape[0] > target_class_index: # Handle 1D output if needed
+                 target_score = logits[target_class_index]
+            else:
+                 raise ValueError(f"Cannot select target_class_index {target_class_index} from logits with shape {logits.shape}")
+                 
+            target_score.backward() 
+            print("Backward pass complete.")
             
         except Exception as e:
-            print(f"  Error in dynamic filtering: {e}")
-            print(f"  Fallback: Using all validated layers")
-            return validated_layers
-    
+            # Ensure hooks are removed even if inference fails
+            remove_hooks(self.activation_handles) 
+            remove_hooks(_gradient_handles)
+            raise RuntimeError(f"Error during model inference or backpropagation: {e}")
+
+        # --- Save Activations and Gradients ---
+        saved_files_dict = {} 
+        save_error = False
+        for layer_path in target_layer_paths:
+            safe_name = layer_path.replace('.', '_')
+            filename = f"{save_name}_{safe_name}_act_grad.pt" 
+            save_path = os.path.join(self.output_dir, filename)
+            
+            if layer_path in activations and layer_path in gradients:
+                try:
+                    data_to_save = {'activation': activations[layer_path], 'gradient': gradients[layer_path]}
+                    torch.save(data_to_save, save_path)
+                    print(f"Saved activation and gradient: {save_path}")
+                    saved_files_dict[layer_path] = save_path
+                except Exception as e:
+                     print(f"Error saving data for layer {layer_path} to {save_path}: {e}")
+                     save_error = True
+            else:
+                print(f"Warning: Missing activation or gradient for {layer_path}. Cannot save.")
+                if layer_path not in activations: print("  Activation missing.")
+                if layer_path not in gradients: print("  Gradient missing.")
+                save_error = True # Treat missing data as an error for this step
+
+        # --- Cleanup Hooks ---
+        remove_hooks(self.activation_handles) 
+        remove_hooks(_gradient_handles)
+        print("Hooks removed.")
+
+        if not saved_files_dict and not save_error:
+             print("Warning: No target layers specified or found, no files saved.")
+        elif not saved_files_dict and save_error:
+             raise RuntimeError("Failed to save any activation/gradient files.")
+             
+        return prediction_result, saved_files_dict
+        
     def run_post_processing(self,
-                           validated_layers: List[Dict], 
-                           nii_path: str, 
-                           save_name: str) -> Dict[str, Any]:
-        """
-        Run post-processing: activation analysis and visualization.
-        
-        Args:
-            validated_layers: List of validated layers to process
-            nii_path: Path to original NIfTI file
-            save_name: Base name for saved files
+                            target_layers_info: List[Dict], 
+                            saved_files_dict: Dict[str, str], 
+                            nii_path: str, # Original T1 path 
+                            save_name: str) -> Dict[str, Any]:
+            """
+            Step 4: Run post-processing: Native heatmap -> MNI heatmap -> Resample -> Analyze -> Visualize (2D).
+            (V2: Organized outputs into layer-specific subfolders)
+            """
+            print(f"\n--- Step 4: Running Post-Processing ---")
             
-        Returns:
-            Dictionary containing post-processing results
-        """
-        print(f"\n--- Running Post-Processing for {len(validated_layers)} layers ---")
-        
-        post_results = {
-            "activated_regions": [],
-            "visualization_paths": [],
-            "final_layers": validated_layers
-        }
-        
-        output_prefix = os.path.join(self.output_dir, save_name)
-        region_max_activations = {}
-        
-        for layer in validated_layers:
-            layer_name = layer["model_path"]
-            print(f"  Processing layer: {layer_name}")
+            post_results = {
+                "activated_regions": [],
+                "visualization_paths": {}, # Map layer_path to *directory* of PNGs
+                "final_heatmap_paths": {} # Map layer_path to final resampled nii path
+            }
+            region_max_activations = {} 
             
-            try:
-                # Setup paths and convert activation to NIfTI
-                safe_layer_name = layer_name.replace(".", "_")
-                act_path = f"{output_prefix}_{safe_layer_name}.pt"
-                nii_output = f"{output_prefix}_{safe_layer_name}.nii.gz"
-                vis_dir = f"{DEFAULT_VIS_DIR_PREFIX}/{save_name}_{safe_layer_name}"
-                os.makedirs(vis_dir, exist_ok=True)
+            if not target_layers_info:
+                print("  No target layers provided for post-processing. Skipping.")
+                return post_results
                 
-                # Check if activation file exists
-                if not os.path.exists(act_path):
-                    print(f"    Warning: Activation file not found: {act_path}")
+            for layer_info in target_layers_info:
+                layer_path = layer_info["model_path"]
+                print(f"\n  Processing layer: {layer_path}")
+                
+                act_grad_pt_path = saved_files_dict.get(layer_path)
+                if not act_grad_pt_path:
+                    print(f"    Warning: Act/Grad file path missing for {layer_path}. Skipping post-processing for this layer.")
                     continue
-                
-                # Convert activation to NIfTI
-                activation_to_nifti(
-                    activation_path=act_path,
-                    reference_nii_path=nii_path,
-                    output_path=nii_output,
-                    norm_type=DEFAULT_NORM_TYPE,
-                    threshold_percentile=DEFAULT_ACT_THRESHOLD_PERCENTILE,
-                )
-                
-                # Resample to atlas space
-                resampled_path = resample_activation_to_atlas(
-                    act_path=nii_output,
-                    atlas_path=DEFAULT_ATLAS_PATH,
-                    output_dir=vis_dir,
-                )
-                
-                # Analyze brain activation
-                df_result = analyze_brain_activation(
-                    activation_path=resampled_path,
-                    atlas_path=DEFAULT_ATLAS_PATH,
-                    label_path=DEFAULT_LABEL_PATH,
-                )
-                
-                # Generate visualization
-                vis_output_path = visualize_activation_map(
-                    activation_path=resampled_path,
-                    output_path=os.path.join(vis_dir, f"map_{safe_layer_name}.png"),
-                    threshold=DEFAULT_VIS_THRESHOLD_PERCENTILE,
-                    title=f"Activation Map - {layer_name}"
-                )
-                post_results["visualization_paths"].append(vis_output_path)
-                
-                # Aggregate region activations
-                for _, row in df_result.iterrows():
-                    region_name = row['Region Name']
-                    activation = row['Mean Activation']
-                    hemisphere = self._parse_hemisphere(region_name)
+
+                try:
+                    # --- [NEW] Organized Path Definitions ---
+                    safe_layer_name = layer_path.replace(".", "_")
                     
-                    if (region_name not in region_max_activations or 
-                        activation > region_max_activations[region_name]['activation_score']):
-                        region_max_activations[region_name] = {
-                            "region_name": region_name,
-                            "activation_score": float(activation),
-                            "hemisphere": hemisphere,
-                        }
-                
-            except Exception as e:
-                print(f"    Error processing layer {layer_name}: {e}")
-                continue
-        
-        # Sort regions by activation score
-        all_regions_info = list(region_max_activations.values())
-        all_regions_info.sort(key=lambda x: x['activation_score'], reverse=True)
-        post_results["activated_regions"] = all_regions_info
-        
-        print(f"  Post-processing complete: {len(all_regions_info)} regions, {len(post_results['visualization_paths'])} visualizations")
-        
-        return post_results
-    
-    def _parse_hemisphere(self, region_name: str) -> str:
-        """
-        Parse hemisphere information from region name.
-        
-        Args:
-            region_name: Brain region name
+                    # Create a single, organized directory for this layer's outputs
+                    layer_output_dir = os.path.join(self.output_dir, f"layer_{safe_layer_name}")
+                    os.makedirs(layer_output_dir, exist_ok=True)
+                    
+                    # Step 6 Output: Native heatmap
+                    native_heatmap_nii = os.path.join(layer_output_dir, f"{save_name}_01_native_heatmap.nii.gz") 
+                    
+                    # Step 7 Output: ANTs normalization files
+                    # All ANTs files (transforms, warped T1, normalized heatmap) will go here
+                    ants_output_dir = os.path.join(layer_output_dir, "02_ants_normalization")
+                    os.makedirs(ants_output_dir, exist_ok=True)
+                    # Use a simple prefix; ANTs function will add its own suffixes
+                    ants_output_prefix = os.path.join(ants_output_dir, f"{save_name}_") 
+                    
+                    # Step 8 Output: Final resampled heatmap
+                    resampled_nii = os.path.join(layer_output_dir, f"{save_name}_03_final_heatmap_resampled_to_atlas.nii.gz")
+                    
+                    # Step 10 Output: Visualization directory
+                    vis_dir = os.path.join(layer_output_dir, "04_visualizations_2d_native") 
+                    os.makedirs(vis_dir, exist_ok=True)
+                    # --- [END NEW] Path Definitions ---
+
+                    
+                    # --- Step 6 Call: Generate Native Space Heatmap (GradCAM) ---
+                    print(f"    6. Generating native heatmap...")
+                    success_native = activation_and_gradient_to_nifti(
+                        data_path=act_grad_pt_path, 
+                        reference_nii_path=nii_path, 
+                        output_path=native_heatmap_nii,
+                    )
+                    if not success_native: raise RuntimeError("Native heatmap generation failed")
+
+                    # --- Step 7 Call: Normalize to MNI (with fallback) ---
+                    print(f"    7. Normalizing heatmap to MNI space...")
+                    
+                    mni_heatmap_nii = "" # Initialize path
+                    try:
+                        # Try the accurate masked version
+                        normalized_heatmap_path_or_none = normalize_native_heatmap_to_mni_accurate_masked( 
+                            t1_native_path=nii_path, 
+                            heatmap_native_path=native_heatmap_nii,
+                            mni_template_path=self.config.mni_template_path, 
+                            output_prefix=ants_output_prefix, # Pass new prefix
+                            transform_type='SyN', 
+                            interpolator='linear'
+                        )
+                        
+                        if normalized_heatmap_path_or_none and os.path.exists(normalized_heatmap_path_or_none):
+                            mni_heatmap_nii = normalized_heatmap_path_or_none
+                            print(f"   ✅ ANTs normalization successful: {mni_heatmap_nii}")
+                        else:
+                            # Check expected path
+                            expected_mni_path = f"{ants_output_prefix}_heatmap_MNI_masked_accurate.nii.gz"
+                            if os.path.exists(expected_mni_path):
+                                mni_heatmap_nii = expected_mni_path
+                                print(f"   ✅ ANTs output found at expected path: {mni_heatmap_nii}")
+                            else:
+                                raise RuntimeError("ANTs normalization failed")
+                                
+                    except Exception as e:
+                        print(f"   ⚠️  ANTs normalization failed: {e}")
+                        print(f"   🔄 Falling back to native space analysis...")
+                        # Use native heatmap directly for atlas analysis
+                        mni_heatmap_nii = native_heatmap_nii
+
+                    # --- Step 8 Call: Resample to Atlas ---
+                    print(f"    8. Resampling heatmap to atlas grid...")
+                    resampled_success_path = resample_activation_to_atlas( 
+                        act_path=mni_heatmap_nii, # Use the normalized heatmap
+                        atlas_path=self.config.atlas_path, 
+                        output_dir=layer_output_dir, # Output to the layer's main dir
+                        interpolation='linear'
+                    )
+                    if not resampled_success_path: raise RuntimeError("Resampling failed")
+                    
+                    # Rename the output file to our new, clean name
+                    if os.path.abspath(resampled_success_path) != os.path.abspath(resampled_nii):
+                        print(f"    Renaming resampled file to {os.path.basename(resampled_nii)}")
+                        shutil.move(resampled_success_path, resampled_nii)
+                    else:
+                        resampled_nii = resampled_success_path # Use the path returned
+
+                    post_results["final_heatmap_paths"][layer_path] = resampled_nii
+                    
+                    # --- Step 9 Call: Analyze Brain Activation ---
+                    print(f"    9. Analyzing brain regions...")
+                    df_result = analyze_brain_activation(
+                        activation_path=resampled_nii, # Use the final resampled map
+                        atlas_path=self.config.atlas_path,
+                        label_path=self.config.atlas_label_path, 
+                    )
+                    if df_result is None or df_result.empty:
+                        print("    Warning: Brain activation analysis returned empty results.")
+                        # Store empty results to avoid errors later
+                        post_results["activated_regions"] = [] 
+                    else:
+                        # Aggregate region activations
+                        for _, row in df_result.iterrows():
+                            region_name = row['Region Name']; activation = row['Mean Activation'] 
+                            hemisphere = self._parse_hemisphere(region_name)
+                            # Use Mean Activation for comparison
+                            if (region_name not in region_max_activations or 
+                                activation > region_max_activations[region_name]['activation_score']):
+                                region_max_activations[region_name] = {
+                                    "region_name": region_name,
+                                    "activation_score": float(activation), # Use Mean Activation
+                                    "hemisphere": hemisphere,
+                                    "voxel_count": int(row['Voxel Count']), # Add voxel count for context
+                                    "total_activation": float(row['Total Activation']) # Add total activation
+                                }
+                    
+                    # --- Step 10 Call: Generate 2D Visualization ---
+                    print(f"    10. Generating 2D Grad-CAM visualizations...")
+                    success_vis = visualize_gradcam_2d(
+                        data_path=act_grad_pt_path, 
+                        reference_nii_path=nii_path, 
+                        output_dir=vis_dir # Use new visualization dir
+                    )
+                    if success_vis:
+                        post_results["visualization_paths"][layer_path] = vis_dir 
+                    else:
+                        print(f"    Warning: 2D visualization generation failed for {layer_path}")
+
+                except Exception as e:
+                    print(f"    ERROR processing layer {layer_path}: {e}")
+                    # Optional: Log detailed traceback
+                    # print(traceback.format_exc())
+                    continue # Continue to the next layer if one fails
             
-        Returns:
-            Hemisphere string
-        """
-        name_upper = region_name.upper()
-        if '_L' in name_upper:
-            return 'Left'
-        elif '_R' in name_upper:
-            return 'Right'
-        else:
-            return 'Bilateral / Unknown'
+            # --- Final aggregation ---
+            all_regions_info = list(region_max_activations.values())
+            # Sort by Mean Activation Score
+            all_regions_info.sort(key=lambda x: x['activation_score'], reverse=True) 
+            post_results["activated_regions"] = all_regions_info
+            print(f"  Post-processing finished.")
+            return post_results
+
+    def _parse_hemisphere(self, region_name: str) -> str:
+        # ... (function content unchanged) ...
+        name_upper = region_name.upper(); 
+        if '_L' in name_upper: return 'Left'
+        elif '_R' in name_upper: return 'Right'
+        else: return 'Bilateral / Unknown'
     
     def run_full_pipeline(self, 
                          nii_path: str, 
                          save_name: str,
-                         include_post_processing: bool = False,
-                         include_dynamic_filtering: bool = False) -> Dict[str, Any]:
+                         include_post_processing: bool = True, 
+                         target_class_index: int = 1 
+                         ) -> Dict[str, Any]:
         """
-        Run the complete inference pipeline from start to finish.
-        
-        Args:
-            nii_path: Path to input NIfTI file  
-            save_name: Base name for saved files
-            include_post_processing: Whether to include activation analysis and visualization
-            include_dynamic_filtering: Whether to apply LLM-based dynamic layer filtering
-            
-        Returns:
-            Dictionary containing all pipeline results
+        Run the complete pipeline: Inspect -> Select -> Prepare -> Infer/Hook -> PostProcess.
+        Removes redundant validation and filtering steps.
         """
         results = {}
+        start_pipeline_time = time.time()
         
         try:
             # Step 1: Inspect model and select layers
-            selected_layers, selected_layer_names = self.inspect_model_structure()
+            selected_layers, selected_layer_names = self.inspect_and_select_layers()
             results["selected_layers"] = selected_layers
             
-            # Step 2: Validate layers
-            if self.model is None:
-                self.model = self.adapter.create_model()
-            all_layers_info = inspect_torch_model(
-                self.model, 
-                self.config.input_shape[1:], 
-                self.config.device
-            )
-            validated_layers = self.validate_layers(selected_layers, all_layers_info)
+            # --- Validation is implicitly done by selection ---
+            # --- Dynamic filtering is removed ---
             
-            if not validated_layers:
-                raise ValueError("No valid layers found after validation")
+            # Step 2: Prepare model (load weights)
+            prepared_model = self.prepare_model()
             
-            results["validated_layers"] = validated_layers
-            validated_layer_names = [layer["model_path"] for layer in validated_layers]
-            
-            # Step 3: Prepare model for inference
-            prepared_model = self.prepare_model_for_inference(validated_layers)
-            
-            # Step 4: Run inference
-            prediction_result = self.run_inference(
-                nii_path, save_name, validated_layer_names
+            # Step 3: Run inference (forward/backward, save act/grad)
+            prediction_result, saved_files_dict = self.run_inference_with_hooks(
+                nii_path, save_name, selected_layers, target_class_index
             )
             results["prediction_result"] = prediction_result
+            results["activation_gradient_files"] = saved_files_dict
             
-            # Step 5: Optional dynamic filtering
-            final_layers = validated_layers
-            if include_dynamic_filtering:
-                final_layers = self.run_dynamic_filtering(
-                    validated_layers, save_name
-                )
-                results["final_layers"] = final_layers
-            
-            # Step 6: Optional post-processing
+            # Step 4: Post-processing 
             if include_post_processing:
-                post_processing_results = self.run_post_processing(
-                    final_layers, nii_path, save_name
-                )
-                results.update(post_processing_results)
+                if not saved_files_dict:
+                    print("Warning: No activation/gradient files generated, skipping post-processing.")
+                else:
+                    post_processing_results = self.run_post_processing(
+                        selected_layers, # Pass the layers selected in Step 1
+                        saved_files_dict, 
+                        nii_path, 
+                        save_name 
+                    )
+                    results.update(post_processing_results)
             
-            print(f"\n--- Pipeline Complete for {self.config.model_type.value} ---")
+            pipeline_time = time.time() - start_pipeline_time
+            print(f"\n--- Pipeline Complete for {self.config.model_type.value} ({pipeline_time:.2f} seconds) ---")
             print(f"Prediction: {prediction_result}")
             
             return results
             
         except Exception as e:
-            error_message = f"Pipeline error: {e}"
+            pipeline_time = time.time() - start_pipeline_time
+            error_message = f"Pipeline error after {pipeline_time:.2f} seconds: {e}"
             print(f"ERROR: {error_message}")
             results["error"] = error_message
+            results["traceback"] = traceback.format_exc()
             return results
 
-# Convenience functions for backward compatibility
-def run_inference_and_classification(state: Dict[str, Any], 
-                                     model_config: Union[ModelConfig, str] = "capsnet") -> Dict[str, Any]:
+# --- Backward Compatibility Function (Simplified) ---
+def run_inference_and_classification(
+    state: Dict[str, Any], model_config: Union[ModelConfig, str] = "papermodel"
+) -> Dict[str, Any]: 
     """
-    Backward-compatible function for running inference.
-    This can replace the original function in inference.py
-    
-    Note: This function only runs inference. For the complete workflow including
-    dynamic filtering and post-processing, use the individual workflow nodes.
+    Simplified backward-compatible function for inference only.
     """
-    print("\n--- Node: Generic Inference & Classification ---")
-    
-    subject_id = state['subject_id']
-    model_path = state.get('model_path')
-    nii_path = state['fmri_scan_path']
-    save_name = f"{subject_id}"
-    
+    # ... (Function content largely unchanged, but ensure paths and config name are correct) ...
+    print("\n--- Node: Generic Inference & Classification (Inference Only) ---")
+    subject_id = state.get("subject_id", "unknown_subject")
+    model_weights = state.get("model_path") 
+    nii_path = state.get("fmri_scan_path") or state.get("t1_native_path") # Support both key names
+    save_name = f"{subject_id}_inference_only" 
+    output_dir = state.get("output_dir", DEFAULT_OUTPUT_DIR) 
+
+    if not nii_path: return {"error_log": state.get("error_log", []) + ["Missing input NIfTI path in state."]}
+         
     try:
-        # Create pipeline
-        pipeline = GenericInferencePipeline(
-            model_config=model_config,
-            model_path=model_path
-        )
-        
-        # Run only the inference part (not the full pipeline)
-        # The workflow handles filtering and post-processing in separate nodes
-        results = pipeline.run_full_pipeline(nii_path, save_name)
-        
-        if "error" in results:
-            return {"error_log": state.get("error_log", []) + [results["error"]]}
-        
-        trace = f"Node: Generic inference complete. Prediction: {results['prediction_result']}"
-        
-        return {
-            "classification_result": results["prediction_result"],
-            "validated_layers": results["validated_layers"],
-            "trace_log": state.get("trace_log", []) + [trace]
-        }
-        
+        pipeline = GenericInferencePipeline( model_config=model_config, model_weights_path=model_weights, output_dir=output_dir)
+        pipeline.prepare_model() 
+        inputs = pipeline.adapter.preprocess_data(nii_path).to(pipeline.config.device)
+        with torch.no_grad(): outputs = pipeline.prepared_model(inputs)
+        prediction_result, _ = pipeline.adapter.postprocess_prediction(outputs, return_logits=False) # Don't need logits here
+        trace = f"Node: Generic inference complete. Prediction: {prediction_result}"
+        return { "classification_result": prediction_result, "trace_log": state.get("trace_log", []) + [trace] }
     except Exception as e:
-        error_message = f"Node (Generic Inference) Error: {e}"
-        print(f"\n[ERROR] {error_message}")
+        # ... (Error handling unchanged) ...
+        error_message = f"Node (Generic Inference Only) Error: {e}" # ... rest ...
         return {"error_log": state.get("error_log", []) + [error_message]}
 
-# Export the generic pipeline for easy import
+
+# Export necessary components
 __all__ = [
     'GenericInferencePipeline',
-    'run_inference_and_classification',
+    'run_inference_and_classification', 
     'ModelConfig',
     'ModelFactory',
     'get_config_by_name',
-    # Note: filter_layers_by_llm and post-processing functions are now integrated
-    # into GenericInferencePipeline and available through run_full_pipeline options
+    'inspect_torch_model',
+    'select_visualization_layers',
+    'prepare_model_with_hooks', 
+    'activation_and_gradient_to_nifti',
+    'normalize_native_heatmap_to_mni_accurate_masked', # Export the specific accurate function
+    'resample_activation_to_atlas',
+    'analyze_brain_activation',
+    'visualize_gradcam_2d' # Export the 2D visualizer
 ]
+
+
+# --- Main execution block for testing the full pipeline ---
+if __name__ == "__main__":
+    
+    print("--- Starting GenericInferencePipeline Full Test ---")
+    start_full_time = time.time()
+    
+    # --- [NEW] Simplified Configuration ---
+    CONFIG_NAME = "papermodel" 
+    INPUT_NIFTI_PATH = "/Volumes/3T-disk/fMRI/Model/sMRI_data/AD/T1_3D_MPRAGE_SAG_0003_008/T1_3D_MPRAGE_SAG_0003_008_T1_3D_mprage_SAG_20231213144131_3b.nii"
+    MODEL_WEIGHTS = "model/shufflenet/fold_3_best_model.pth" 
+    
+    SUBJECT_ID = "test_subject_008" # Use a clean subject ID
+    SAVE_NAME_PREFIX = SUBJECT_ID    # This will prefix files (e.g., "test_subject_008_01_native.nii.gz")
+    TEST_OUTPUT_DIR = f"output/pipeline_run_{SUBJECT_ID}" # A clean, top-level folder for this subject
+    # --- [END NEW] Configuration ---
+    
+    # --- Check required files ---
+    print("Checking input files...")
+    if not os.path.exists(INPUT_NIFTI_PATH):
+        print(f"Error: Input T1 NIfTI not found at: {INPUT_NIFTI_PATH}"); exit()
+    if MODEL_WEIGHTS and not os.path.exists(MODEL_WEIGHTS):
+         print(f"Error: Model weights not found at: {MODEL_WEIGHTS}"); exit()
+         
+    try:
+        test_config = get_config_by_name(CONFIG_NAME)
+        print(f"Loaded config: {CONFIG_NAME}")
+        if not os.path.exists(test_config.mni_template_path): raise FileNotFoundError(f"MNI template not found: {test_config.mni_template_path}")
+        if not os.path.exists(test_config.atlas_path): raise FileNotFoundError(f"Atlas NIfTI not found: {test_config.atlas_path}")
+        if not os.path.exists(test_config.atlas_label_path): raise FileNotFoundError(f"Atlas Label file not found: {test_config.atlas_label_path}")
+    except Exception as e:
+        print(f"Error loading config or checking config paths: {e}"); exit()
+
+    # --- Instantiate and Run ---
+    try:
+        print("\nInstantiating GenericInferencePipeline...")
+        pipeline = GenericInferencePipeline(
+            model_config=CONFIG_NAME,
+            model_weights_path=MODEL_WEIGHTS,
+            output_dir=TEST_OUTPUT_DIR # Use new clean output dir
+        )
+        
+        print("\nRunning full pipeline with post-processing...")
+        results = pipeline.run_full_pipeline(
+            nii_path=INPUT_NIFTI_PATH,
+            save_name=SAVE_NAME_PREFIX, # Use new clean prefix
+            include_post_processing=True, 
+            target_class_index=1 # Explain AD class
+        )
+        
+        print("\n--- Pipeline Finished ---")
+        
+        # --- Print Summary ---
+        if "error" in results:
+            print(f"Pipeline failed with error: {results['error']}")
+            if "traceback" in results: print(f"\nTraceback:\n{results['traceback']}")
+        else:
+            print("Pipeline completed successfully!")
+            print(f"Prediction Result: {results.get('prediction_result')}")
+            if "selected_layers" in results: print(f"Selected Layers: {[layer['model_path'] for layer in results['selected_layers']]}")
+            if "final_heatmap_paths" in results:
+                 print("\nFinal Heatmap NIfTI Files (aligned to atlas):")
+                 for layer, path in results["final_heatmap_paths"].items(): print(f"  - {layer}: {path}")
+            if "visualization_paths" in results:
+                 print("\nVisualization PNG Directories:")
+                 for layer, path in results["visualization_paths"].items(): print(f"  - {layer}: {path}")
+            if "activated_regions" in results:
+                print("\nTop 5 Activated Regions (Sorted by Mean Activation):")
+                try:
+                    import pandas as pd
+                    # Ensure the list is not empty before creating DataFrame
+                    if results["activated_regions"]:
+                        df_regions = pd.DataFrame(results["activated_regions"])
+                        print(df_regions.head(5).to_string(index=False))
+                    else:
+                         print("  (No regions passed activation threshold or analysis failed)")
+                except ImportError: print(results["activated_regions"][:5]) 
+                     
+    except Exception as e:
+        print(f"\n--- Critical Error Running Pipeline ---")
+        print(f"Error: {e}")
+        traceback.print_exc()
+        
+    finally:
+        end_full_time = time.time()
+        print(f"\nTotal script execution time: {end_full_time - start_full_time:.2f} seconds.")

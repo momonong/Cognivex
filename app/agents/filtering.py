@@ -1,38 +1,32 @@
 # app/agents/2_dynamic_filtering.py
 from app.graph.state import AgentState
-# Import tools and constants from our core library
-from app.core.fmri_processing.pipeline_steps import dynamic_filtering, OUTPUT_DIR
 
 def filter_layers_dynamically(state: AgentState) -> dict:
     """
-    Node 2: Uses an LLM to dynamically filter layers based on activation stats.
+    Node 2: Simplified layer filtering for ShuffleNet integration.
+    Since the new generic pipeline handles layer selection automatically,
+    this node now just passes through the validated layers.
     """
-    print("\n--- Node: 2. Dynamic Layer Filtering ---")
-    subject_id = state['subject_id']
+    print("\n--- Node: 2. Layer Filtering (Simplified for ShuffleNet) ---")
+    
     validated_layers = state.get('validated_layers', [])
-    save_name_prefix = f"{subject_id}"
+    
+    if not validated_layers:
+        print("[Warning] No validated layers found. This may indicate an issue with the inference step.")
+        return {"error_log": state.get("error_log", []) + ["No validated layers found for filtering"]}
+    
+    # For ShuffleNet, we typically want to keep all validated layers
+    # since the layer selection is already optimized in the generic pipeline
+    final_layers = validated_layers
+    
+    print(f"  - Keeping {len(final_layers)} validated layers for further processing")
+    for layer in final_layers:
+        layer_name = layer.get('model_path', 'Unknown')
+        print(f"    * {layer_name}")
+    
+    trace = f"Node 2: Layer filtering complete. Kept {len(final_layers)} layers."
 
-    try:
-        keep_entries, _, _ = dynamic_filtering(
-            results={},  # This is a temporary dict, not needed from state
-            selected_layers=validated_layers,
-            activation_dir=OUTPUT_DIR,
-            save_name_prefix=save_name_prefix,
-            delete_rejected=True,
-        )
-        
-        if not keep_entries:
-            print("[Warning] No layers passed filtering. Using first validated layer as fallback.")
-            keep_entries = validated_layers[:1]
-
-        trace = f"Node 2: Filtering complete. Kept {len(keep_entries)} layers."
-
-        return {
-            "final_layers": keep_entries,
-            "trace_log": state.get("trace_log", []) + [trace]
-        }
-
-    except Exception as e:
-        error_message = f"Node 2 (Filtering) Error: {e}"
-        print(f"\n[ERROR] {error_message}")
-        return {"error_log": state.get("error_log", []) + [error_message]}
+    return {
+        "final_layers": final_layers,
+        "trace_log": state.get("trace_log", []) + [trace]
+    }

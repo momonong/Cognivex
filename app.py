@@ -85,14 +85,15 @@ else:
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
 
-# 模型選擇 - 类似逻辑
-models = {"CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
+# 模型選擇 - 添加 ShuffleNet 支援
+models = {"ShuffleNet": "shufflenet", "CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
 
 current_model = st.session_state.get("selected_model_display")
 model_list = list(models.keys())
 if current_model and current_model in model_list:
     default_model_index = model_list.index(current_model)
 else:
+    # 設定 ShuffleNet 為預設選項（第一個）
     default_model_index = 0
 
 if is_running:
@@ -115,6 +116,11 @@ selected_model_key = models[selected_model_display]
 
 # 顯示模型詳細信息
 model_info = {
+    "shufflenet": {
+        "type": "2D ShuffleNet with ECA Attention",
+        "description": "High-accuracy 2D CNN with attention mechanism for slice-based analysis",
+        "best_for": "High-accuracy AD/NC classification (80%+), efficient 2D processing",
+    },
     "capsnet": {
         "type": "3D Capsule Network",
         "description": "Advanced neural network with capsule layers for spatial relationships",
@@ -229,6 +235,7 @@ if st.session_state.get("analysis_running", False) and not st.session_state.get(
             progress_bar.progress(10)
 
             model_paths_map = {
+                "shufflenet": "model/shufflenet/fold_3_best_model.pth",
                 "capsnet": "model/capsnet/best_capsnet_rnn.pth",
                 "mcadnnet": "model/macadnnet/._best_overall_model.pth",
             }
