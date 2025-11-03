@@ -12,7 +12,7 @@
 - **Brain_Atlas_System**: 腦圖譜系統，整合 AAL3、Yeo 功能網路等標準腦圖譜
 - **Functional_Network_Analyzer**: 功能網路分析器，基於 Yeo 7/17 網路進行腦區功能分析
 - **Patient_Data_Manager**: 患者資料管理系統，處理臨床元數據和影像資料
-- **AI_Model_Hub**: AI 模型中心，支援多種深度學習模型（CapsNet、ShuffleNet 等）
+- **AI_Model_Hub**: AI 模型中心，支援 ShuffleNet 2D 深度學習模型
 - **Clinical_Report_System**: 臨床報告系統，生成符合醫療標準的診斷報告
 - **Metadata_Parser**: 元數據解析器，處理 JSON、CSV 等格式的臨床資訊
 
@@ -36,11 +36,11 @@
 
 #### 驗收標準
 
-1. THE Clinical_Dashboard SHALL 提供多種 AI 模型選項（CapsNet 3D、ShuffleNet 2D、PaperModel）
-2. THE Clinical_Dashboard SHALL 支援同時執行多個模型進行比較分析
+1. THE Clinical_Dashboard SHALL 提供 ShuffleNet 2D AI 模型進行腦部影像分析
+2. THE Clinical_Dashboard SHALL 支援 ShuffleNet 模型的高準確度分類分析
 3. WHEN 醫師選擇模型並開始分析，THE Clinical_Dashboard SHALL 執行完整的 Multimodal_Pipeline 流程
 4. THE Clinical_Dashboard SHALL 顯示每個模型的分析進度和處理步驟狀態
-5. THE Clinical_Dashboard SHALL 提供每個模型的分類結果（AD/NC）、信心分數和模型特定的解釋性視覺化
+5. THE Clinical_Dashboard SHALL 提供 ShuffleNet 模型的分類結果（AD/NC）、信心分數和解釋性視覺化
 
 ### 需求 3: 腦圖譜整合分析視覺化
 
@@ -75,7 +75,7 @@
 1. THE Clinical_Dashboard SHALL 自動生成包含患者基本資訊、掃描參數、多模型分析結果的完整報告
 2. THE Clinical_Dashboard SHALL 在報告中整合 DICOM 元數據、影像品質評估和技術參數
 3. THE Clinical_Dashboard SHALL 提供標準化的腦區活化表格，包含 AAL3 標籤和 Yeo 網路分類
-4. THE Clinical_Dashboard SHALL 生成多模型診斷結果的比較分析和一致性評估
+4. THE Clinical_Dashboard SHALL 生成 ShuffleNet 模型診斷結果的詳細分析和信心評估
 5. THE Clinical_Dashboard SHALL 提供 PDF 和結構化 JSON 格式的報告匯出功能
 
 ### 需求 6: 資料品質控制和驗證
@@ -96,7 +96,7 @@
 
 #### 驗收標準
 
-1. THE Clinical_Dashboard SHALL 支援多個 AI 模型結果的並排比較和一致性分析
+1. THE Clinical_Dashboard SHALL 支援 ShuffleNet 模型結果的詳細分析和歷史比較
 2. THE Clinical_Dashboard SHALL 提供患者群組的統計比較功能（AD vs CN）
 3. THE Clinical_Dashboard SHALL 支援同一患者多次掃描的縱向追蹤比較
 4. THE Clinical_Dashboard SHALL 基於功能網路進行跨患者的模式比較分析

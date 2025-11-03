@@ -12,7 +12,7 @@
 - **資料處理**: 現有的 LangGraph 工作流程
 - **資料庫**: Neo4j (知識圖譜) + PostgreSQL (患者資料)
 - **檔案儲存**: 本地檔案系統 + 雲端儲存
-- **AI 推理**: PyTorch + 現有的 GenericInferencePipeline
+- **AI 推理**: PyTorch + ShuffleNet 模型 + 現有的 GenericInferencePipeline
 
 ### 微服務架構
 ```
@@ -64,7 +64,7 @@ src/
 
 #### 關鍵組件設計
 - **PatientUploadComponent**: 支援 DICOM/NIfTI 拖拽上傳
-- **ModelSelectionComponent**: AI 模型選擇和配置
+- **ModelConfigurationComponent**: ShuffleNet 模型配置和參數設定
 - **BrainVisualizationComponent**: 3D/2D 腦部視覺化
 - **AnalysisProgressComponent**: 即時分析進度顯示
 - **ReportViewerComponent**: 互動式報告檢視器###
@@ -113,7 +113,7 @@ workflow.add_node("file_validation", validate_uploaded_files)
 workflow.add_node("dicom_conversion", convert_dicom_to_nifti)
 workflow.add_node("metadata_extraction", extract_clinical_metadata)
 workflow.add_node("quality_control", perform_quality_checks)
-workflow.add_node("multi_model_inference", run_multiple_models)
+workflow.add_node("shufflenet_inference", run_shufflenet_model)
 workflow.add_node("atlas_integration", integrate_brain_atlases)
 workflow.add_node("network_analysis", analyze_functional_networks)
 workflow.add_node("clinical_correlation", correlate_with_clinical_data)
@@ -126,7 +126,7 @@ DICOM/NIfTI Upload → File Validation → Format Conversion
 Clinical Report ← Report Generation ← Metadata Extraction
                                             ↓
                     ↑                Quality Control
-Network Analysis ← Atlas Integration ← Multi-Model Inference
+Network Analysis ← Atlas Integration ← ShuffleNet Inference
 ```
 
 ### 4. 資料模型設計
@@ -157,7 +157,7 @@ class HospitalInfo(BaseModel):
 class AnalysisResult(BaseModel):
     id: str
     patient_id: str
-    model_results: List[ModelResult]
+    shufflenet_result: ModelResult
     brain_regions: List[BrainRegion]
     functional_networks: List[FunctionalNetwork]
     quality_metrics: QualityMetrics
@@ -202,7 +202,7 @@ class BrainRegion(BaseModel):
 - **圖表類型**:
   - 腦區活化強度柱狀圖
   - 功能網路雷達圖
-  - 模型比較散點圖
+  - 信心分數分布圖
   - 時間序列趨勢圖
 
 ### 6. 檔案管理系統
@@ -242,7 +242,7 @@ class FileManager:
 ```python
 class AnalysisRequest(BaseModel):
     patient_id: str
-    selected_models: List[str]
+    use_shufflenet: bool = True
     analysis_options: AnalysisOptions
     priority: int = 1
 
@@ -317,7 +317,7 @@ CREATE TABLE analyses (
     id UUID PRIMARY KEY,
     patient_id UUID REFERENCES patients(id),
     status VARCHAR(50) NOT NULL,
-    selected_models TEXT[],
+    model_name VARCHAR(50) DEFAULT 'shufflenet',
     results JSONB,
     quality_metrics JSONB,
     created_at TIMESTAMP DEFAULT NOW(),
