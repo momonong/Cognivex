@@ -2,10 +2,6 @@ import torch
 import torch.nn as nn
 
 class Simple3DCNN_InstanceNorm(nn.Module):
-    """
-    模型定義必須與訓練時完全相同，才能載入權重。
-    使用 InstanceNorm3d 替代 BatchNorm3d。
-    """
     def __init__(self, in_channels=1, num_classes=2):
         super(Simple3DCNN_InstanceNorm, self).__init__()
         

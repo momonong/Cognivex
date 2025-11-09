@@ -5,12 +5,11 @@ import nibabel as nib
 import os
 from scipy.ndimage import zoom
 from nilearn import plotting
-# 修正匯入
-from nilearn.datasets import load_mni152_template 
+from nilearn.datasets import load_mni152_template, fetch_atlas_aal
 from captum.attr import GuidedBackprop
-from nilearn.image import resample_to_img 
-# 🚨 引入 Matplotlib 用於組合視圖
+from nilearn.image import resample_to_img, smooth_img 
 import matplotlib.pyplot as plt
+import pandas as pd 
 
 # ====================================================================
 # 【1. 設定與配置】(保持不變)
@@ -25,6 +24,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # 【2. 模型定義 (已修正 ReLU)】(保持不變)
 # ====================================================================
 class Simple3DCNN_InstanceNorm(nn.Module):
+    # ... (您的模型定義保持不變，此處省略)
     def __init__(self, in_channels=1, num_classes=2):
         super(Simple3DCNN_InstanceNorm, self).__init__()
         def create_conv_block(in_c, out_c, kernel_size=3, padding=1):
@@ -49,7 +49,7 @@ class Simple3DCNN_InstanceNorm(nn.Module):
         return x
 
 # ====================================================================
-# 【3. Grad-CAM 與 Guided Backprop 實作】(保持不變)
+# 【3. 輔助函數】(保持不變)
 # ====================================================================
 gradients = {}; activations = {}
 def backward_hook(module, grad_in, grad_out): gradients['value'] = grad_out[0]
@@ -67,21 +67,34 @@ def normalize_map(map_data):
     return (map_data - min_val) / (max_val - min_val + 1e-8)
 
 # ====================================================================
-# 【4. 主測試腳本 (🚨 核心修正點：任務 3 和 8)】
+# 【4. 主測試腳本 (🚨 修正 任務 4)】
 # ====================================================================
 
 def run_single_test():
     print(f"--- 開始單一檔案 Guided Grad-CAM 測試 ---")
     print(f"使用設備: {DEVICE}")
 
-    # 1. 載入 MNI 模板
+    # 1. 載入 MNI 模板與 AAL Atlas
     try:
         mni_template = load_mni152_template() 
         MNI_TARGET_SHAPE = mni_template.get_fdata().shape
         MNI_AFFINE = mni_template.affine
-        print(f"✅ MNI 模板載入成功，目標尺寸 (Target Shape) 設為: {MNI_TARGET_SHAPE}")
+        mni_brain_mask = mni_template.get_fdata() > 0 
+        
+        aal_atlas_data = fetch_atlas_aal(version='SPM12')
+        aal_label_names = aal_atlas_data.labels
+        aal_label_indices = aal_atlas_data.indices # 這是 ['0', '2001', '2002', ...] (字串)
+        
+        aal_img = nib.load(aal_atlas_data.maps)
+        
+        print("... Z 正在將 AAL Atlas 配準到 MNI 模板空間...")
+        aal_img_resampled = resample_to_img(aal_img, mni_template, interpolation='nearest', force_resample=True, copy_header=True)
+        aal_data_np = aal_img_resampled.get_fdata() # 這是配準後的 AAL 數據 (整數)
+        
+        print(f"✅ MNI 模板載入成功，目標尺寸: {MNI_TARGET_SHAPE}")
+        print(f"✅ AAL Atlas 載入並配準成功。")
     except Exception as e:
-        print(f"🚨 致命錯誤：無法載入 Nilearn MNI 模板。錯誤: {e}"); return
+        print(f"🚨 致命錯誤：載入 MNI/AAL 模板失敗。錯誤: {e}"); return
 
     # 2. 載入模型 (略)
     model = Simple3DCNN_InstanceNorm(num_classes=2).to(DEVICE)
@@ -89,14 +102,15 @@ def run_single_test():
     model.eval()
     print(f"✅ 模型載入成功: {TEST_MODEL_PATH}")
 
-    # 3. 載入單一 NIfTI 檔案 (略)
+    # 3. 載入單一 NIfTI 檔案
     input_tensor, original_affine = load_nifti_as_tensor(TEST_DATA_PATH)
     input_tensor = input_tensor.to(DEVICE); input_tensor.requires_grad_()
+    subject_id = os.path.basename(TEST_DATA_PATH).replace('.nii', '').replace('.nii.gz', '')
     print(f"✅ 測試資料載入成功: {TEST_DATA_PATH}")
 
-    # --- 任務 1：計算 Grad-CAM (低解析度) ---
-    print("... [任務 1] 正在計算 Grad-CAM (低解析度)...")
+    # --- 任務 1 & 2 (Grad-CAM & Guided Backprop) ---
     # ... (此部分邏輯保持不變，此處省略)
+    print("... [任務 1] 正在計算 Grad-CAM (低解析度)...")
     model.block4.register_forward_hook(forward_hook); model.block4.register_backward_hook(backward_hook)
     output = model(input_tensor); target_class_index = 1 
     one_hot_output = torch.zeros((1, output.size()[-1]), device=DEVICE); one_hot_output[0][target_class_index] = 1
@@ -107,121 +121,103 @@ def run_single_test():
     for i in range(feature_maps.shape[0]): grad_cam_map_low_res += weights[i] * feature_maps[i, :, :, :]
     grad_cam_map_low_res = torch.relu(grad_cam_map_low_res)
     grad_cam_np_low_res = grad_cam_map_low_res.cpu().detach().numpy()
-    print(f"✅ 低解析度 Grad-CAM 熱圖已產生 (Shape: {grad_cam_np_low_res.shape})")
-
-    # --- 任務 2：計算 Guided Backpropagation (高解析度) ---
     print("... [任務 2] 正在計算 Guided Backprop (高解析度)...")
-    # ... (此部分邏輯保持不變，此處省略)
     model.zero_grad(); gbp = GuidedBackprop(model)
     guided_grads_tensor = gbp.attribute(input_tensor, target=target_class_index)
     guided_grads_np = guided_grads_tensor.squeeze(0).squeeze(0).cpu().detach().numpy()
-    print(f"✅ 高解析度 Guided Backprop 熱圖已產生 (Shape: {guided_grads_np.shape})")
 
-    # ----------------------------------------------------
-    # 【任務 3：結合與空間對齊 (修正閾值)】
-    # ----------------------------------------------------
+    # --- 任務 3：結合與空間對齊 ---
+    # ... (此部分邏輯保持不變，此處省略)
     print("... [任務 3] 正在結合熱圖並執行空間對齊...")
-
-    # 3a. 上取樣 (Zoom) 低解析度的 Grad-CAM
     zoom_factors = [t / c for t, c in zip(MNI_TARGET_SHAPE, grad_cam_np_low_res.shape)]
     grad_cam_high_res = zoom(grad_cam_np_low_res, zoom=zoom_factors, order=1)
-    
-    # 3b. 建立 Guided Backprop 的 NIfTI 物件 (使用原始 Affine)
     gbp_nii_raw = nib.Nifti1Image(guided_grads_np, original_affine)
-    
-    # 3c. 將 Guided Backprop 配準 (Resample) 到 MNI 模板空間
     print("... [任務 3b] 正在將 Guided Backprop 配準到 MNI 空間...")
-    gbp_nii_aligned = resample_to_img(
-        source_img=gbp_nii_raw,
-        target_img=mni_template,
-        interpolation='continuous'
-    )
+    gbp_nii_aligned = resample_to_img(source_img=gbp_nii_raw, target_img=mni_template, interpolation='continuous', force_resample=True, copy_header=True)
     guided_grads_aligned_np = gbp_nii_aligned.get_fdata()
-
-    # 3d. 正規化兩張「均在 MNI 空間」的熱圖
     grad_cam_norm = normalize_map(grad_cam_high_res)
     guided_grads_norm = normalize_map(np.abs(guided_grads_aligned_np))
-
-    # 3e. 結合 (核心)：Guided Grad-CAM = Grad-CAM * Guided Backprop
     guided_grad_cam_map = grad_cam_norm * guided_grads_norm
-    
-    # 3f. 軸向翻轉 (修正鏡像問題)
     heatmap_flipped = np.flip(guided_grad_cam_map, axis=0) 
-    
-    # 3g. 🚨 修正點：計算統計閾值 (95th percentile)
-    # 我們只看非零激活的體素
-    nonzero_values = heatmap_flipped[heatmap_flipped > 0]
-    if len(nonzero_values) > 0:
-        stat_threshold = np.percentile(nonzero_values, 95) # 顯示最強的 5%
-    else:
-        stat_threshold = heatmap_flipped.max() # 如果全為 0
-    print(f"✅ 統計閾值 (95th percentile) 計算完成: {stat_threshold:.4f}")
-
-    # 3h. 強制賦予 MNI Affine
-    nii_aligned = nib.Nifti1Image(heatmap_flipped, MNI_AFFINE)
-    
+    heatmap_masked = heatmap_flipped * mni_brain_mask 
+    nii_aligned = nib.Nifti1Image(heatmap_masked, MNI_AFFINE) 
     print("✅ 空間對齊完成！")
 
     # ----------------------------------------------------
-    # 【任務 8：儲存結果 (🚨 核心修正點：XYZ 三視圖)】
+    # 【🚨 核心修正點：任務 4 - 腦區量化 (AAL Atlas)】
     # ----------------------------------------------------
-    subject_id = os.path.basename(TEST_DATA_PATH).replace('.nii', '').replace('.nii.gz', '')
-    nii_path = os.path.join(OUTPUT_DIR, f"{subject_id}_GUIDED_gradcam_ALIGNED.nii.gz")
-    png_path = os.path.join(OUTPUT_DIR, f"{subject_id}_GUIDED_gradcam_VISUAL_XYZ.png")
+    print("... [任務 4] 正在進行腦區量化 (AAL Atlas)...")
     
-    nib.save(nii_aligned, nii_path)
+    gradcam_data = nii_aligned.get_fdata() 
+    
+    region_activations = []
+    
+    # 🚨 修正：同時遍歷標籤名稱 (label_name) 和 標籤 ID (label_id)
+    for label_name, label_id_str in zip(aal_label_names, aal_label_indices):
+        
+        # 🚨 修正：將 label_id 從 'str' 轉換為 'int'
+        label_id_int = int(label_id_str)
+        
+        if label_id_int == 0: # 跳過 'Background'
+            continue
+            
+        # 🚨 修正：使用整數 ID (label_id_int) 進行比較
+        region_mask = (aal_data_np == label_id_int) 
+        
+        activations_in_region = gradcam_data[region_mask]
+        total_activation = np.sum(activations_in_region)
+        num_voxels = np.sum(region_mask) # 這次 Num_Voxels 將會 > 0
+        average_activation = total_activation / num_voxels if num_voxels > 0 else 0
+        
+        region_activations.append({
+            'Region': label_name,
+            'Label_ID': label_id_int,
+            'Total_Activation': total_activation,
+            'Average_Activation': average_activation,
+            'Num_Voxels': num_voxels
+        })
+
+    df_activations = pd.DataFrame(region_activations)
+    df_activations = df_activations.sort_values(by='Average_Activation', ascending=False)
+    
+    csv_path = os.path.join(OUTPUT_DIR, f"{subject_id}_brain_region_activations.csv")
+    df_activations.to_csv(csv_path, index=False)
+    
+    print(f"✅ 腦區量化完成！結果已儲存至: {csv_path}")
+    print("\n--- 最活躍的腦區 (前 10 名) ---")
+    print(df_activations.head(10).to_string(index=False))
+
+    # ----------------------------------------------------
+    # 【任務 8：儲存結果 (視覺化平滑)】
+    # ----------------------------------------------------
+    nii_path = os.path.join(OUTPUT_DIR, f"{subject_id}_GUIDED_gradcam_ALIGNED_MASKED.nii.gz") 
+    png_path = os.path.join(OUTPUT_DIR, f"{subject_id}_GUIDED_gradcam_VISUAL_XYZ_MASKED_SMOOTHED.png")
+    
+    nib.save(nii_aligned, nii_path) 
     print(f"💾 已儲存對齊的 NIfTI 檔案至: {nii_path}")
     
-    # 創建一個 3x1 的 Matplotlib 畫布
+    print("... 正在平滑熱圖以進行視覺化...")
+    nii_smoothed = smooth_img(nii_aligned, fwhm=4) # FWHM=4mm 平滑
+    
+    smoothed_data = nii_smoothed.get_fdata()
+    nonzero_values_smoothed = smoothed_data[smoothed_data > 0]
+    if len(nonzero_values_smoothed) > 0:
+        stat_threshold_smoothed = np.percentile(nonzero_values_smoothed, 85) # 保持 85th
+    else:
+        stat_threshold_smoothed = 0
+    print(f"✅ 平滑後統計閾值 (85th percentile) 計算完成: {stat_threshold_smoothed:.4f}")
+    
     fig, axes = plt.subplots(nrows=3, figsize=(15, 10))
-    fig.suptitle(f"Guided Grad-CAM (Aligned) - {subject_id}", fontsize=16, y=1.02)
+    fig.suptitle(f"Guided Grad-CAM (Smoothed & Masked) - {subject_id}", fontsize=16, y=1.02)
     
-    # 繪製 Z 視圖 (Axial)
-    plotting.plot_stat_map(
-        nii_aligned, 
-        bg_img=mni_template,    
-        display_mode='z',           
-        cut_coords=7, # 7 個切片
-        cmap='hot',                
-        black_bg=True,             
-        colorbar=True,
-        threshold=stat_threshold, # 應用統計閾值
-        axes=axes[0], # 繪製在第一個子圖
-        title="Axial (Z)"
-    )
-    
-    # 繪製 X 視圖 (Sagittal)
-    plotting.plot_stat_map(
-        nii_aligned, 
-        bg_img=mni_template,    
-        display_mode='x',           
-        cut_coords=6, # 6 個切片
-        cmap='hot',                
-        black_bg=True,             
-        colorbar=False, # 關閉多餘的 colorbar
-        threshold=stat_threshold,
-        axes=axes[1],
-        title="Sagittal (X)"
-    )
-    
-    # 繪製 Y 視圖 (Coronal)
-    plotting.plot_stat_map(
-        nii_aligned, 
-        bg_img=mni_template,    
-        display_mode='y',           
-        cut_coords=6,
-        cmap='hot',                
-        black_bg=True,             
-        colorbar=False,
-        threshold=stat_threshold,
-        axes=axes[2],
-        title="Coronal (Y)"
-    )
+    plotting.plot_stat_map(nii_smoothed, bg_img=mni_template, display_mode='z', cut_coords=7, cmap='hot', black_bg=True, colorbar=True, threshold=stat_threshold_smoothed, axes=axes[0], title="Axial (Z)")
+    plotting.plot_stat_map(nii_smoothed, bg_img=mni_template, display_mode='x', cut_coords=6, cmap='hot', black_bg=True, colorbar=False, threshold=stat_threshold_smoothed, axes=axes[1], title="Sagittal (X)")
+    plotting.plot_stat_map(nii_smoothed, bg_img=mni_template, display_mode='y', cut_coords=6, cmap='hot', black_bg=True, colorbar=False, threshold=stat_threshold_smoothed, axes=axes[2], title="Coronal (Y)")
     
     fig.savefig(png_path, bbox_inches='tight', dpi=150)
-    plt.close(fig) # 關閉畫布
+    plt.close(fig) 
     
-    print(f"🖼️  已儲存 XYZ 三視圖 PNG 檔案至: {png_path}")
+    print(f"🖼️  已儲存「平滑後」的 XYZ 三視圖 PNG 檔案至: {png_path}")
     print(f"--- 高解析度測試完成 ---")
 
 if __name__ == '__main__':
