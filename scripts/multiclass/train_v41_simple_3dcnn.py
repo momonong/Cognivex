@@ -34,7 +34,7 @@ NUM_FOLDS = 5
 NUM_EPOCHS = 100
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-4
-BATCH_SIZE = 4  # 3D volume 很大，用小 batch
+BATCH_SIZE = 24  # 🚀 增加到 24 來充分利用 VRAM (目前只用 10GB/24GB)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 影像參數
@@ -206,16 +206,19 @@ class MultiModalDataset(Dataset):
 # 【4. 訓練和驗證】
 # ====================================================================
 
-def train_epoch(model, dataloader, criterion, optimizer, device, scaler):
+def train_epoch(model, dataloader, criterion, optimizer, device, scaler, epoch_num):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
+    all_labels = []
+    all_preds = []
+    first_batch_logits = None
     
-    for volumes, labels, _ in tqdm(dataloader, desc="Training", leave=False):
-        volumes, labels = volumes.to(device), labels.to(device)
+    for batch_idx, (volumes, labels, _) in enumerate(tqdm(dataloader, desc="Training", leave=False)):
+        volumes, labels = volumes.to(device, non_blocking=True), labels.to(device, non_blocking=True)
         
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)  # 🚀 更快的梯度清零
         
         with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
             outputs = model(volumes)
@@ -229,8 +232,19 @@ def train_epoch(model, dataloader, criterion, optimizer, device, scaler):
         _, predicted = torch.max(outputs, 1)
         total += labels.size(0)
         correct += (predicted == labels).sum().item()
+        
+        all_labels.extend(labels.cpu().numpy())
+        all_preds.extend(predicted.cpu().numpy())
+        
+        # 記錄第一個 batch 的 logits
+        if batch_idx == 0:
+            first_batch_logits = outputs[0].detach().cpu().numpy()
     
-    return running_loss / total, correct / total
+    # 計算預測分布
+    pred_dist = np.bincount(all_preds, minlength=NUM_CLASSES)
+    label_dist = np.bincount(all_labels, minlength=NUM_CLASSES)
+    
+    return running_loss / total, correct / total, pred_dist, label_dist, first_batch_logits
 
 
 def validate_epoch(model, dataloader, criterion, device):
@@ -238,10 +252,13 @@ def validate_epoch(model, dataloader, criterion, device):
     running_loss = 0.0
     correct = 0
     total = 0
+    all_labels = []
+    all_preds = []
+    first_batch_logits = None
     
     with torch.no_grad():
-        for volumes, labels, _ in dataloader:
-            volumes, labels = volumes.to(device), labels.to(device)
+        for batch_idx, (volumes, labels, _) in enumerate(dataloader):
+            volumes, labels = volumes.to(device, non_blocking=True), labels.to(device, non_blocking=True)
             
             with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
                 outputs = model(volumes)
@@ -251,8 +268,19 @@ def validate_epoch(model, dataloader, criterion, device):
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+            
+            all_labels.extend(labels.cpu().numpy())
+            all_preds.extend(predicted.cpu().numpy())
+            
+            # 記錄第一個 batch 的 logits
+            if batch_idx == 0:
+                first_batch_logits = outputs[0].detach().cpu().numpy()
     
-    return running_loss / total, correct / total
+    # 計算預測分布
+    pred_dist = np.bincount(all_preds, minlength=NUM_CLASSES)
+    label_dist = np.bincount(all_labels, minlength=NUM_CLASSES)
+    
+    return running_loss / total, correct / total, pred_dist, label_dist, first_batch_logits
 
 
 # ====================================================================
@@ -260,6 +288,11 @@ def validate_epoch(model, dataloader, criterion, device):
 # ====================================================================
 
 def main():
+    # 🚀 啟用 cudnn benchmark 來自動優化卷積算法
+    if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.enabled = True
+    
     print("="*60)
     print("V41: Simple 3D CNN (基於你成功的架構)")
     print("="*60)
@@ -308,15 +341,27 @@ def main():
         train_subset = torch.utils.data.Subset(dataset, train_ids)
         val_subset = torch.utils.data.Subset(dataset, val_ids)
         
-        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
-        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
+        # 🚀 使用多個 workers 來加速資料載入
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, 
+                                 num_workers=4, pin_memory=True, prefetch_factor=2, persistent_workers=True)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, shuffle=False, 
+                               num_workers=2, pin_memory=True, prefetch_factor=2, persistent_workers=True)
         
         # 建立模型
         model = Simple3DCNN_MultiClass(in_channels=3, num_classes=NUM_CLASSES).to(DEVICE)
         
+        # 🚀 使用 torch.compile 加速（PyTorch 2.0+ 且有 Triton）
+        # 注意：Windows 上 Triton 支援有限，如果失敗就跳過
+        # try:
+        #     model = torch.compile(model, mode='reduce-overhead')
+        #     print(f"   ✅ 使用 torch.compile 加速")
+        # except Exception as e:
+        #     print(f"   ⚠️ torch.compile 不可用，使用標準模式")
+        #     pass
+        
         optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
         criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=False)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10)
         
         # 使用新的 GradScaler API
         try:
@@ -330,15 +375,27 @@ def main():
         patience = 20
         
         for epoch in range(NUM_EPOCHS):
-            train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, DEVICE, scaler)
-            val_loss, val_acc = validate_epoch(model, val_loader, criterion, DEVICE)
+            train_loss, train_acc, train_pred_dist, train_label_dist, train_logits = train_epoch(
+                model, train_loader, criterion, optimizer, DEVICE, scaler, epoch+1
+            )
+            val_loss, val_acc, val_pred_dist, val_label_dist, val_logits = validate_epoch(
+                model, val_loader, criterion, DEVICE
+            )
             
             scheduler.step(val_acc)
             current_lr = optimizer.param_groups[0]['lr']
             
-            print(f"Epoch {epoch+1:3d}/{NUM_EPOCHS} | LR: {current_lr:.6f} | "
-                  f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.4f} | "
-                  f"Val Loss: {val_loss:.4f}, Acc: {val_acc:.4f}")
+            # 詳細輸出
+            print(f"\nEpoch {epoch+1:3d}/{NUM_EPOCHS} | LR: {current_lr:.6f}")
+            print(f"  Train: Loss={train_loss:.4f}, Acc={train_acc:.4f} | "
+                  f"Labels={train_label_dist}, Preds={train_pred_dist}")
+            if train_logits is not None:
+                print(f"    Train Logits 範例: [{train_logits[0]:.3f}, {train_logits[1]:.3f}, {train_logits[2]:.3f}]")
+            
+            print(f"  Val:   Loss={val_loss:.4f}, Acc={val_acc:.4f} | "
+                  f"Labels={val_label_dist}, Preds={val_pred_dist}")
+            if val_logits is not None:
+                print(f"    Val Logits 範例: [{val_logits[0]:.3f}, {val_logits[1]:.3f}, {val_logits[2]:.3f}]")
             
             # 儲存最佳模型
             if val_acc > best_val_acc:
@@ -347,11 +404,12 @@ def main():
                 
                 model_path = os.path.join(MODEL_OUTPUT_DIR, f"fold_{fold_num}_best.pth")
                 torch.save(model.state_dict(), model_path)
-                print(f"  ✅ 最佳 Val Acc: {best_val_acc:.4f}")
+                print(f"    ✅ 最佳 Val Acc: {best_val_acc:.4f} (已儲存)")
             else:
                 patience_counter += 1
+                print(f"    ⏳ 沒有改善 ({patience_counter}/{patience})")
                 if patience_counter >= patience:
-                    print(f"  ⚠️ Early stopping at epoch {epoch+1}")
+                    print(f"\n  ⚠️ Early stopping at epoch {epoch+1}")
                     break
         
         print(f"\nFold {fold_num} 完成。最佳 Val Acc: {best_val_acc:.4f}")
