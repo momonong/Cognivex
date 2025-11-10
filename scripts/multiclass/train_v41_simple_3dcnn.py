@@ -7,7 +7,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torch.cuda.amp import autocast, GradScaler
+try:
+    from torch.amp import autocast, GradScaler
+except ImportError:
+    from torch.cuda.amp import autocast, GradScaler
 import numpy as np
 import nibabel as nib
 import os
@@ -129,7 +132,8 @@ class MultiModalDataset(Dataset):
                         "label": label_id, "subject_id": subject_id
                     })
         
-        print(f"找到 {len(self.subjects)} 位病患")
+        if self.verbose:
+            print(f"找到 {len(self.subjects)} 位病患")
     
     def __len__(self):
         return len(self.subjects)
@@ -174,7 +178,8 @@ class MultiModalDataset(Dataset):
             return data_cropped
             
         except Exception as e:
-            print(f"錯誤：載入 {os.path.basename(nifti_path)} 失敗: {e}")
+            if self.verbose:
+                print(f"錯誤：載入 {os.path.basename(nifti_path)} 失敗: {e}")
             return np.zeros(PATCH_SIZE, dtype=np.float32)
     
     def __getitem__(self, idx):
@@ -192,7 +197,8 @@ class MultiModalDataset(Dataset):
             return torch.tensor(volume, dtype=torch.float32), subject["label"], subject["subject_id"]
         
         except Exception as e:
-            print(f"錯誤：處理 {subject['subject_id']} 失敗: {e}")
+            if self.verbose:
+                print(f"錯誤：處理 {subject['subject_id']} 失敗: {e}")
             return torch.zeros((3, *PATCH_SIZE), dtype=torch.float32), subject["label"], subject["subject_id"]
 
 
@@ -211,7 +217,7 @@ def train_epoch(model, dataloader, criterion, optimizer, device, scaler):
         
         optimizer.zero_grad()
         
-        with autocast():
+        with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
             outputs = model(volumes)
             loss = criterion(outputs, labels)
         
@@ -237,7 +243,7 @@ def validate_epoch(model, dataloader, criterion, device):
         for volumes, labels, _ in dataloader:
             volumes, labels = volumes.to(device), labels.to(device)
             
-            with autocast():
+            with autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu'):
                 outputs = model(volumes)
                 loss = criterion(outputs, labels)
             
@@ -257,9 +263,15 @@ def main():
     print("="*60)
     print("V41: Simple 3D CNN (基於你成功的架構)")
     print("="*60)
+    print(f"使用裝置: {DEVICE}")
+    print(f"Batch Size: {BATCH_SIZE}")
+    print(f"Patch Size: {PATCH_SIZE}")
+    print(f"學習率: {LEARNING_RATE}")
+    print(f"Epochs: {NUM_EPOCHS}")
+    print("="*60)
     
     # 1. 建立資料集
-    dataset = MultiModalDataset(DATA_ROOT)
+    dataset = MultiModalDataset(DATA_ROOT, verbose=True)
     
     if len(dataset) == 0:
         print("錯誤：沒有找到資料")
@@ -296,16 +308,21 @@ def main():
         train_subset = torch.utils.data.Subset(dataset, train_ids)
         val_subset = torch.utils.data.Subset(dataset, val_ids)
         
-        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
-        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4, pin_memory=True)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0, pin_memory=True)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0, pin_memory=True)
         
         # 建立模型
         model = Simple3DCNN_MultiClass(in_channels=3, num_classes=NUM_CLASSES).to(DEVICE)
         
         optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
         criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10)
-        scaler = GradScaler()
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=10, verbose=False)
+        
+        # 使用新的 GradScaler API
+        try:
+            scaler = GradScaler('cuda' if torch.cuda.is_available() else 'cpu')
+        except TypeError:
+            scaler = GradScaler()
         
         # 訓練
         best_val_acc = 0.0
