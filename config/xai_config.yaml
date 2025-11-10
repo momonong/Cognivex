@@ -1,0 +1,88 @@
+# XAI Analysis Configuration
+# Configuration for 3D CNN Brain Region Visualization and Explainability Analysis
+
+# Model Configuration
+model:
+  # Model architecture name
+  architecture: "Simple3DCNN_InstanceNorm"
+  
+  # Directory containing model weights (5-fold cross-validation)
+  weights_dir: "model/cnn_3d"
+  
+  # Number of folds for ensemble analysis
+  num_folds: 5
+  
+  # Compute device (cuda:0, cuda:1, or cpu)
+  device: "cuda:0"
+
+# Data Processing Configuration
+data:
+  # Patch size for 3D CNN input [depth, height, width]
+  patch_size: [128, 128, 128]
+  
+  # Target voxel size in mm [x, y, z]
+  target_voxel_size: [1.0, 1.0, 1.0]
+  
+  # Intensity normalization range [min, max]
+  intensity_range: [0.0, 1000.0]
+
+# Grad-CAM Settings
+gradcam:
+  # Target layer for Grad-CAM extraction
+  target_layer: "block4"
+  
+  # Threshold percentile for filtering low activations (0-100)
+  threshold_percentile: 95.0
+  
+  # Aggregation method for ensemble models: mean, max, or weighted
+  aggregation_method: "mean"
+
+# Brain Atlas Configuration
+atlas:
+  # Atlas name
+  name: "AAL3"
+  
+  # Path to atlas NIfTI file
+  path: "data/aal3/AAL3v1_1mm.nii.gz"
+  
+  # Path to atlas labels XML file
+  labels_path: "data/aal3/AAL3v1_1mm.xml"
+
+# Visualization Settings
+visualization:
+  # Colormap for heatmaps (hot, jet, viridis, etc.)
+  colormap: "hot"
+  
+  # Transparency/alpha value for overlay (0.0-1.0)
+  alpha: 0.7
+  
+  # Cut coordinates for slice views (null for automatic)
+  cut_coords: null
+  
+  # Display mode: ortho, x, y, z, xz, yz, xy
+  display_mode: "ortho"
+
+# Output Configuration
+output:
+  # Base directory for all outputs
+  base_dir: "output/cnn_3d/xai_analysis"
+  
+  # Save Grad-CAM heatmaps as NIfTI files
+  save_nifti: true
+  
+  # Save brain region scores as CSV
+  save_csv: true
+  
+  # Save visualization plots as PNG
+  save_plots: true
+  
+  # Save interactive HTML viewers
+  save_html: true
+
+# Batch Processing Configuration
+batch:
+  # Maximum number of parallel workers
+  max_workers: 4
+  
+  # Continue processing on error (don't stop entire batch)
+  continue_on_error: true
