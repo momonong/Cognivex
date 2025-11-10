@@ -80,11 +80,66 @@ python scripts/ml/analyze_feature_importance.py
 
 **預期結果：**
 ```
-關鍵腦區重要性佔比: 60%+  ← 表示模型學到正確特徵
-Top 20 中來自關鍵腦區: 12/20  ← 超過一半來自關鍵腦區
+關鍵腦區重要性佔比: 88.98%  ← 表示模型學到正確特徵
+Top 20 中來自關鍵腦區: 17/20  ← 超過一半來自關鍵腦區
 ```
 
-### 3. 使用模型預測
+### 3. 比較 24 ROIs vs 全部 116 ROIs（可選）
+
+如果你想驗證 24 個精選腦區是否足夠，可以進行完整比較：
+
+**步驟 1：提取所有 116 個 AAL ROI 特徵**
+```bash
+python scripts/ml/extract_all_roi_features.py
+```
+
+這會從所有 MRI 影像中提取全部 116 個 AAL 腦區的特徵。
+
+**步驟 2：比較不同特徵集**
+```bash
+python scripts/ml/compare_real_features.py
+```
+
+這會比較：
+- 24 個精選 ROIs
+- 全部 116 個 ROIs（Random Forest）
+- 全部 116 個 ROIs（L1 正則化）
+- Top 30 ROIs（單變量選擇）
+- Top 30 ROIs（互信息選擇）
+
+**輸出：**
+- 詳細的效能比較報告
+- 視覺化圖表
+- 過擬合分析
+- 建議使用哪種方法
+
+### 4. 訓練最終模型（混合方案）✨
+
+**推薦使用最終版本！**
+
+```bash
+python scripts/ml/train_final_model.py
+```
+
+這會訓練使用 **32 個 ROIs 的混合模型**：
+- 24 個文獻選擇的 ROIs（領域知識）
+- + 8 個數據驅動的 ROIs（從 Top 30 分析）
+- = 最佳平衡：效能 + 可解釋性
+
+**輸出：**
+- `model/ml/final/final_model.pkl` - 最終模型
+- `model/ml/final/final_scaler.pkl` - 特徵標準化器
+- `output/ml/final_model/final_model_report.txt` - 詳細報告
+- `output/ml/final_model/final_model_analysis.png` - 視覺化分析
+
+**預期結果：**
+```
+CV Accuracy: 75.4% ± 5.8%
+ROC-AUC: 80.1% ± 6.7%
+Overfitting Gap: 0.246
+```
+
+### 5. 使用模型預測
 
 ```bash
 python scripts/ml/predict.py --input path/to/image_T1.nii.gz
