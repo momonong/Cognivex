@@ -199,7 +199,9 @@ def render_structural_results(final_state: Dict[str, Any], ground_truth: str):
     
     structured_report = final_state.get("structured_report", {})
     if structured_report:
-        report_data = structured_report.get(lang.lower()[:2], structured_report.get("en", {}))
+        # Map language selection to report keys
+        lang_key = "zh" if lang == "中文" else "en"
+        report_data = structured_report.get(lang_key, structured_report.get("en", {}))
         
         if report_data:
             # Primary Finding
@@ -366,15 +368,29 @@ def render_structural_results(final_state: Dict[str, Any], ground_truth: str):
                     for limitation in limitations:
                         st.markdown(f"• {limitation}")
         else:
+            # Report data is empty - show debug info
             if lang == "中文":
-                st.info("報告生成中...")
+                st.warning("⚠️ 報告資料為空")
+                with st.expander("調試資訊"):
+                    st.write("structured_report 內容:", structured_report)
+                    st.write("語言鍵:", lang_key)
             else:
-                st.info("Report generation in progress...")
+                st.warning("⚠️ Report data is empty")
+                with st.expander("Debug Info"):
+                    st.write("structured_report content:", structured_report)
+                    st.write("Language key:", lang_key)
     else:
+        # No structured_report in final_state
         if lang == "中文":
-            st.info("報告生成中...")
+            st.warning("⚠️ 未找到報告資料")
+            with st.expander("調試資訊"):
+                st.write("final_state 鍵:", list(final_state.keys()))
+                st.write("是否包含 structured_report:", "structured_report" in final_state)
         else:
-            st.info("Report generation in progress...")
+            st.warning("⚠️ No report data found")
+            with st.expander("Debug Info"):
+                st.write("final_state keys:", list(final_state.keys()))
+                st.write("Has structured_report:", "structured_report" in final_state)
     
     # === KEY BRAIN REGIONS ===
     st.markdown("---")

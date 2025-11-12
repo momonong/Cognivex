@@ -3,7 +3,8 @@ from neo4j import GraphDatabase
 
 # 從環境變數讀取 Neo4j 的連接資訊
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-NEO4J_USERNAME = os.getenv("NEO4J_USERNAME", "neo4j")
+# 支援兩種環境變數名稱：NEO4J_USER 和 NEO4J_USERNAME
+NEO4J_USERNAME = os.getenv("NEO4J_USER") or os.getenv("NEO4J_USERNAME", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 def get_neo4j_driver():
