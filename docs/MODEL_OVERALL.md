@@ -22,7 +22,7 @@
 6. [實驗結果](#6-實驗結果)
 7. [臨床驗證](#7-臨床驗證)
 8. [討論與發現](#8-討論與發現)
-9. [限制與未來工 作](#9-限制與未來工作)
+9. [限制與未來工作](#9-限制與未來工作)
 10. [結論](#10-結論)
 
 ---
@@ -2381,6 +2381,4 @@ Storage: 10+ GB
 **聯絡方式**：
 - 查看 `docs/MODEL.md` 了解詳細方法論
 - 查看 `docs/FINAL_MODEL_SUMMARY.md` 了解快速摘要
-- 查看 `output/ml/final_model/final_model_report.txt` 了解完整結果
-- 查看 `scripts/ml/train_final_model.py` 了解實現細節
-
+- 查看 `output/ml/final_model/final

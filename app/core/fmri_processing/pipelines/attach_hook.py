@@ -113,8 +113,8 @@ if __name__ == "__main__":
     )  # 假設已經在當前模組中
 
     # 1. Import the new central loader
-    # 確保路徑正確：從 app.core.model.loader 導入
-    from model.loader import get_model_and_input_shape
+    # 確保路徑正確：從 app.core.fmri_processing.fmri_model_loader 導入
+    from app.core.fmri_processing.fmri_model_loader import get_model_and_input_shape
 
     # 2. Get the model and its input shape
     MODEL, input_shape = get_model_and_input_shape()
