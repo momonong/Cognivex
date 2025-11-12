@@ -3,18 +3,32 @@ from typing import Any, Union, Optional, Type
 from pathlib import Path
 import mimetypes
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+
+# --- 嘗試導入 Google GenAI，如果失敗則設為 None ---
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_AVAILABLE = True
+except ImportError:
+    genai = None
+    types = None
+    GENAI_AVAILABLE = False
+    print("[WARNING] google-generativeai not installed. Gemini provider will not be available.")
 
 # --- 初始化 ---
 load_dotenv()
 GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION")
-gemini_client = genai.Client(
-    vertexai=True,
-    project=str(GOOGLE_CLOUD_PROJECT),
-    location=str(GOOGLE_CLOUD_LOCATION),
-)
+
+if GENAI_AVAILABLE and GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION:
+    gemini_client = genai.Client(
+        vertexai=True,
+        project=str(GOOGLE_CLOUD_PROJECT),
+        location=str(GOOGLE_CLOUD_LOCATION),
+    )
+else:
+    gemini_client = None
+
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 
@@ -27,7 +41,29 @@ def build_gemini_config(
     temperature: float = 0,
     seed: int = 42,
     **kwargs,  
-) -> types.GenerateContentConfig:
+):
+    """建立 Gemini 配置"""
+    if not GENAI_AVAILABLE:
+        raise RuntimeError("google-generativeai is not installed. Cannot use Gemini provider.")
+    
+    return _build_gemini_config_impl(
+        mime_type=mime_type,
+        system_instruction=system_instruction,
+        response_schema=response_schema,
+        temperature=temperature,
+        seed=seed,
+        **kwargs
+    )
+
+def _build_gemini_config_impl(
+    *,
+    mime_type: Optional[str] = "text/plain",
+    system_instruction: Optional[str] = None,
+    response_schema: Optional[Type] = None,
+    temperature: float = 0,
+    seed: int = 42,
+    **kwargs,  
+) -> "types.GenerateContentConfig":
 
     if response_schema:
         final_mime_type = "application/json"
@@ -46,8 +82,10 @@ def build_gemini_config(
 
 def prepare_image_parts_from_paths(
     image_path: Union[str, Path, list[Union[str, Path]]],
-) -> list[types.Part]:
+) -> list:
     """從路徑載入圖片並回傳 Gemini Part 物件列表。"""
+    if not GENAI_AVAILABLE:
+        raise RuntimeError("google-generativeai is not installed. Cannot use Gemini provider.")
     if isinstance(image_path, (str, Path)):
         image_path_list = [Path(image_path)]
     else:
@@ -70,6 +108,9 @@ def handle_text(
     prompt: str | list, *, model: str = DEFAULT_GEMINI_MODEL, **kwargs
 ) -> str | Any:
     """(內部) Vertex AI Gemini 聊天函式。"""
+    if not GENAI_AVAILABLE or not gemini_client:
+        raise RuntimeError("Gemini client is not available. Check your configuration.")
+    
     config = build_gemini_config(**kwargs)
     response = gemini_client.models.generate_content(
         model=model,
@@ -87,6 +128,9 @@ def handle_image(
     **kwargs,
 ) -> str:
     """(內部) 使用 Gemini 處理一個或多個圖片 + 提示詞。"""
+    if not GENAI_AVAILABLE or not gemini_client:
+        raise RuntimeError("Gemini client is not available. Check your configuration.")
+    
     image_parts = prepare_image_parts_from_paths(image_path)
     parts = [types.Part(text=prompt)] + image_parts
     config = build_gemini_config(**kwargs)

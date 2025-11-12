@@ -12,19 +12,36 @@ from nilearn import image as nimg
 # ---### 變更點 1: 匯入 LangGraph App ###---
 from app.graph.workflow import app
 
+# ---### 變更點 2: 匯入結構性 MRI UI 組件 ###---
+from app.ui.structural_mri_components import (
+    render_analysis_mode_selector,
+    render_structural_results
+)
+
 
 # ---### 變更點 2: 更新快取函式以處理 4D 數據 ###---
 @st.cache_resource(show_spinner="正在載入並處理 NIfTI 檔案...")
-def load_4d_nifti(path: str):
+def load_nifti(path: str):
     """
-    載入 4D NIfTI 檔案並回傳 nilearn 影像物件和時間點總數。
+    載入 NIfTI 檔案並回傳 nilearn 影像物件和時間點總數。
+    支援 3D (結構性 MRI) 和 4D (功能性 MRI) 影像。
     """
     try:
-        img_4d = nimg.load_img(path)
-        num_time_points = img_4d.shape[3]
-        return img_4d, num_time_points
+        img = nimg.load_img(path)
+        # 檢查維度
+        if len(img.shape) == 4:
+            # 4D 影像（功能性 MRI）
+            num_time_points = img.shape[3]
+            return img, num_time_points
+        elif len(img.shape) == 3:
+            # 3D 影像（結構性 MRI）
+            # 返回影像本身，時間點為 1
+            return img, 1
+        else:
+            st.error(f"不支援的影像維度: {img.shape}")
+            return None, 0
     except Exception as e:
-        st.error(f"載入或處理 4D 檔案失敗: {path}. 錯誤: {e}")
+        st.error(f"載入 NIfTI 檔案失敗: {path}. 錯誤: {e}")
         return None, 0
 
 
@@ -43,19 +60,50 @@ if "analysis_running" not in st.session_state:
 
 st.sidebar.header("Analysis Controls")
 
+# 分析模式選擇
+analysis_mode = render_analysis_mode_selector()
+if "analysis_mode" not in st.session_state:
+    st.session_state.analysis_mode = analysis_mode
+else:
+    st.session_state.analysis_mode = analysis_mode
+
+st.sidebar.markdown("---")
+
 # 受試者選擇 - 分析時禁用但保持在原位
-subject_folders = glob.glob("data/raw/*/sub-*")
+# 根據分析模式使用不同的資料路徑
 subject_labels = {}
-for folder_path in subject_folders:
-    parts = folder_path.split(os.sep)
-    if len(parts) >= 4:
-        subject_id = parts[-1]
-        label = parts[-2]
-        subject_labels[subject_id] = label
+
+if st.session_state.analysis_mode == "structural":
+    # 結構性 MRI: 使用 data/sMRI（子資料夾結構）
+    smri_folders = glob.glob("data/sMRI/*/sub-*")
+    for folder_path in smri_folders:
+        parts = folder_path.split(os.sep)
+        if len(parts) >= 3:
+            subject_id = parts[-1]  # sub-0005
+            label = parts[-2]  # AD or NC
+            # 統一格式為 sub_XXXX
+            subject_id_normalized = subject_id.replace("-", "_")
+            subject_labels[subject_id_normalized] = label
+else:
+    # 功能性 MRI: 使用 data/fMRI（子資料夾結構）
+    fmri_folders = glob.glob("data/fMRI/*/sub-*")
+    for folder_path in fmri_folders:
+        parts = folder_path.split(os.sep)
+        if len(parts) >= 3:
+            subject_id = parts[-1]
+            label = parts[-2]
+            # 處理 CN -> NC 的標籤轉換
+            if label == "CN":
+                label = "NC"
+            subject_labels[subject_id] = label
+
 subject_list = sorted(subject_labels.keys())
 if not subject_list:
+    mode_name = "結構性 MRI (sMRI)" if st.session_state.analysis_mode == "structural" else "功能性 MRI (fMRI)"
+    data_path = "data/sMRI/" if st.session_state.analysis_mode == "structural" else "data/fMRI/"
     st.sidebar.error(
-        "在 'data/raw' 路徑下找不到任何 'AD/sub-XX' 或 'NC/sub-XX' 資料夾。"
+        f"找不到任何 {mode_name} 受試者資料。\n"
+        f"請確認資料在 {data_path} 目錄下。"
     )
     st.stop()
 
@@ -86,58 +134,105 @@ else:
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
 
-# 模型選擇 - 添加 ShuffleNet 支援
-models = {"ShuffleNet": "shufflenet", "CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
+st.sidebar.markdown("---")
 
-current_model = st.session_state.get("selected_model_display")
-model_list = list(models.keys())
-if current_model and current_model in model_list:
-    default_model_index = model_list.index(current_model)
+# 模型選擇 - 根據分析模式顯示不同選項
+if st.session_state.analysis_mode == "structural":
+    # 結構性 MRI - 使用機器學習模型（仿照 fMRI 的呈現方式）
+    models = {"Random Forest": "random_forest"}
+    
+    current_model = st.session_state.get("selected_model_display")
+    model_list = list(models.keys())
+    if current_model and current_model in model_list:
+        default_model_index = model_list.index(current_model)
+    else:
+        default_model_index = 0
+    
+    if is_running:
+        # 分析中：顯示當前模型但禁用
+        selected_model_display = st.sidebar.selectbox(
+            "Select ML Model:",
+            [current_model or "N/A"],
+            disabled=True,
+            help="Model selection is locked during analysis.",
+        )
+    else:
+        # 正常狀態：正常選擇
+        selected_model_display = st.sidebar.selectbox(
+            "Select ML Model:",
+            model_list,
+            index=default_model_index,
+            help="Choose the machine learning model for structural MRI classification.",
+        )
+    selected_model_key = models[selected_model_display]
+    model_path = None  # Will use default from config
+    
+    # 顯示模型詳細信息
+    model_info = {
+        "random_forest": {
+            "type": "Random Forest Classifier",
+            "description": "Ensemble learning method using ROI-based features from AAL atlas",
+            "best_for": "Structural MRI analysis with 32 ROI features, interpretable results",
+        }
+    }
+    if selected_model_key in model_info:
+        info = model_info[selected_model_key]
+        st.sidebar.caption(f"**Model Type:** {info['type']}")
+        st.sidebar.caption(f"**Description:** {info['description']}")
+        st.sidebar.caption(f"**Best for:** {info['best_for']}")
 else:
-    # 設定 ShuffleNet 為預設選項（第一個）
-    default_model_index = 0
+    # 功能性 MRI - 使用深度學習模型
+    models = {"ShuffleNet": "shufflenet", "CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
 
-if is_running:
-    # 分析中：顯示當前模型但禁用
-    selected_model_display = st.sidebar.selectbox(
-        "Select Inference Model:",
-        [current_model or "N/A"],
-        disabled=True,
-        help="Model selection is locked during analysis.",
-    )
-else:
-    # 正常狀態：正常選擇
-    selected_model_display = st.sidebar.selectbox(
-        "Select Inference Model:",
-        model_list,
-        index=default_model_index,
-        help="Choose the neural network model for fMRI classification.",
-    )
-selected_model_key = models[selected_model_display]
+    current_model = st.session_state.get("selected_model_display")
+    model_list = list(models.keys())
+    if current_model and current_model in model_list:
+        default_model_index = model_list.index(current_model)
+    else:
+        # 設定 ShuffleNet 為預設選項（第一個）
+        default_model_index = 0
 
-# 顯示模型詳細信息
-model_info = {
-    "shufflenet": {
-        "type": "2D ShuffleNet with ECA Attention",
-        "description": "High-accuracy 2D CNN with attention mechanism for slice-based analysis",
-        "best_for": "High-accuracy AD/NC classification (80%+), efficient 2D processing",
-    },
-    "capsnet": {
-        "type": "3D Capsule Network",
-        "description": "Advanced neural network with capsule layers for spatial relationships",
-        "best_for": "Complex 3D fMRI patterns, part-whole relationships",
-    },
-    "mcadnnet": {
-        "type": "2D Convolutional Neural Network",
-        "description": "Traditional CNN architecture for 2D slice analysis",
-        "best_for": "2D brain slice patterns, computational efficiency",
-    },
-}
-if selected_model_key in model_info:
-    info = model_info[selected_model_key]
-    st.sidebar.caption(f"**Model Type:** {info['type']}")
-    st.sidebar.caption(f"**Description:** {info['description']}")
-    st.sidebar.caption(f"**Best for:** {info['best_for']}")
+    if is_running:
+        # 分析中：顯示當前模型但禁用
+        selected_model_display = st.sidebar.selectbox(
+            "Select Inference Model:",
+            [current_model or "N/A"],
+            disabled=True,
+            help="Model selection is locked during analysis.",
+        )
+    else:
+        # 正常狀態：正常選擇
+        selected_model_display = st.sidebar.selectbox(
+            "Select Inference Model:",
+            model_list,
+            index=default_model_index,
+            help="Choose the neural network model for fMRI classification.",
+        )
+    selected_model_key = models[selected_model_display]
+
+    # 顯示模型詳細信息
+    model_info = {
+        "shufflenet": {
+            "type": "2D ShuffleNet with ECA Attention",
+            "description": "High-accuracy 2D CNN with attention mechanism for slice-based analysis",
+            "best_for": "High-accuracy AD/NC classification (80%+), efficient 2D processing",
+        },
+        "capsnet": {
+            "type": "3D Capsule Network",
+            "description": "Advanced neural network with capsule layers for spatial relationships",
+            "best_for": "Complex 3D fMRI patterns, part-whole relationships",
+        },
+        "mcadnnet": {
+            "type": "2D Convolutional Neural Network",
+            "description": "Traditional CNN architecture for 2D slice analysis",
+            "best_for": "2D brain slice patterns, computational efficiency",
+        },
+    }
+    if selected_model_key in model_info:
+        info = model_info[selected_model_key]
+        st.sidebar.caption(f"**Model Type:** {info['type']}")
+        st.sidebar.caption(f"**Description:** {info['description']}")
+        st.sidebar.caption(f"**Best for:** {info['best_for']}")
 
 # 檢查是否有參數變更，如果有則重置分析狀態
 prev_subject = st.session_state.get('selected_subject')
@@ -234,28 +329,53 @@ if st.session_state.get("analysis_running", False) and not st.session_state.get(
             status_text.text("Preparing analysis...")
             progress_bar.progress(10)
 
-            model_paths_map = {
-                "shufflenet": "model/shufflenet/fold_3_best_model.pth",
-                "capsnet": "model/capsnet/best_capsnet_rnn.pth",
-                "mcadnnet": "model/macadnnet/._best_overall_model.pth",
-            }
-            model_path = model_paths_map.get(selected_model_key)
-            if not model_path:
-                raise FileNotFoundError(
-                    f"找不到模型 '{selected_model_key}' 的路徑設定。"
-                )
+            # 根據分析模式設定模型路徑
+            if st.session_state.analysis_mode == "structural":
+                model_path = None  # 使用 config 中的預設路徑
+            else:
+                model_paths_map = {
+                    "shufflenet": "model/shufflenet/fold_3_best_model.pth",
+                    "capsnet": "model/capsnet/best_capsnet_rnn.pth",
+                    "mcadnnet": "model/macadnnet/._best_overall_model.pth",
+                }
+                model_path = model_paths_map.get(selected_model_key)
+                if not model_path:
+                    raise FileNotFoundError(
+                        f"找不到模型 '{selected_model_key}' 的路徑設定。"
+                    )
 
             status_text.text("Loading data files...")
             progress_bar.progress(20)
 
-            nii_search_pattern = f"data/raw/*/{selected_subject}/*.nii.gz"
-            nii_file_list = glob.glob(nii_search_pattern)
-            if not nii_file_list:
-                raise FileNotFoundError(
-                    f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。"
-                )
-            nii_path = nii_file_list[0]
-            st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
+            # 根據分析模式搜尋不同的檔案
+            if st.session_state.analysis_mode == "structural":
+                # 結構性 MRI: 從 data/sMRI 搜尋 T1 檔案
+                label = ground_truth_label
+                # 將 sub_XXXX 轉換為 sub-XXXX（資料夾格式）
+                subject_folder = selected_subject.replace("_", "-")
+                nii_search_pattern = f"data/sMRI/{label}/{subject_folder}/*_T1.nii.gz"
+                nii_file_list = glob.glob(nii_search_pattern)
+                
+                if not nii_file_list:
+                    raise FileNotFoundError(
+                        f"找不到受試者 '{selected_subject}' 的 T1 檔案。\n"
+                        f"搜尋路徑: {nii_search_pattern}\n"
+                        f"請確認檔案存在於 data/sMRI/{label}/{subject_folder}/ 目錄下"
+                    )
+                
+                nii_path = nii_file_list[0]
+                st.info(f"Files found:\n- T1 MRI: {nii_path}")
+            else:
+                # 功能性 MRI: 從 data/fMRI 搜尋檔案
+                nii_search_pattern = f"data/fMRI/*/{selected_subject}/*.nii.gz"
+                nii_file_list = glob.glob(nii_search_pattern)
+                if not nii_file_list:
+                    raise FileNotFoundError(
+                        f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。\n"
+                        f"搜尋路徑: {nii_search_pattern}"
+                    )
+                nii_path = nii_file_list[0]
+                st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
 
             status_text.text("Starting brain analysis workflow...")
             progress_bar.progress(30)
@@ -264,7 +384,10 @@ if st.session_state.get("analysis_running", False) and not st.session_state.get(
                 "subject_id": selected_subject,
                 "fmri_scan_path": nii_path,
                 "model_path": model_path,
-                "model_name": selected_model_key,  # 新增模型名稱
+                "model_name": selected_model_key,
+                "analysis_mode": st.session_state.analysis_mode,  # 新增分析模式
+                "trace_log": [],
+                "error_log": []
             }
 
             status_text.text("Running AI analysis pipeline...")
@@ -321,23 +444,31 @@ if st.session_state.get("run_complete", False):
     st.markdown("---")
     st.header("Analysis Results")
 
-    # 活化圖與預測結果顯示
-    st.subheader("Subject Activation overlay on brain.")
-    try:
-        viz_path = final_state.get("visualization_paths", [])[0]
-        st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}")
-    except Exception as e:
-        st.error(f"Cannot display image. Path is missing or invalid: {e}")
-
-    predicted_label = final_state.get("classification_result", "N/A")
-    st.subheader("Prediction Verification")
-    col1, col2 = st.columns(2)
-    col1.metric("Ground Truth", report_ground_truth)
-    col2.metric("Model Prediction", predicted_label)
-    if report_ground_truth == predicted_label:
-        st.success("✅ Prediction is Correct")
+    # 判斷分析模式並顯示對應結果
+    analysis_mode = final_state.get("analysis_mode", "functional")
+    
+    if analysis_mode == "structural":
+        # 顯示結構性 MRI 結果
+        render_structural_results(final_state, report_ground_truth)
     else:
-        st.error("❌ Prediction is Incorrect")
+        # 顯示功能性 MRI 結果（原有邏輯）
+        # 活化圖與預測結果顯示
+        st.subheader("Subject Activation overlay on brain.")
+        try:
+            viz_path = final_state.get("visualization_paths", [])[0]
+            st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}")
+        except Exception as e:
+            st.error(f"Cannot display image. Path is missing or invalid: {e}")
+
+        predicted_label = final_state.get("classification_result", "N/A")
+        st.subheader("Prediction Verification")
+        col1, col2 = st.columns(2)
+        col1.metric("Ground Truth", report_ground_truth)
+        col2.metric("Model Prediction", predicted_label)
+        if report_ground_truth == predicted_label:
+            st.success("✅ Prediction is Correct")
+        else:
+            st.error("❌ Prediction is Incorrect")
 
     # ---### 整合最終版互動式檢視器 ###---
     is_expanded_default = st.session_state.get("viewer_expanded", False)
@@ -346,32 +477,41 @@ if st.session_state.get("run_complete", False):
     ):
         nii_path = st.session_state.get("nii_path")
         if nii_path and Path(nii_path).exists():
-            # 呼叫新的 4D 數據載入函數
-            img_4d, num_time_points = load_4d_nifti(nii_path)
+            # 載入 NIfTI 檔案（支援 3D 和 4D）
+            img, num_time_points = load_nifti(nii_path)
 
-            if img_4d and num_time_points > 0:
-                # 顯示時間軸滑桿，讓使用者可以選擇
-                # 為了讓使用者介面從 1 開始，我們設定 min_value=1, max_value=num_time_points
-                selected_time_point_display = st.slider(
-                    "Time Point (Volume)",
-                    min_value=1,
-                    max_value=num_time_points,
-                    value=1,
-                    help=f"This fMRI scan has {num_time_points} volumes.",
-                )
+            if img and num_time_points > 0:
+                # 根據影像維度決定是否顯示時間軸滑桿
+                if num_time_points > 1:
+                    # 4D 影像：顯示時間軸滑桿
+                    selected_time_point_display = st.slider(
+                        "Time Point (Volume)",
+                        min_value=1,
+                        max_value=num_time_points,
+                        value=1,
+                        help=f"This scan has {num_time_points} volumes.",
+                    )
+                    # 轉換為 0-based 索引
+                    selected_time_point_index = selected_time_point_display - 1
+                    # 提取指定時間點的 3D 影像
+                    img_3d_at_t = nimg.index_img(img, selected_time_point_index)
+                else:
+                    # 3D 影像：直接使用
+                    img_3d_at_t = img
+                    selected_time_point_display = None
 
-                # 在後端處理時，我們需要將使用者的 1-based 索引轉換為 0-based 索引
-                selected_time_point_index = selected_time_point_display - 1
-
-                # 根據選擇的時間點，產生對應的 3D 檢視器
-                img_3d_at_t = nimg.index_img(img_4d, selected_time_point_index)
+                # 根據影像類型設定標題
+                if selected_time_point_display:
+                    title = f"Volume at T={selected_time_point_display}"
+                else:
+                    title = "Structural MRI (T1-weighted)"
 
                 viewer = plotting.view_img(
                     img_3d_at_t,
                     bg_img=None,
                     cmap="gray",
                     threshold=None,
-                    title=f"Volume at T={selected_time_point_display}",  # 顯示 1-based 的時間點
+                    title=title,
                     resampling_interpolation="nearest",
                     colorbar=False,
                     annotate=True,

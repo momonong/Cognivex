@@ -10,18 +10,30 @@ from pathlib import Path
 from pydantic import BaseModel, Field, create_model
 import traceback
 
-from langchain_aws import ChatBedrock
-from langchain_core.messages import HumanMessage, SystemMessage
+# --- 嘗試導入 langchain_aws，如果失敗則設為 None ---
+try:
+    from langchain_aws import ChatBedrock
+    from langchain_core.messages import HumanMessage, SystemMessage
+    BEDROCK_AVAILABLE = True
+except ImportError:
+    ChatBedrock = None
+    HumanMessage = None
+    SystemMessage = None
+    BEDROCK_AVAILABLE = False
+    print("[WARNING] langchain_aws not installed. Bedrock provider will not be available.")
 
 # --- 初始化 ---
 DEFAULT_BEDROCK_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 
-chat_client = ChatBedrock(
-    model_id=DEFAULT_BEDROCK_MODEL_ID,
-    region_name=REGION,
-    model_kwargs={"temperature": 0.1},
-)
+if BEDROCK_AVAILABLE:
+    chat_client = ChatBedrock(
+        model_id=DEFAULT_BEDROCK_MODEL_ID,
+        region_name=REGION,
+        model_kwargs={"temperature": 0.1},
+    )
+else:
+    chat_client = None
 
 
 # --- Bedrock 專屬輔助函式 ---

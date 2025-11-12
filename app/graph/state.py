@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, Literal
 
 class BrainRegionInfo(TypedDict):
     """Stores detailed information for a single brain region."""
@@ -7,6 +7,11 @@ class BrainRegionInfo(TypedDict):
     hemisphere: str
     associated_networks: Optional[List[str]]
     known_functions: Optional[str]
+    
+    # === Structural MRI specific fields ===
+    feature_value: Optional[float]  # Original feature value (standardized)
+    importance_rank: Optional[int]  # Ranking by importance
+    clinical_relevance: Optional[str]  # Clinical significance from MODEL_OVERALL.md
 
 class AgentState(TypedDict):
     """
@@ -19,7 +24,11 @@ class AgentState(TypedDict):
     subject_id: str
     fmri_scan_path: str
     model_path: Optional[str]
-    model_name: Optional[str]  # 新增: 模型名稱 ("capsnet", "mcadnnet", etc.)
+    model_name: Optional[str]  # 模型名稱 ("capsnet", "mcadnnet", etc.)
+    
+    # === Analysis Mode Control ===
+    analysis_mode: Optional[Literal["structural", "functional"]]  # Analysis type
+    ml_model_type: Optional[str]  # ML model type ("random_forest", "svm", etc.)
 
     # === 2. Intermediate Data ===
     # Data passed between internal nodes of the fMRI analysis pipeline.
@@ -36,6 +45,13 @@ class AgentState(TypedDict):
     image_explanation: Optional[Dict[str, Any]]
     rag_summary: Optional[str]
     generated_reports: Optional[Dict[str, str]]
+    
+    # === Structural MRI Specific Outputs ===
+    roi_features: Optional[Dict[str, float]]  # ROI name -> feature value
+    feature_importances: Optional[Dict[str, float]]  # ROI name -> importance
+    prediction_confidence: Optional[float]  # Prediction confidence (0-1)
+    feature_importance_plot_path: Optional[str]  # Path to importance chart
+    roi_visualization_path: Optional[str]  # Path to brain visualization
 
     # === 4. System & Tracing ===
     # For logging and error handling throughout the workflow.
