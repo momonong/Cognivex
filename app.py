@@ -522,18 +522,19 @@ if st.session_state.get("run_complete", False):
         else:
             st.warning("Could not find the original NIfTI file for this viewer.")
 
-    # 中英文報告分頁
-    reports = final_state.get("generated_reports", {})
-    report_en = reports.get("en", "No English report was generated.")
-    report_zh = reports.get("zh", "沒有生成中文報告。")
+    # 中英文報告分頁 - 只在功能性 MRI 模式下顯示
+    if analysis_mode == "functional":
+        reports = final_state.get("generated_reports", {})
+        report_en = reports.get("en", "No English report was generated.")
+        report_zh = reports.get("zh", "沒有生成中文報告。")
 
-    tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
-    with tab_en:
-        st.subheader("Clinical Report (English)")
-        st.markdown(report_en, unsafe_allow_html=True)
-    with tab_zh:
-        st.subheader("臨床分析報告 (繁體中文)")
-        st.markdown(report_zh, unsafe_allow_html=True)
+        tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
+        with tab_en:
+            st.subheader("Clinical Report (English)")
+            st.markdown(report_en, unsafe_allow_html=True)
+        with tab_zh:
+            st.subheader("臨床分析報告 (繁體中文)")
+            st.markdown(report_zh, unsafe_allow_html=True)
 else:
     st.info(
         "Please select a subject and model, then click 'Start Analysis' in the sidebar to view results."

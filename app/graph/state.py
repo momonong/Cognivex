@@ -44,7 +44,8 @@ class AgentState(TypedDict):
     visualization_paths: Optional[List[str]]
     image_explanation: Optional[Dict[str, Any]]
     rag_summary: Optional[str]
-    generated_reports: Optional[Dict[str, str]]
+    generated_reports: Optional[Dict[str, str]]  # For functional MRI text reports
+    structured_report: Optional[Dict[str, Dict[str, Any]]]  # For structural MRI JSON reports
     
     # === Structural MRI Specific Outputs ===
     roi_features: Optional[Dict[str, float]]  # ROI name -> feature value

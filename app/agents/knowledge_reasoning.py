@@ -46,9 +46,14 @@ def enrich_with_knowledge_graph(state: AgentState) -> dict:
     kg_results = kg_data.get("result", [])
     
     # 6. 為了方便快速查找，將 KG 結果轉換成一個字典 (lookup map)
-    #    鍵是腦區名稱，值是從 KG 查回的完整記錄
-    results_map = {item["region"]: item for item in kg_results}
+    #    鍵是輸入的腦區名稱（AI 模型傳入的），值是從 KG 查回的完整記錄
+    #    使用 inputRegion 作為鍵，這樣可以正確匹配原始的 region_name
+    results_map = {item["inputRegion"]: item for item in kg_results if item.get("region")}
     print(f"  - Successfully retrieved KG data for {len(results_map)} regions.")
+    
+    # 記錄匹配詳情以便調試
+    if kg_results:
+        print(f"  - Sample mapping: {kg_results[0].get('inputRegion')} -> {kg_results[0].get('region')}")
 
     # 7. 將 KG 的結果合併回我們原有的 activated_regions 列表中
     enriched_regions = []
@@ -61,13 +66,18 @@ def enrich_with_knowledge_graph(state: AgentState) -> dict:
         if region_name in results_map:
             kg_info = results_map[region_name]
             
-            # 安全地獲取 network 和 functions 資訊
-            network = kg_info.get("network")
+            # 安全地獲取 networks 和 functions 資訊
+            # 注意：現在 networks 已經是列表了
+            networks = kg_info.get("networks", [])
             functions = kg_info.get("functions", [])
+            
+            # 過濾掉空值
+            networks = [n for n in networks if n]
+            functions = [f for f in functions if f]
             
             # 更新字典，加入新的鍵值對
             enriched_region_info.update({
-                "associated_networks": [network] if network else [],
+                "associated_networks": networks,
                 "known_functions": functions
             })
         
