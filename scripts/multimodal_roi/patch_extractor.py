@@ -53,7 +53,7 @@ class AAL116PatchExtractor:
         # Load AAL atlas
         self.atlas_img, self.atlas_data, self.roi_labels = self._load_aal_atlas()
         
-        print(f"✅ AAL-116 Patch Extractor initialized")
+        print(f"[OK] AAL-116 Patch Extractor initialized")
         print(f"   Target patch size: {target_patch_size}")
         print(f"   Number of ROIs: {len(self.roi_labels)}")
     
@@ -73,7 +73,7 @@ class AAL116PatchExtractor:
             if roi_labels[0].lower() == 'background':
                 roi_labels = roi_labels[1:]
             
-            print(f"✅ Loaded AAL atlas from nilearn")
+            print(f"[OK] Loaded AAL atlas from nilearn")
             print(f"   Atlas shape: {atlas_data.shape}")
             print(f"   Number of ROIs: {len(roi_labels)}")
             print(f"   ROI indices: {np.unique(atlas_data)[1:][:5]}... (showing first 5)")
@@ -81,7 +81,7 @@ class AAL116PatchExtractor:
             return atlas_img, atlas_data, roi_labels
             
         except Exception as e:
-            print(f"⚠️ Could not load AAL atlas from nilearn: {e}")
+            print(f"[WARN] Could not load AAL atlas from nilearn: {e}")
             print("   Please ensure nilearn is installed and has internet access")
             raise
     
@@ -284,7 +284,7 @@ def test_patch_extractor():
                         t1_path, t2_path, dwi_path
                     )
                     
-                    print(f"\n✅ Patch extraction successful!")
+                    print(f"\n[OK] Patch extraction successful!")
                     print(f"   T1 patches shape: {patches['T1'].shape}")
                     print(f"   T2 patches shape: {patches['T2_FLAIR'].shape}")
                     print(f"   DWI patches shape: {patches['DWI'].shape}")
@@ -298,7 +298,7 @@ def test_patch_extractor():
                     
                     return
     
-    print("\n⚠️ No test data found. Please check data path.")
+    print("\n[WARN] No test data found. Please check data path.")
     print("   Expected path: E:/fMRI/Model/sMRI_data_MultiModal_Aligned_MNI/")
 
 

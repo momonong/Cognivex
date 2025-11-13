@@ -179,3 +179,4 @@ cython_debug/
 /figures
 /model
 gcp-service-account.json
+/cache

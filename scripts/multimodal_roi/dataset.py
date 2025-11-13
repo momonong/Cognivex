@@ -68,7 +68,7 @@ class MultiModalROIDataset(Dataset):
         # Collect all subjects
         self.subjects = self._collect_subjects()
         
-        print(f"✅ Dataset initialized: {split}")
+        print(f"[OK] Dataset initialized: {split}")
         print(f"   Total subjects: {len(self.subjects)}")
         print(f"   NC: {sum(1 for s in self.subjects if s['label'] == 0)}")
         print(f"   MCI: {sum(1 for s in self.subjects if s['label'] == 1)}")
@@ -82,7 +82,7 @@ class MultiModalROIDataset(Dataset):
             class_dir = self.data_root / label_name
             
             if not class_dir.exists():
-                print(f"⚠️ Directory not found: {class_dir}")
+                print(f"[WARN] Directory not found: {class_dir}")
                 continue
             
             # Find all T1 files
@@ -134,7 +134,7 @@ class MultiModalROIDataset(Dataset):
                 with open(subject['cache_path'], 'rb') as f:
                     patches = pickle.load(f)
             except Exception as e:
-                print(f"⚠️ Failed to load cache for {subject['subject_id']}: {e}")
+                print(f"[WARN] Failed to load cache for {subject['subject_id']}: {e}")
                 patches = None
         else:
             patches = None
@@ -153,7 +153,7 @@ class MultiModalROIDataset(Dataset):
                     with open(subject['cache_path'], 'wb') as f:
                         pickle.dump(patches, f)
                 except Exception as e:
-                    print(f"⚠️ Failed to save cache for {subject['subject_id']}: {e}")
+                    print(f"[WARN] Failed to save cache for {subject['subject_id']}: {e}")
         
         # Apply transform if provided
         if self.transform:
@@ -322,14 +322,14 @@ def test_dataset():
     )
     
     if len(dataset) == 0:
-        print("⚠️ No subjects found in dataset")
+        print("[WARN] No subjects found in dataset")
         return
     
     # Test loading one sample
     print(f"\nLoading first sample...")
     sample = dataset[0]
     
-    print(f"\n✅ Sample loaded successfully!")
+    print(f"\n[OK] Sample loaded successfully!")
     print(f"   Subject ID: {sample['subject_id']}")
     print(f"   Label: {sample['label']}")
     print(f"   T1 patches shape: {sample['patches']['T1'].shape}")
@@ -341,7 +341,7 @@ def test_dataset():
     loader = DataLoader(dataset, batch_size=2, shuffle=False, num_workers=0)
     
     batch = next(iter(loader))
-    print(f"\n✅ Batch loaded successfully!")
+    print(f"\n[OK] Batch loaded successfully!")
     print(f"   Batch size: {len(batch['label'])}")
     print(f"   T1 patches shape: {batch['patches']['T1'].shape}")
     print(f"   Labels: {batch['label']}")

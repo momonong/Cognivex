@@ -293,7 +293,7 @@ def test_model():
     total_params = sum(p.numel() for p in multi_model.parameters())
     print(f"\nTotal parameters (3 Mini-CNNs): {total_params:,}")
     
-    print("\n✅ Model test passed!")
+    print("\n[OK] Model test passed!")
 
 
 if __name__ == "__main__":
