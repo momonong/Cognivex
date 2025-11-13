@@ -15,7 +15,10 @@ def render_analysis_mode_selector() -> str:
     
     mode_display = st.sidebar.selectbox(
         "Analysis Mode",
-        options=["Structural MRI (T1)", "Functional MRI (fMRI)"],
+        options=[
+            "Structural MRI (T1)", 
+            # "Functional MRI (fMRI)" #! Function MRI mode not supported now.
+        ],
         index=0,
         help="Select the type of MRI analysis to perform",
         key="analysis_mode_selector"
@@ -23,7 +26,7 @@ def render_analysis_mode_selector() -> str:
     
     mode_map = {
         "Functional MRI (fMRI)": "functional",
-        "Structural MRI (T1)": "structural"
+        "Structural MRI (T1)": "structural" 
     }
     
     return mode_map[mode_display]

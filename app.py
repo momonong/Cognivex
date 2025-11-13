@@ -67,7 +67,6 @@ if "analysis_mode" not in st.session_state:
 else:
     st.session_state.analysis_mode = analysis_mode
 
-st.sidebar.markdown("---")
 
 # 受試者選擇 - 分析時禁用但保持在原位
 # 根據分析模式使用不同的資料路徑
@@ -134,7 +133,6 @@ else:
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
 
-st.sidebar.markdown("---")
 
 # 模型選擇 - 根據分析模式顯示不同選項
 if st.session_state.analysis_mode == "structural":
