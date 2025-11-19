@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     
     # === Analysis Mode Control ===
     analysis_mode: Optional[Literal["structural", "functional"]]  # Analysis type
+    model_type: Optional[Literal["legacy", "cnn_rf"]]  # Model type for structural MRI
     ml_model_type: Optional[str]  # ML model type ("random_forest", "svm", etc.)
 
     # === 2. Intermediate Data ===

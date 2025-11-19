@@ -18,6 +18,9 @@ from app.agents.structural_mri_inference import run_structural_mri_inference
 from app.agents.structural_feature_analyzer import analyze_feature_importance
 from app.agents.structural_visualizer import generate_structural_visualizations
 
+# Import CNN-RF agent nodes
+from app.agents.cnn_rf_inference import run_cnn_rf_inference, run_cnn_rf_inference_with_visualization
+
 # Router function for analysis mode
 def route_by_analysis_mode(state: AgentState) -> str:
     """
@@ -30,12 +33,17 @@ def route_by_analysis_mode(state: AgentState) -> str:
         Name of the next node to execute
     """
     mode = state.get("analysis_mode", "functional")
+    model_type = state.get("model_type", "legacy")  # 'legacy' or 'cnn_rf'
     
     if mode == "structural":
-        print(f"\n🔀 Router: Directing to STRUCTURAL MRI branch")
-        return "structural_mri_inference"
+        if model_type == "cnn_rf":
+            print(f"\n[ROUTER] Directing to CNN-RF INFERENCE branch")
+            return "cnn_rf_inference"
+        else:
+            print(f"\n[ROUTER] Directing to STRUCTURAL MRI branch (legacy)")
+            return "structural_mri_inference"
     else:
-        print(f"\n🔀 Router: Directing to FUNCTIONAL MRI branch")
+        print(f"\n[ROUTER] Directing to FUNCTIONAL MRI branch")
         return "inference"
 
 # Create a new StateGraph with our AgentState
@@ -46,10 +54,13 @@ workflow.add_node("inference", run_inference_and_classification)
 workflow.add_node("filtering", filter_layers_dynamically)
 workflow.add_node("post_processing", run_post_processing)
 
-# Add structural MRI nodes
+# Add structural MRI nodes (legacy)
 workflow.add_node("structural_mri_inference", run_structural_mri_inference)
 workflow.add_node("structural_feature_analyzer", analyze_feature_importance)
 workflow.add_node("structural_visualizer", generate_structural_visualizations)
+
+# Add CNN-RF nodes (new)
+workflow.add_node("cnn_rf_inference", run_cnn_rf_inference_with_visualization)
 
 # Add shared nodes (used by both branches)
 workflow.add_node("entity_linker", link_entities)
@@ -64,6 +75,7 @@ workflow.add_conditional_edges(
     route_by_analysis_mode,
     {
         "structural_mri_inference": "structural_mri_inference",
+        "cnn_rf_inference": "cnn_rf_inference",
         "inference": "inference"
     }
 )
@@ -73,10 +85,14 @@ workflow.add_edge("inference", "filtering")
 workflow.add_edge("filtering", "post_processing")
 workflow.add_edge("post_processing", "entity_linker")
 
-# === Structural MRI Branch (new) ===
+# === Structural MRI Branch (legacy) ===
 workflow.add_edge("structural_mri_inference", "structural_feature_analyzer")
 workflow.add_edge("structural_feature_analyzer", "structural_visualizer")
 workflow.add_edge("structural_visualizer", "entity_linker")
+
+# === CNN-RF Branch (new) ===
+# CNN-RF inference includes visualization, so go directly to entity linker
+workflow.add_edge("cnn_rf_inference", "entity_linker")
 
 # === Shared path (both branches converge) ===
 workflow.add_edge("entity_linker", "knowledge_reasoner")
