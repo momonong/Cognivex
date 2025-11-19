@@ -41,7 +41,7 @@ class EndToEndPredictor:
     
     def __init__(
         self,
-        model_path="model/cnn_rf/rf_model_NC_vs_AD.joblib",
+        model_path="model/cnn_rf/rf_model_NC_vs_AD_GM_only.joblib",
         atlas_path="data/aal3/AAL3v1_1mm.nii.gz",
         atlas_labels_path="data/aal3/AAL3v1.json",
         data_root="data/MRI_processed"
@@ -92,12 +92,17 @@ class EndToEndPredictor:
                 print(f"\n[3/3] Initializing SHAP explainer...")
                 # Extract the actual RandomForest model from pipeline
                 if hasattr(self.model, 'named_steps'):
-                    rf_model = self.model.named_steps['model']
+                    if 'model' in self.model.named_steps:
+                        rf_model = self.model.named_steps['model']
+                        self.shap_explainer = shap.TreeExplainer(rf_model)
+                        print(f"[OK] SHAP explainer initialized for local explanations")
+                        print(f"[INFO] SHAP will use TRANSFORMED data (after scaling & selection)")
+                    else:
+                        print(f"[WARN] Could not find 'model' step in pipeline")
                 else:
-                    rf_model = self.model
-                
-                self.shap_explainer = shap.TreeExplainer(rf_model)
-                print(f"[OK] SHAP explainer initialized for local explanations")
+                    # Not a pipeline, use the model directly
+                    self.shap_explainer = shap.TreeExplainer(self.model)
+                    print(f"[OK] SHAP explainer initialized (no pipeline)")
             except Exception as e:
                 print(f"[WARN] Could not initialize SHAP explainer: {e}")
                 self.shap_explainer = None
@@ -143,12 +148,15 @@ class EndToEndPredictor:
         """
         Calculate SHAP values for local explainability
         
+        IMPORTANT: SHAP needs the TRANSFORMED data (after scaling and selection),
+        not the raw data. We must manually apply the pipeline transformations.
+        
         Args:
-            feature_df: DataFrame with features
+            feature_df: DataFrame with RAW features
             verbose: Print information
         
         Returns:
-            Tuple of (shap_values, feature_names)
+            Tuple of (shap_values, selected_feature_names)
         """
         if not SHAP_AVAILABLE or self.shap_explainer is None:
             if verbose:
@@ -159,28 +167,143 @@ class EndToEndPredictor:
             if verbose:
                 print(f"\n[SHAP] Calculating local feature importance...")
             
-            # Get feature names
-            feature_names = list(feature_df.columns)
-            
-            # Calculate SHAP values
-            shap_values = self.shap_explainer.shap_values(feature_df)
-            
-            # For binary classification, shap_values is a list [class_0, class_1]
-            # We want the SHAP values for the positive class (AD = class 0 in our case)
-            if isinstance(shap_values, list):
-                # Use class 0 (AD) SHAP values
-                shap_values_ad = shap_values[0][0]  # First sample, AD class
+            # CRITICAL: Extract pipeline components
+            if hasattr(self.model, 'named_steps'):
+                # Get scaler
+                scaler = None
+                if 'scaler' in self.model.named_steps:
+                    scaler = self.model.named_steps['scaler']
+                elif 'scale' in self.model.named_steps:
+                    scaler = self.model.named_steps['scale']
+                
+                # Get selector
+                selector = None
+                if 'select' in self.model.named_steps:
+                    selector = self.model.named_steps['select']
+                elif 'selector' in self.model.named_steps:
+                    selector = self.model.named_steps['selector']
+                
+                # Get RF model
+                rf_model = None
+                if 'model' in self.model.named_steps:
+                    rf_model = self.model.named_steps['model']
+                
+                if verbose:
+                    print(f"[INFO] Pipeline components:")
+                    print(f"  - Scaler: {type(scaler).__name__ if scaler else 'None'}")
+                    print(f"  - Selector: {type(selector).__name__ if selector else 'None'}")
+                    print(f"  - Model: {type(rf_model).__name__ if rf_model else 'None'}")
+                
+                # STEP 1: Apply scaling (if exists)
+                if scaler:
+                    X_scaled = scaler.transform(feature_df)
+                    if verbose:
+                        print(f"[OK] Applied scaling: {feature_df.shape} -> {X_scaled.shape}")
+                else:
+                    X_scaled = feature_df.values
+                
+                # STEP 2: Apply feature selection (if exists)
+                if selector:
+                    X_selected = selector.transform(X_scaled)
+                    
+                    # Get selected feature names
+                    selected_mask = selector.get_support()
+                    original_feature_names = list(feature_df.columns)
+                    selected_feature_names = [name for name, selected in zip(original_feature_names, selected_mask) if selected]
+                    
+                    if verbose:
+                        print(f"[OK] Applied feature selection: {X_scaled.shape} -> {X_selected.shape}")
+                        print(f"[OK] Selected {len(selected_feature_names)} features")
+                else:
+                    X_selected = X_scaled
+                    selected_feature_names = list(feature_df.columns)
+                
+                # STEP 3: Calculate SHAP on the TRANSFORMED data
+                if rf_model and self.shap_explainer:
+                    shap_values = self.shap_explainer.shap_values(X_selected)
+                    
+                    if verbose:
+                        print(f"[DEBUG] SHAP raw output type: {type(shap_values)}")
+                        if isinstance(shap_values, list):
+                            print(f"[DEBUG] SHAP is list with {len(shap_values)} elements")
+                            for i, arr in enumerate(shap_values):
+                                print(f"[DEBUG]   Class {i} shape: {arr.shape}")
+                        else:
+                            print(f"[DEBUG] SHAP shape: {shap_values.shape}")
+                    
+                    # [FIX] Handle Binary Classification Output
+                    # Random Forest SHAP returns a list: [array_class_0, array_class_1]
+                    # We need to select the POSITIVE CLASS (AD)
+                    # In sklearn, classes are sorted: [0, 1] where 0=AD, 1=NC
+                    # But we want SHAP values that push TOWARDS AD (positive class)
+                    
+                    if isinstance(shap_values, list):
+                        if verbose:
+                            print(f"[INFO] SHAP output is list. Selecting Class 1 (positive/AD direction)...")
+                        
+                        # For binary classification, we want class 1 (positive class)
+                        # This gives us SHAP values that are positive when pushing towards AD
+                        shap_values_selected = shap_values[1]  # Class 1
+                        
+                        if verbose:
+                            print(f"[DEBUG] Selected class 1 shape: {shap_values_selected.shape}")
+                        
+                        # Get first sample
+                        shap_values_ad = shap_values_selected[0]
+                        
+                    elif len(shap_values.shape) == 3:
+                        # If it returns a 3D array (samples, features, classes)
+                        if verbose:
+                            print(f"[INFO] SHAP output is 3D array. Selecting Class 1...")
+                        shap_values_ad = shap_values[0, :, 1]  # First sample, all features, class 1
+                        
+                    else:
+                        # Single output, shape: (n_samples, n_features)
+                        if verbose:
+                            print(f"[INFO] SHAP output is 2D array (single class)")
+                        shap_values_ad = shap_values[0]
+                    
+                    # Ensure it's 1D
+                    shap_values_ad = np.array(shap_values_ad).flatten()
+                    
+                    if verbose:
+                        print(f"[DEBUG] Final SHAP shape: {shap_values_ad.shape}")
+                        print(f"[OK] SHAP values: {len(shap_values_ad)} values for {len(selected_feature_names)} features")
+                    
+                    # Validate lengths
+                    if len(shap_values_ad) != len(selected_feature_names):
+                        if verbose:
+                            print(f"[ERROR] SHAP values length mismatch: {len(shap_values_ad)} vs {len(selected_feature_names)}")
+                        raise ValueError(
+                            f"SHAP values length ({len(shap_values_ad)}) does not match "
+                            f"feature names length ({len(selected_feature_names)})"
+                        )
+                    
+                    if verbose:
+                        print(f"[OK] SHAP values and feature names aligned correctly")
+                    
+                    return shap_values_ad, selected_feature_names
+                else:
+                    if verbose:
+                        print(f"[WARN] Could not extract RF model from pipeline")
+                    return None, None
             else:
-                shap_values_ad = shap_values[0]
-            
-            if verbose:
-                print(f"[OK] SHAP values calculated for {len(feature_names)} features")
-            
-            return shap_values_ad, feature_names
+                # Not a pipeline, use original logic
+                feature_names = list(feature_df.columns)
+                shap_values = self.shap_explainer.shap_values(feature_df)
+                
+                if isinstance(shap_values, list):
+                    shap_values_ad = shap_values[0][0]
+                else:
+                    shap_values_ad = shap_values[0]
+                
+                return shap_values_ad, feature_names
             
         except Exception as e:
             if verbose:
                 print(f"[WARN] SHAP calculation failed: {e}")
+                import traceback
+                traceback.print_exc()
             return None, None
     
     def get_top_shap_features(
@@ -209,13 +332,29 @@ class EndToEndPredictor:
         shap_values = np.array(shap_values).flatten()
         abs_shap = np.abs(shap_values)
         
+        # Validate lengths match
+        if len(shap_values) != len(feature_names):
+            raise ValueError(
+                f"SHAP values length ({len(shap_values)}) does not match "
+                f"feature names length ({len(feature_names)})"
+            )
+        
+        # Adjust top_n if it's larger than available features
+        actual_top_n = min(top_n, len(shap_values))
+        
         # Get top indices
-        top_indices = np.argsort(abs_shap)[-top_n:][::-1]
+        top_indices = np.argsort(abs_shap)[-actual_top_n:][::-1]
         
         # Create feature info list
         top_features = []
         for i in range(len(top_indices)):
-            idx = top_indices[i]
+            idx = int(top_indices[i])  # Ensure it's a Python int
+            
+            # Safety check
+            if idx >= len(feature_names):
+                print(f"[WARN] Index {idx} out of range for {len(feature_names)} features, skipping")
+                continue
+            
             feature_info = {
                 'name': feature_names[idx],
                 'shap_value': float(shap_values[idx]),
@@ -264,6 +403,19 @@ class EndToEndPredictor:
         
         # Convert to DataFrame (model expects this format)
         feature_df = pd.DataFrame([features])
+        
+        # [FIX] Filter features based on model type
+        # GM-only models expect only GM features
+        if 'GM_only' in str(self.model_path) or 'GM' in str(self.model_path).upper():
+            if verbose:
+                print(f"[INFO] Detected GM-only model, filtering to GM features only...")
+            
+            # Keep only GM features
+            gm_features = [col for col in feature_df.columns if col.endswith('_GM')]
+            feature_df = feature_df[gm_features]
+            
+            if verbose:
+                print(f"[OK] Filtered: {len(features)} -> {len(gm_features)} GM features")
         
         # Step 3: Make prediction
         if verbose:
@@ -385,11 +537,11 @@ Diagnosis:
         report += f"""
 Ground Truth:
   True Label: {results['true_label']}
-  Prediction: {'✓ CORRECT' if results['correct'] else '✗ INCORRECT'}
+  Prediction: {'CORRECT' if results['correct'] else 'INCORRECT'}
 
 Model Information:
   Model: {self.model_path.name}
-  Classes: {', '.join(self.classes)}
+  Classes: {', '.join([str(c) for c in self.classes])}
   Total Features: {len(results['features'])}
 
 {'='*80}
@@ -427,11 +579,11 @@ Model Information:
                     'Correct': results['correct']
                 })
                 
-                status = "✓" if results['correct'] else "✗"
+                status = "[OK]" if results['correct'] else "[X]"
                 print(f"  {status} {results['predicted_label']} (confidence: {results['confidence']:.1%})")
                 
             except Exception as e:
-                print(f"  ✗ Error: {e}")
+                print(f"  [ERROR] {e}")
                 all_results.append({
                     'Subject_ID': subject_id,
                     'True_Label': 'ERROR',

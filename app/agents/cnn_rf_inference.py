@@ -61,9 +61,9 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
     model_name = state.get('model_name', DEFAULT_MODEL)
     data_root = state.get('data_root', 'data/MRI_processed')
     
-    print(f"\n📊 Subject: {subject_id}")
-    print(f"🤖 Model: {model_name}")
-    print(f"📁 Data Root: {data_root}")
+    print(f"\n[Subject] {subject_id}")
+    print(f"[Model] {model_name}")
+    print(f"[Data Root] {data_root}")
     
     try:
         # Step 1: Initialize end-to-end predictor
@@ -81,9 +81,9 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
                 model_path=str(model_path),
                 data_root=data_root
             )
-            print(f"   ✓ Predictor initialized")
-            print(f"   ✓ Model: {model_path.name}")
-            print(f"   ✓ Classes: {predictor.classes}")
+            print(f"   [OK] Predictor initialized")
+            print(f"   [OK] Model: {model_path.name}")
+            print(f"   [OK] Classes: {predictor.classes}")
             
         except Exception as e:
             error_msg = f"Predictor initialization failed: {e}"
@@ -106,11 +106,11 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
             roi_features = results['features']
             subject_dir = results['subject_dir']
             
-            print(f"\n   🎯 Prediction Results:")
+            print(f"\n   [Prediction Results]")
             print(f"      Classification: {prediction}")
             print(f"      Confidence: {confidence:.1%}")
             print(f"      Ground Truth: {true_label}")
-            print(f"      Status: {'✓ CORRECT' if correct else '✗ INCORRECT'}")
+            print(f"      Status: {'CORRECT' if correct else 'INCORRECT'}")
             print(f"      Probabilities:")
             for cls, prob in probabilities.items():
                 print(f"         {cls}: {prob:.1%}")
@@ -131,8 +131,8 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
             shap_features = results.get('shap_features', [])
             
             if shap_features:
-                print(f"   ✓ SHAP analysis complete")
-                print(f"\n   🎯 Top 5 Features for This Subject (SHAP):")
+                print(f"   [OK] SHAP analysis complete")
+                print(f"\n   [Top 5 Features for This Subject (SHAP)]")
                 for i, feat in enumerate(shap_features[:5], 1):
                     direction_symbol = "→" if feat['direction'] == 'towards AD' else "←"
                     print(f"      {i}. {feat['name']}")
@@ -144,14 +144,14 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
                     for feat in shap_features
                 }
             else:
-                print(f"   ⚠️  SHAP not available, using global feature importances")
+                print(f"   [WARN] SHAP not available, using global feature importances")
                 # Fallback to global importances
                 if hasattr(predictor.model, 'named_steps'):
                     rf_model = predictor.model.named_steps['model']
                     feature_importances = rf_model.feature_importances_
                     top_indices = np.argsort(feature_importances)[-5:][::-1]
                     
-                    print(f"\n   📊 Top 5 Important Features (Global):")
+                    print(f"\n   [Top 5 Important Features (Global)]")
                     for i, idx in enumerate(top_indices, 1):
                         print(f"      {i}. Feature {idx}: {feature_importances[idx]:.4f}")
                     
@@ -164,7 +164,7 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
             
         except Exception as e:
             error_msg = f"Feature importance extraction failed: {e}"
-            print(f"   ⚠️  {error_msg}")
+            print(f"   [WARN] {error_msg}")
             feature_importances_dict = {}
             shap_features = []
         
@@ -174,7 +174,7 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
             f"{prediction} (confidence: {confidence:.1%}, ground truth: {true_label})"
         )
         
-        print(f"\n✅ {trace_msg}")
+        print(f"\n[SUCCESS] {trace_msg}")
         print("="*80 + "\n")
         
         return {
@@ -194,7 +194,7 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
     except Exception as e:
         # Catch-all for unexpected errors
         error_msg = f"Unexpected error in CNN-RF inference: {type(e).__name__}: {e}"
-        print(f"❌ {error_msg}")
+        print(f"[ERROR] {error_msg}")
         print("="*80 + "\n")
         
         import traceback
@@ -253,18 +253,18 @@ def run_cnn_rf_inference_with_visualization(state: AgentState) -> dict:
                 output_path=output_path
             )
             
-            print(f"   ✓ Brain map saved: {brain_map_path}")
+            print(f"   [OK] Brain map saved: {brain_map_path}")
             
             result['brain_map_path'] = brain_map_path
             result['trace_log'] = result.get('trace_log', []) + [
                 f"Brain visualization generated: {brain_map_path}"
             ]
         else:
-            print("   ⚠️  No feature importances available for visualization")
+            print("   [WARN] No feature importances available for visualization")
         
     except Exception as e:
         error_msg = f"Brain visualization failed: {e}"
-        print(f"   ⚠️  {error_msg}")
+        print(f"   [WARN] {error_msg}")
         # Non-critical error, don't fail the whole inference
         result['error_log'] = result.get('error_log', []) + [error_msg]
     

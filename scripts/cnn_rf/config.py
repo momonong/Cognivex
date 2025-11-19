@@ -29,17 +29,31 @@ MODELS = {
     "NC_vs_AD": {
         "path": MODEL_DIR / "rf_model_NC_vs_AD.joblib",
         "classes": ['AD', 'NC'],  # 按字母排序
-        "description": "二分類：正常控制組 vs 阿茲海默症"
+        "description": "二分類：正常控制組 vs 阿茲海默症（全特徵）",
+        "features": "All modalities (GM, FA, MD)",
+        "selected_features": 30,
+        "note": "⚠️ 特徵選擇過於激進，AD 生物標記未被選中"
+    },
+    "NC_vs_AD_GM": {
+        "path": MODEL_DIR / "rf_model_NC_vs_AD_GM_only.joblib",
+        "classes": ['AD', 'NC'],  # 按字母排序
+        "description": "二分類：正常控制組 vs 阿茲海默症（僅 GM 特徵）⭐ 推薦",
+        "features": "GM only (Gray Matter)",
+        "selected_features": 83,
+        "note": "✓ Hippocampus 和 Amygdala 被選中，生物學可解釋性高"
     },
     "NC_MCI_AD": {
         "path": MODEL_DIR / "rf_model_NC_MCI_AD.joblib",
         "classes": ['AD', 'MCI', 'NC'],  # 按字母排序
-        "description": "三分類：正常控制組 vs 輕度認知障礙 vs 阿茲海默症"
+        "description": "三分類：正常控制組 vs 輕度認知障礙 vs 阿茲海默症",
+        "features": "All modalities (GM, FA, MD)",
+        "selected_features": "TBD",
+        "note": "尚未訓練"
     }
 }
 
-# 默認使用的模型
-DEFAULT_MODEL = "NC_vs_AD"
+# 默認使用的模型 - 改用 GM-only 模型
+DEFAULT_MODEL = "NC_vs_AD_GM"  # ⭐ 推薦使用 GM-only 模型
 
 # ====================================================================
 # 特徵提取配置 (Feature Extraction)

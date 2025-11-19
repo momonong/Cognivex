@@ -41,7 +41,15 @@ CNN_RF_MODELS: Dict[str, CNNRFModelConfig] = {
         name="NC_vs_AD",
         model_path=MODEL_DIR / "rf_model_NC_vs_AD.joblib",
         classes=['AD', 'NC'],
-        description="Binary classification: Normal Control vs Alzheimer's Disease",
+        description="Binary classification: Normal Control vs Alzheimer's Disease (All features)",
+        data_root=DATA_ROOT,
+        roi_features_path=ROI_FEATURES_PATH
+    ),
+    "NC_vs_AD_GM": CNNRFModelConfig(
+        name="NC_vs_AD_GM",
+        model_path=MODEL_DIR / "rf_model_NC_vs_AD_GM_only.joblib",
+        classes=['AD', 'NC'],
+        description="Binary classification: Normal Control vs Alzheimer's Disease (GM only) - Recommended",
         data_root=DATA_ROOT,
         roi_features_path=ROI_FEATURES_PATH
     ),
@@ -55,8 +63,8 @@ CNN_RF_MODELS: Dict[str, CNNRFModelConfig] = {
     )
 }
 
-# Default model
-DEFAULT_CNN_RF_MODEL = "NC_vs_AD"
+# Default model - Use GM-only model (recommended)
+DEFAULT_CNN_RF_MODEL = "NC_vs_AD_GM"
 
 
 def get_cnn_rf_config(model_name: str = None) -> CNNRFModelConfig:
