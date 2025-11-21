@@ -10,19 +10,68 @@ import matplotlib.cm as cm # For colormaps
 from typing import List, Dict, Any, Tuple, Optional 
 
 # (Import constants and preprocessing function from model script)
-try:
-    # We need the preprocessing function to get the original slices
-    # and constants for validation
-    from model.shufflenet.model import preprocess_nii_to_slices, NUM_SLICES_PER_SUBJECT, SLICE_IMG_SIZE 
-except ImportError as e:
-    print(f"Error importing from model.shufflenet.model: {e}")
-    # Provide defaults and a placeholder function if import fails
-    NUM_SLICES_PER_SUBJECT = 10
-    SLICE_IMG_SIZE = 128
-    def preprocess_nii_to_slices(path):
-        print("Error: Real preprocess_nii_to_slices function not found.")
-        return None 
-    print("Warning: Using default constants and placeholder preprocess function.")
+# Constants for slice processing
+NUM_SLICES_PER_SUBJECT = 10
+SLICE_IMG_SIZE = 128
+
+def preprocess_nii_to_slices(nii_path: str) -> torch.Tensor:
+    """
+    Preprocess NIfTI file to slices for visualization.
+    Extracts and processes slices from fMRI data.
+    """
+    import nibabel as nib
+    import numpy as np
+    import cv2
+    
+    try:
+        # Load NIfTI data
+        img = nib.load(nii_path)
+        data = img.get_fdata()
+        
+        # Handle 4D fMRI data by taking temporal mean
+        if len(data.shape) == 4:
+            data = np.mean(data, axis=3)
+        
+        # Extract sagittal slices
+        sagittal_dim = 0
+        num_total_slices = data.shape[sagittal_dim]
+        
+        if num_total_slices < NUM_SLICES_PER_SUBJECT:
+            raise ValueError(f"Not enough sagittal slices: {num_total_slices} < {NUM_SLICES_PER_SUBJECT}")
+        
+        # Find center slices
+        center_slice_index = num_total_slices // 2
+        start_index = center_slice_index - (NUM_SLICES_PER_SUBJECT // 2)
+        end_index = start_index + NUM_SLICES_PER_SUBJECT
+        
+        selected_slices_data = data[start_index:end_index, :, :]
+        
+        # Process each slice
+        processed_slices = []
+        for i in range(NUM_SLICES_PER_SUBJECT):
+            slice_2d = selected_slices_data[i, :, :]
+            slice_2d = np.rot90(slice_2d)
+            
+            # Normalize to 0-255
+            if np.max(slice_2d) > 0:
+                slice_2d = (slice_2d - np.min(slice_2d)) / (np.max(slice_2d) - np.min(slice_2d))
+            slice_2d_uint8 = (slice_2d * 255).astype(np.uint8)
+            
+            # Resize
+            resized_slice = cv2.resize(slice_2d_uint8, (SLICE_IMG_SIZE, SLICE_IMG_SIZE), interpolation=cv2.INTER_CUBIC)
+            processed_slices.append(resized_slice)
+        
+        # Stack and convert to tensor
+        stacked_slices = np.stack(processed_slices)
+        stacked_slices = stacked_slices[:, np.newaxis, :, :]
+        slices_tensor = torch.tensor(stacked_slices, dtype=torch.float32) / 255.0
+        input_tensor = slices_tensor.unsqueeze(0)
+        
+        return input_tensor
+        
+    except Exception as e:
+        print(f"Error in preprocess_nii_to_slices: {e}")
+        return None
 
 # --- Grad-CAM Calculation Function (Copied from act_to_nii_gradcam.py) ---
 def calculate_gradcam(activation: torch.Tensor, gradient: torch.Tensor) -> torch.Tensor:

@@ -105,8 +105,8 @@ if __name__ == "__main__":
     
     # Import from the new centralized loader and inspector
     # (Update paths if necessary for your execution context)
-    from app.core.fmri_processing.fmri_model_loader import get_model_and_input_shape
-    from app.core.fmri_processing.pipelines.inspector import inspect_torch_model
+    from app.core.mri_processing.mri_model_loader import get_model_and_input_shape
+    from app.core.mri_processing.pipelines.inspector import inspect_torch_model
     import json
 
     # 1. Load the correct model

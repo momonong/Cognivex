@@ -106,15 +106,15 @@ def prepare_model_with_hooks(
 if __name__ == "__main__":
 
     # 引入梯度鉤子相關函數（確保它們在 hook_manager.py 裡）
-    from app.core.fmri_processing.pipelines.attach_hook import (
+    from app.core.mri_processing.pipelines.attach_hook import (
         attach_gradient_hooks,
         _gradient_handles,
         remove_hooks,
     )  # 假設已經在當前模組中
 
     # 1. Import the new central loader
-    # 確保路徑正確：從 app.core.fmri_processing.fmri_model_loader 導入
-    from app.core.fmri_processing.fmri_model_loader import get_model_and_input_shape
+    # 確保路徑正確：從 app.core.mri_processing.mri_model_loader 導入
+    from app.core.mri_processing.mri_model_loader import get_model_and_input_shape
 
     # 2. Get the model and its input shape
     MODEL, input_shape = get_model_and_input_shape()

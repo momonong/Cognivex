@@ -2,11 +2,11 @@
 from app.graph.state import AgentState
 
 # NEW: Import the generic pipeline system
-from app.core.fmri_processing.generic_pipeline_steps import (
+from app.core.mri_processing.generic_pipeline_steps import (
     run_inference_and_classification as generic_run_inference,
     GenericInferencePipeline
 )
-from app.core.fmri_processing.model_config import (
+from app.core.mri_processing.model_config import (
     get_config_by_name,
     ModelConfig,
     ModelType

@@ -7,15 +7,9 @@ import cv2 # Needed for resizing
 from typing import List, Dict, Any, Tuple, Optional 
 
 # (Import constants from model script)
-try:
-    # We need these constants to correctly determine the original slice shape
-    # before the final resize.
-    from model.shufflenet.model import NUM_SLICES_PER_SUBJECT, SLICE_IMG_SIZE 
-except ImportError as e:
-    print(f"Error importing constants: {e}")
-    NUM_SLICES_PER_SUBJECT = 10
-    SLICE_IMG_SIZE = 128
-    print("Warning: Using default constants.")
+# Constants for slice processing
+NUM_SLICES_PER_SUBJECT = 10
+SLICE_IMG_SIZE = 128
 
 # --- NEW: Grad-CAM Calculation Function ---
 def calculate_gradcam(activation: torch.Tensor, gradient: torch.Tensor) -> torch.Tensor:

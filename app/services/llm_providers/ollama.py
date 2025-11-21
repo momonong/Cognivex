@@ -11,6 +11,15 @@ from typing import Any, List, Optional, Type, Union
 from pathlib import Path
 from pydantic import BaseModel
 
+# Import error handling
+from .error_handling import (
+    retry_with_backoff,
+    parse_json_with_recovery,
+    log_llm_error,
+    LLMConnectionError,
+    LLMParsingError
+)
+
 # --- 嘗試導入 ollama，如果失敗則設為 None ---
 try:
     import ollama
@@ -73,6 +82,13 @@ def list_models() -> List[str]:
         return []
 
 
+@retry_with_backoff(
+    max_retries=3,
+    base_delay=1.0,
+    max_delay=10.0,
+    exceptions=(Exception,),
+    verbose=True
+)
 def handle_text(
     prompt: Union[str, List[str]], 
     *, 
@@ -85,6 +101,8 @@ def handle_text(
     """
     Handle text-only prompts with Ollama
     
+    Includes automatic retry with exponential backoff and JSON parsing recovery.
+    
     Args:
         prompt: Text prompt or list of prompts
         model: Ollama model name
@@ -95,19 +113,29 @@ def handle_text(
     
     Returns:
         Model response as string (JSON if response_schema provided)
+    
+    Raises:
+        LLMConnectionError: If Ollama is not available
+        LLMParsingError: If JSON parsing fails
+    
+    Requirements: 10.1
     """
     if not OLLAMA_AVAILABLE:
-        raise RuntimeError(
+        error = LLMConnectionError(
             "ollama is not installed. Cannot use Ollama provider.\n"
             "Install with: pip install ollama"
         )
+        log_llm_error(error, {'provider': 'ollama', 'issue': 'not_installed'})
+        raise error
     
     if not check_availability():
-        raise RuntimeError(
+        error = LLMConnectionError(
             "Ollama server is not running.\n"
             "Start with: ollama serve\n"
             "Or install from: https://ollama.ai"
         )
+        log_llm_error(error, {'provider': 'ollama', 'issue': 'server_not_running'})
+        raise error
     
     print("\n" + "="*20 + " [OLLAMA INVOKE START] " + "="*20)
     print(f"[DEBUG] Model: {model}")
@@ -167,24 +195,55 @@ def handle_text(
         
         # Clean output if needed
         if response_schema:
-            clean_output = _extract_json_from_text(raw_output)
-            print(f"[DEBUG] Cleaned JSON:\n---\n{clean_output}\n---")
-            
-            # Validate against schema
+            # Use robust JSON parsing with recovery
             try:
-                parsed = json.loads(clean_output)
+                parsed = parse_json_with_recovery(raw_output, verbose=True)
+                print(f"[DEBUG] Parsed JSON:\n---\n{json.dumps(parsed, indent=2)}\n---")
+                
+                # Validate against schema
                 validated = response_schema(**parsed)
                 return validated.model_dump_json(indent=2)
+            except LLMParsingError as e:
+                print(f"[ERROR] JSON parsing failed: {e}")
+                log_llm_error(
+                    e,
+                    {
+                        'provider': 'ollama',
+                        'model': model,
+                        'response_preview': raw_output[:200]
+                    }
+                )
+                raise
             except Exception as e:
                 print(f"[WARNING] Schema validation failed: {e}")
-                return clean_output
+                log_llm_error(
+                    e,
+                    {
+                        'provider': 'ollama',
+                        'model': model,
+                        'issue': 'schema_validation'
+                    }
+                )
+                # Return raw JSON if validation fails
+                return json.dumps(parsed, indent=2)
         
         return raw_output
         
     except Exception as e:
         print("\n" + "X"*20 + " [OLLAMA INVOKE FAILED] " + "X"*20)
         print(f"[ERROR] {type(e).__name__}: {e}")
-        raise e
+        
+        # Log error with context
+        log_llm_error(
+            e,
+            {
+                'provider': 'ollama',
+                'model': model,
+                'temperature': temperature,
+                'has_schema': response_schema is not None
+            }
+        )
+        raise
     finally:
         print("="*21 + " [OLLAMA INVOKE END] " + "="*21 + "\n")
 

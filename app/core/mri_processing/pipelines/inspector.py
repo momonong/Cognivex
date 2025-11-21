@@ -2,7 +2,7 @@ from torch.nn.modules.module import Module
 
 
 import torch.nn as nn
-from app.core.fmri_processing.fmri_model_loader import get_model_and_input_shape 
+from app.core.mri_processing.mri_model_loader import get_model_and_input_shape 
 
 def inspect_torch_model(model: nn.Module) -> list[dict]:
     """

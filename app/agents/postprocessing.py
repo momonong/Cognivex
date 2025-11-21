@@ -1,8 +1,8 @@
 # app/agents/postprocessing.py
 import os
 from app.graph.state import AgentState, BrainRegionInfo
-from app.core.fmri_processing.generic_pipeline_steps import GenericInferencePipeline
-from app.core.fmri_processing.model_config import get_config_by_name
+from app.core.mri_processing.generic_pipeline_steps import GenericInferencePipeline
+from app.core.mri_processing.model_config import get_config_by_name
 
 # ---### NEW HELPER FUNCTION ###---
 # This helper function is co-located in the same file that uses it.

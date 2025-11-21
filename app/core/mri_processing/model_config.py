@@ -129,20 +129,21 @@ class CapsNet3DAdapter(BaseModelAdapter):
         else:
             return prediction_str
 
-# --- NEW: PaperModel Adapter ---
+# --- NEW: 2D CNN Model Adapter ---
 class PaperModelAdapter(BaseModelAdapter):
-    """Adapter for the PaperModel (ShuffleNet-based 2D Slice CNN)"""
+    """Adapter for 2D CNN models (using MCADNNet)"""
     
     def create_model(self) -> torch.nn.Module:
-        # Import from the correct path
-        from model.shufflenet.model import PaperModel 
-        # Model __init__ defaults: num_classes=2, groups=3, dropout_p=DROPOUT_RATE
-        model = PaperModel() 
-        # No need to move to device here
+        # Use MCADNNet as the 2D CNN model
+        from scripts.macadnnet.model import MCADNNet
+        
+        # Create model with default parameters
+        # Input shape for MCADNNet is per-slice: (1, 64, 64)
+        model = MCADNNet(num_classes=2, input_shape=(1, 64, 64), dropout_p=0.5)
         return model
     
     def preprocess_data(self, data_path: str) -> torch.Tensor:
-        """Preprocess fMRI NIfTI data for ShuffleNet (handles both 3D and 4D data)"""
+        """Preprocess fMRI NIfTI data for MCADNNet (handles both 3D and 4D data)"""
         import nibabel as nib
         import numpy as np
         import cv2
@@ -189,18 +190,18 @@ class PaperModelAdapter(BaseModelAdapter):
                     slice_2d = (slice_2d - np.min(slice_2d)) / (np.max(slice_2d) - np.min(slice_2d))
                 slice_2d_uint8 = (slice_2d * 255).astype(np.uint8)
                 
-                # Resize to 128x128
-                resized_slice = cv2.resize(slice_2d_uint8, (128, 128), interpolation=cv2.INTER_CUBIC)
+                # Resize to 64x64 for MCADNNet
+                resized_slice = cv2.resize(slice_2d_uint8, (64, 64), interpolation=cv2.INTER_CUBIC)
                 processed_slices.append(resized_slice)
             
             # 5. Stack and convert to tensor
-            stacked_slices = np.stack(processed_slices)  # (10, 128, 128)
-            stacked_slices = stacked_slices[:, np.newaxis, :, :]  # (10, 1, 128, 128)
+            stacked_slices = np.stack(processed_slices)  # (10, 64, 64)
+            stacked_slices = stacked_slices[:, np.newaxis, :, :]  # (10, 1, 64, 64)
             
             # Convert to tensor and normalize 0-1
             slices_tensor = torch.tensor(stacked_slices, dtype=torch.float32) / 255.0
             
-            # Add batch dimension: (1, 10, 1, 128, 128)
+            # Add batch dimension: (1, 10, 1, 64, 64)
             input_tensor = slices_tensor.unsqueeze(0)
             
             return input_tensor
@@ -278,13 +279,13 @@ CAPSNET_CONFIG = ModelConfig(
     inference_params={"threshold": 0.5} 
 )
 
-# --- NEW: PaperModel Config ---
+# --- NEW: 2D CNN Model Config (MCADNNet) ---
 PAPERMODEL_CONFIG = ModelConfig(
-    model_type=ModelType.CNN_2D, # Use CNN_2D for now
-    input_shape=(1, 10, 1, 128, 128), # (B, N_slices, C, H, W)
+    model_type=ModelType.CNN_2D,
+    input_shape=(1, 10, 1, 64, 64), # (B, N_slices, C, H, W) - Updated for MCADNNet
     preprocessing_params={
         "num_slices": 10, # Matches NUM_SLICES_PER_SUBJECT
-        "slice_size": 128, # Matches SLICE_IMG_SIZE
+        "slice_size": 64, # Updated for MCADNNet
         "plane": "sagittal" # Document the plane used
     },
     inference_params={

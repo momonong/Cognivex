@@ -16,7 +16,7 @@ import traceback # For detailed error reporting
 from typing import Dict, Any, List, Tuple, Optional, Union
 
 # --- Configuration ---
-from app.core.fmri_processing.model_config import (
+from app.core.mri_processing.model_config import (
     ModelConfig,
     ModelFactory,
     get_config_by_name,
@@ -24,26 +24,26 @@ from app.core.fmri_processing.model_config import (
 
 # --- Pipeline Component Imports ---
 # Step 1: Inspector (Simple version, no torchsummary)
-from app.core.fmri_processing.pipelines.inspector import inspect_torch_model 
+from app.core.mri_processing.pipelines.inspector import inspect_torch_model 
 # Step 2: Selector (Uses LLM)
-from app.core.fmri_processing.pipelines.choose_layer import select_visualization_layers 
+from app.core.mri_processing.pipelines.choose_layer import select_visualization_layers 
 # Step 3: Hook Manager (Includes gradient hooks)
-from app.core.fmri_processing.pipelines.attach_hook import (
+from app.core.mri_processing.pipelines.attach_hook import (
     prepare_model_with_hooks, 
     attach_gradient_hooks, 
     remove_hooks, 
     _gradient_handles # Access global list for cleanup
 )
 # Step 6: Native Heatmap Generation (Grad-CAM version)
-from app.core.fmri_processing.pipelines.act_to_nii import activation_and_gradient_to_nifti 
+from app.core.mri_processing.pipelines.act_to_nii import activation_and_gradient_to_nifti 
 # Step 7: Spatial Normalization (ANTs)
-from app.core.fmri_processing.pipelines.spatial_normalizer import normalize_native_heatmap_to_mni_accurate_masked # Use the accurate masked version
+from app.core.mri_processing.pipelines.spatial_normalizer import normalize_native_heatmap_to_mni_accurate_masked # Use the accurate masked version
 # Step 8: Resample to Atlas (Original version)
-from app.core.fmri_processing.pipelines.resample import resample_activation_to_atlas 
+from app.core.mri_processing.pipelines.resample import resample_activation_to_atlas 
 # Step 9: ROI Analysis
-from app.core.fmri_processing.pipelines.brain_map import analyze_brain_activation 
+from app.core.mri_processing.pipelines.brain_map import analyze_brain_activation 
 # Step 10: Visualization (New 2D version)
-from app.core.fmri_processing.pipelines.visualize import visualize_gradcam_2d 
+from app.core.mri_processing.pipelines.visualize import visualize_gradcam_2d 
 
 # Global constants (can be overridden by model config or pipeline init)
 DEFAULT_OUTPUT_DIR = "output/generic_pipeline" 
@@ -127,7 +127,7 @@ class GenericInferencePipeline:
         print(f"Using selection strategy: '{strategy}'")
 
         # --- CUSTOM MODIFICATION FOR SHUFFLENET/PAPERMODEL ---
-        from app.core.fmri_processing.model_config import ModelType
+        from app.core.mri_processing.model_config import ModelType
         if strategy == "force_select_stage2" and self.config.model_type == ModelType.CNN_2D:
             print("INFO: PaperModel (CNN_2D) detected with 'force_select_stage2' strategy. Bypassing LLM.")
             forced_layer_path = "backbone.stage2"

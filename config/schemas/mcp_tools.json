@@ -1,0 +1,249 @@
+{
+  "resources": [
+    {
+      "uri": "diagnosis://{subject_id}/report",
+      "name": "Diagnostic Report",
+      "description": "Complete diagnostic data including prediction, SHAP values, UQ score, and anomaly status",
+      "mime_type": "application/json",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subject_id": {
+            "type": "string",
+            "description": "Patient identifier (e.g., 'sub-0005')",
+            "pattern": "^sub-\\d{4}$"
+          }
+        },
+        "required": ["subject_id"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "uri": {"type": "string"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "subject_id": {"type": "string"},
+              "prediction_result": {
+                "type": "string",
+                "enum": ["AD", "NC", "MCI"]
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "uq_score": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "top_features": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "roi_name": {"type": "string"},
+                    "feature_name": {"type": "string"},
+                    "feature_value": {"type": "number"},
+                    "z_score": {"type": "number"},
+                    "shap_value": {"type": "number"},
+                    "rank": {"type": "integer"}
+                  }
+                }
+              },
+              "anomaly_status": {
+                "type": "object",
+                "properties": {
+                  "has_anomaly": {"type": "boolean"},
+                  "anomalous_regions": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "anomaly_type": {"type": "string"}
+                }
+              }
+            },
+            "required": ["subject_id", "prediction_result", "confidence", "uq_score", "top_features", "anomaly_status"]
+          },
+          "timestamp": {"type": "string", "format": "date-time"}
+        },
+        "required": ["uri", "data", "timestamp"]
+      }
+    },
+    {
+      "uri": "diagnosis://{subject_id}/features",
+      "name": "Raw Features",
+      "description": "Raw feature values for the subject",
+      "mime_type": "application/json",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subject_id": {
+            "type": "string",
+            "description": "Patient identifier (e.g., 'sub-0005')",
+            "pattern": "^sub-\\d{4}$"
+          }
+        },
+        "required": ["subject_id"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "uri": {"type": "string"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "subject_id": {"type": "string"},
+              "features": {
+                "type": "object",
+                "additionalProperties": {"type": "number"}
+              }
+            },
+            "required": ["subject_id", "features"]
+          },
+          "timestamp": {"type": "string", "format": "date-time"}
+        },
+        "required": ["uri", "data", "timestamp"]
+      }
+    },
+    {
+      "uri": "knowledge://{region_name}/context",
+      "name": "Clinical Knowledge Context",
+      "description": "Clinical information about a brain region from knowledge graph",
+      "mime_type": "application/json",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "region_name": {
+            "type": "string",
+            "description": "Brain region name (e.g., 'Hippocampus_L', 'Amygdala_R')"
+          }
+        },
+        "required": ["region_name"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "uri": {"type": "string"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "region_name": {"type": "string"},
+              "context": {
+                "type": "object",
+                "properties": {
+                  "full_name": {"type": "string"},
+                  "function": {"type": "string"},
+                  "summary": {"type": "string"},
+                  "clinical_significance": {"type": "string"},
+                  "related_conditions": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                  },
+                  "is_ad_hotspot": {"type": "boolean"}
+                }
+              },
+              "fallback": {"type": "boolean"}
+            },
+            "required": ["region_name", "context"]
+          },
+          "timestamp": {"type": "string", "format": "date-time"}
+        },
+        "required": ["uri", "data", "timestamp"]
+      }
+    }
+  ],
+  "tools": [
+    {
+      "name": "simulate_counterfactual",
+      "description": "Execute what-if analysis by masking specific features to assess their diagnostic impact. This tool neutralizes selected brain region features to determine how much they contribute to the diagnostic prediction.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "subject_id": {
+            "type": "string",
+            "description": "Patient identifier (e.g., 'sub-0005')",
+            "pattern": "^sub-\\d{4}$"
+          },
+          "features_to_mask": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "List of ROI names or feature names to neutralize (e.g., ['Hippocampus_L', 'Hippocampus_R'])",
+            "minItems": 1
+          }
+        },
+        "required": ["subject_id", "features_to_mask"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "const": "simulate_counterfactual"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "error"]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "subject_id": {"type": "string"},
+              "original_prediction": {
+                "type": "string",
+                "enum": ["AD", "NC", "MCI"]
+              },
+              "original_confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "new_prediction": {
+                "type": "string",
+                "enum": ["AD", "NC", "MCI"]
+              },
+              "new_confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0
+              },
+              "confidence_delta": {"type": "number"},
+              "masked_features": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "feature_name": {"type": "string"},
+                    "original_value": {"type": "number"},
+                    "masked_value": {"type": "number"}
+                  }
+                }
+              },
+              "interpretation": {"type": "string"}
+            },
+            "required": [
+              "subject_id",
+              "original_prediction",
+              "original_confidence",
+              "new_prediction",
+              "new_confidence",
+              "confidence_delta",
+              "masked_features",
+              "interpretation"
+            ]
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "type": {"type": "string"},
+              "message": {"type": "string"}
+            }
+          },
+          "timestamp": {"type": "string", "format": "date-time"}
+        },
+        "required": ["tool", "status", "timestamp"]
+      }
+    }
+  ]
+}
