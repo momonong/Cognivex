@@ -115,9 +115,20 @@ def load_model(
         model_kwargs["load_in_4bit"] = True
         print("[INFO] Using 4-bit quantization")
     
-    model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
-    
-    print("[OK] Model loaded successfully")
+    # Try loading with quantization config first, fallback if model is already quantized
+    try:
+        model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
+        print("[OK] Model loaded successfully")
+    except ValueError as e:
+        if "quantized" in str(e).lower() and (load_in_8bit or load_in_4bit):
+            # Model is already quantized (e.g., with Mxfp4Config), remove quantization params
+            print(f"[INFO] Model is already quantized, loading without additional quantization config")
+            model_kwargs.pop("load_in_8bit", None)
+            model_kwargs.pop("load_in_4bit", None)
+            model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
+            print("[OK] Model loaded successfully (using model's native quantization)")
+        else:
+            raise
     
     # Cache model and tokenizer
     _model_cache[cache_key] = model

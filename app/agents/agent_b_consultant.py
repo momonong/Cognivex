@@ -309,16 +309,27 @@ Always explain your medical reasoning. You are the final authority on clinical i
         """
         if self.config.verbose:
             print(f"[AGENT B] Calling LLM: {self.config.model}")
+            print(f"[AGENT B] Provider: {self.config.provider}")
         
         # Create user prompt
         user_prompt = f"""
-Based on the ContextObject below, synthesize a comprehensive clinical report.
+Based on the ContextObject below, synthesize a comprehensive clinical report in Traditional Chinese (繁體中文).
 
 CONTEXT OBJECT:
 {formatted_context}
 
-Generate a clinical report following the structure outlined in your system instructions.
-Focus on integrating all evidence and providing clear clinical interpretation.
+請用繁體中文生成臨床報告，遵循系統指示中的結構。
+重點整合所有證據並提供清晰的臨床解釋。
+
+報告結構應包含：
+1. 診斷摘要
+2. 關鍵發現（腦區分析）
+3. 異常分析（如有）
+4. 反事實分析（如有）
+5. 臨床解釋
+6. 建議事項
+
+請使用專業但易懂的醫學術語。
 """
         
         # Call LLM based on provider
@@ -333,17 +344,25 @@ Focus on integrating all evidence and providing clear clinical interpretation.
                     if self.config.verbose:
                         print(f"[WARNING] Model not found at: {self.config.model_path}")
                         print(f"[INFO] Please ensure the model is downloaded")
+                    raise FileNotFoundError(f"Model not found at: {self.config.model_path}")
+                
+                if self.config.verbose:
+                    print(f"[AGENT B] Using HuggingFace model from: {self.config.model_path}")
+                    print(f"[AGENT B] 8-bit quantization: {self.config.load_in_8bit}")
                 
                 response_text = huggingface.handle_text(
                     prompt=user_prompt,
                     model_path=self.config.model_path,
                     system_instruction=self.system_prompt,
                     temperature=self.config.temperature,
-                    max_new_tokens=1024,  # Longer for clinical reports
+                    max_new_tokens=2048,  # Longer for clinical reports
                     load_in_8bit=self.config.load_in_8bit
                 )
             else:  # ollama
                 # Check if model is available
+                if not ollama.check_availability():
+                    raise LLMConnectionError("Ollama server is not running")
+                
                 available_models = ollama.list_models()
                 if self.config.model not in available_models:
                     if self.config.verbose:
@@ -351,6 +370,7 @@ Focus on integrating all evidence and providing clear clinical interpretation.
                         print(f"[INFO] Available models: {', '.join(available_models) if available_models else 'None'}")
                         print(f"[INFO] To install: ollama pull {self.config.model}")
                         print(f"[INFO] Or use alternative: ollama pull llama3.1:8b")
+                    raise LLMConnectionError(f"Model '{self.config.model}' not found in Ollama")
                 
                 response_text = ollama.handle_text(
                     prompt=user_prompt,
@@ -359,11 +379,14 @@ Focus on integrating all evidence and providing clear clinical interpretation.
                     temperature=self.config.temperature
                 )
             
+            if self.config.verbose:
+                print(f"[AGENT B] LLM response received ({len(response_text)} chars)")
+            
             return response_text
             
         except Exception as e:
             if self.config.verbose:
-                print(f"[AGENT B] LLM call failed: {e}")
+                print(f"[AGENT B] LLM call failed: {type(e).__name__}: {e}")
             raise e
 
     

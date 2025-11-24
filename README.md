@@ -2,6 +2,28 @@
 
 **Cognivex** is a multi-agent explainable artificial intelligence framework specifically designed for Alzheimer's Disease functional magnetic resonance imaging (fMRI) analysis. The system integrates deep learning models, knowledge graph reasoning, and large language models to provide a complete automated analysis pipeline from raw fMRI data to clinical reports.
 
+## 🆕 Latest Updates (2024/11/21)
+
+### HuggingFace Integration
+- ✅ **Direct HuggingFace Support**: No longer requires Ollama - use local HuggingFace models directly
+- ✅ **8-bit Quantization**: Memory-efficient model loading with automatic quantization
+- ✅ **Flexible Model Selection**: Configure Agent A and Agent B models independently
+- 📖 **Quick Start**: See [QUICK_START_HUGGINGFACE.md](QUICK_START_HUGGINGFACE.md) for setup guide
+
+### Enhanced Clinical Interface
+- ✅ **Chinese Localization**: All diagnostic results with Traditional Chinese translations
+- ✅ **Visual Indicators**: Color-coded confidence levels and uncertainty scores
+- ✅ **Clinical Metrics**: 4 key diagnostic indicators with clear explanations
+- ✅ **Smart File Search**: Automatic detection of MRI files across multiple directory structures
+
+### Improved User Experience
+- ✅ **Interactive MRI Viewer**: Fixed file path detection for seamless 3D visualization
+- ✅ **Comprehensive Reports**: Agent B generates detailed clinical narratives
+- ✅ **Counterfactual Analysis**: Clear explanation of feature impact on diagnosis
+- ✅ **Anomaly Detection**: Mixed pathology warnings with knowledge graph context
+
+**See [SUMMARY_20241121.md](SUMMARY_20241121.md) for complete details.**
+
 ## 🎯 Core Mission
 
 Solving the "black box" problem in neuroimaging AI by creating a trustworthy, autonomous AI assistant that transforms raw fMRI data into clinically relevant, explainable reports for neuroscientists.

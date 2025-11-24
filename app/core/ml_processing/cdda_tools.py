@@ -35,7 +35,7 @@ class CDDAToolKit:
     
     def __init__(
         self,
-        model_path: str = "model/cnn_rf/rf_model_NC_vs_AD_GM_only.joblib",
+        model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
         data_root: str = "data/MRI_processed",
         uq_threshold: float = 0.8,
         z_score_threshold: float = 2.5
@@ -44,7 +44,7 @@ class CDDAToolKit:
         Initialize CDDA Tool Kit
         
         Args:
-            model_path: Path to trained CNN-RF model
+            model_path: Path to trained CNN-RF model (default: 3-class model)
             data_root: Root directory for MRI data
             uq_threshold: Threshold for high uncertainty (default: 0.8)
             z_score_threshold: Threshold for anomaly detection (default: 2.5)
@@ -53,6 +53,9 @@ class CDDAToolKit:
         self.data_root = Path(data_root)
         self.uq_threshold = uq_threshold
         self.z_score_threshold = z_score_threshold
+        
+        # Define class mapping for 3-class model
+        self.classes = {0: 'NC', 1: 'MCI', 2: 'AD'}
         
         # Initialize end-to-end predictor (Layer 1)
         print(f"\n[CDDA] Initializing Tool Kit...")
@@ -65,6 +68,8 @@ class CDDAToolKit:
         self.population_stats = self._load_population_statistics()
         
         print(f"[OK] CDDA Tool Kit ready")
+        print(f"   Model: {model_path}")
+        print(f"   Classes: {list(self.classes.values())}")
         print(f"   UQ Threshold: {uq_threshold}")
         print(f"   Z-Score Threshold: ±{z_score_threshold}")
     
@@ -117,7 +122,7 @@ class CDDAToolKit:
         2. Confidence margin (difference between top 2 classes)
         
         Args:
-            probabilities: Dictionary of class probabilities
+            probabilities: Dictionary of class probabilities (supports 2 or 3 classes)
             confidence: Confidence of predicted class
         
         Returns:
@@ -129,7 +134,7 @@ class CDDAToolKit:
         # Calculate entropy (normalized)
         epsilon = 1e-10  # Avoid log(0)
         entropy = -np.sum(probs * np.log(probs + epsilon))
-        max_entropy = np.log(len(probs))  # Maximum possible entropy
+        max_entropy = np.log(len(probs))  # Maximum possible entropy (log(2) or log(3))
         normalized_entropy = entropy / max_entropy if max_entropy > 0 else 0
         
         # Calculate confidence margin (difference between top 2)

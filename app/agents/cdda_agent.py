@@ -52,32 +52,32 @@ class CDDAAgent:
     
     def __init__(
         self,
-        orchestrator_model: str = "gpt-oss-20b",
-        orchestrator_model_path: Optional[str] = None,
+        orchestrator_model: str = "phi-4-mini",
+        orchestrator_model_path: Optional[str] = "D:/hf_models/Phi-4-mini-instruct",
         consultant_model: str = "medgemma-27b",
-        consultant_model_path: Optional[str] = None,
-        model_path: str = "model/cnn_rf/rf_model_NC_vs_AD_GM_only.joblib",
+        consultant_model_path: Optional[str] = "D:/hf_models/medgemma-27b-text-it",
+        model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
         data_root: str = "data/MRI_processed",
         uq_threshold: float = 0.8,
         z_score_threshold: float = 2.5,
         use_llm: bool = True,
-        load_in_8bit: bool = True,
+        use_4bit: bool = True,
         verbose: bool = True
     ):
         """
         Initialize CDDA Agent with A2A architecture
         
         Args:
-            orchestrator_model: Model for Agent A (e.g., "gpt-oss-20b")
-            orchestrator_model_path: Path for HuggingFace models (Agent A)
-            consultant_model: Model for Agent B (e.g., "medgemma-27b")
-            consultant_model_path: Path for HuggingFace models (Agent B)
-            model_path: Path to trained CNN-RF model
+            orchestrator_model: Model for Agent A (default: "phi-4-mini")
+            orchestrator_model_path: Path for Phi-4-mini model (Agent A)
+            consultant_model: Model for Agent B (default: "medgemma-27b")
+            consultant_model_path: Path for MedGemma model (Agent B)
+            model_path: Path to trained CNN-RF model (default: 3-class model)
             data_root: Root directory for MRI data
             uq_threshold: Threshold for high uncertainty trigger
             z_score_threshold: Threshold for anomaly detection
             use_llm: Enable LLM-based agents (if False, use rule-based fallback)
-            load_in_8bit: Use 8-bit quantization to save memory
+            use_4bit: Use 4-bit quantization to save VRAM (recommended)
             verbose: Print detailed information
         """
         self.verbose = verbose
@@ -119,6 +119,12 @@ class CDDAAgent:
         if self.verbose:
             print("\n[4/4] Initializing A2A Agents...")
             print(f"   Agent A (Orchestrator): {orchestrator_model}")
+            if orchestrator_model_path:
+                print(f"      Path: {orchestrator_model_path}")
+                print(f"      Provider: HuggingFace")
+                print(f"      Quantization: {'4-bit' if use_4bit else '8-bit'}")
+            else:
+                print(f"      Provider: Ollama (fallback)")
         
         agent_a_config = AgentAConfig(
             model=orchestrator_model,
@@ -128,7 +134,7 @@ class CDDAAgent:
             uq_threshold=uq_threshold,
             z_score_threshold=z_score_threshold,
             use_llm=use_llm,
-            load_in_8bit=load_in_8bit,
+            load_in_8bit=not use_4bit,  # Use 8-bit only if not using 4-bit
             verbose=False  # Reduce noise
         )
         
@@ -140,6 +146,12 @@ class CDDAAgent:
         # Initialize Agent B (Consultant)
         if self.verbose:
             print(f"   Agent B (Consultant): {consultant_model}")
+            if consultant_model_path:
+                print(f"      Path: {consultant_model_path}")
+                print(f"      Provider: HuggingFace")
+                print(f"      Quantization: {'4-bit' if use_4bit else '8-bit'}")
+            else:
+                print(f"      Provider: Ollama (fallback)")
         
         agent_b_config = AgentBConfig(
             model=consultant_model,
@@ -147,7 +159,7 @@ class CDDAAgent:
             provider="huggingface" if consultant_model_path else "ollama",
             temperature=0.3,
             use_llm=use_llm,
-            load_in_8bit=load_in_8bit,
+            load_in_8bit=not use_4bit,  # Use 8-bit only if not using 4-bit
             verbose=False  # Reduce noise
         )
         
@@ -159,11 +171,13 @@ class CDDAAgent:
         self.use_llm = use_llm
         
         if self.verbose:
-            print(f"\n[OK] CDDA Agent ready (A2A mode)")
+            print(f"\n[INFO] Orchestrator: Phi-4-mini | Consultant: MedGemma-27b")
+            print(f"[OK] CDDA Agent ready (A2A mode)")
             print(f"   Decision Thresholds:")
             print(f"      UQ > {uq_threshold} → Trigger Counterfactual Simulation")
             print(f"      |Z| > {z_score_threshold} → Trigger Knowledge Lookup")
             print(f"   LLM Mode: {'Enabled' if use_llm else 'Rule-based fallback'}")
+            print(f"   Quantization: {'4-bit' if use_4bit else '8-bit'}")
             print("="*80)
     
     # ========================================================================
