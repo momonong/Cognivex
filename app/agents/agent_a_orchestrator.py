@@ -8,7 +8,7 @@ Agent A is responsible for:
 3. Deciding which tools to invoke
 4. Compiling ContextObject for handoff to Agent B
 
-Agent A uses GPT-OSS-20B (or similar) for function calling and decision logic.
+Agent A uses Phi-4-mini for function calling and decision logic.
 
 Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 8.1, 8.2
 """
@@ -50,8 +50,8 @@ from app.services.llm_providers.error_handling import (
 @dataclass
 class AgentAConfig:
     """Configuration for Agent A"""
-    model: str = "gpt-oss-20b"  # GPT-OSS-20B for function calling
-    model_path: Optional[str] = "D:/hf_models/gpt-oss-20b"  # Path for HuggingFace models
+    model: str = "phi-4-mini"  # Phi-4-mini for function calling
+    model_path: Optional[str] = "D:/hf_models/Phi-4-mini-instruct"  # Path for HuggingFace models
     provider: str = "huggingface"  # "ollama" or "huggingface"
     temperature: float = 0.1
     uq_threshold: float = 0.8
@@ -104,7 +104,7 @@ class AgentA:
         
         if self.config.verbose:
             print("\n" + "="*80)
-            print("AGENT A - ORCHESTRATOR (GPT-OSS-20B)")
+            print("AGENT A - ORCHESTRATOR (Phi-4-mini)")
             print("="*80)
             print(f"Model: {self.config.model}")
             print(f"UQ Threshold: {self.config.uq_threshold}")
@@ -841,7 +841,7 @@ def demo_agent_a_rule_based():
 def demo_agent_a_with_llm():
     """Demo: Agent A with LLM-based orchestration"""
     print("\n" + "="*80)
-    print("DEMO: Agent A - LLM-Based Orchestration (GPT-OSS-20B)")
+    print("DEMO: Agent A - LLM-Based Orchestration (Phi-4-mini)")
     print("="*80)
     
     # Check if Ollama is available

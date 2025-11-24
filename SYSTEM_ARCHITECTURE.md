@@ -50,7 +50,7 @@ graph TB
     
     subgraph "代理層 (Agent Layer) - CDDA Framework"
         CDDA[cdda_agent.py<br/>主控代理]
-        AgentA[agent_a_orchestrator.py<br/>編排代理 GPT-OSS-20B]
+        AgentA[agent_a_orchestrator.py<br/>編排代理 Phi-4-mini]
         AgentB[agent_b_consultant.py<br/>醫療顧問 MedGemma-27B]
     end
     
@@ -139,7 +139,7 @@ graph TB
 | 檔案 | 作用 | 模型 | 關鍵功能 |
 |------|------|------|----------|
 | `app/agents/cdda_agent.py` | CDDA 主控代理 | - | 整合 Agent A/B，執行完整分析流程 |
-| `app/agents/agent_a_orchestrator.py` | 編排代理 (Agent A) | GPT-OSS-20B | MCP 客戶端，讀取資源，調用工具，編譯 ContextObject |
+| `app/agents/agent_a_orchestrator.py` | 編排代理 (Agent A) | Phi-4-mini | MCP 客戶端，讀取資源，調用工具，編譯 ContextObject |
 | `app/agents/agent_b_consultant.py` | 醫療顧問 (Agent B) | MedGemma-27B | 接收 ContextObject，生成臨床報告，無工具存取權限 |
 
 ### 3. 工作流層 (Workflow Layer) - LangGraph
@@ -462,7 +462,7 @@ run_analysis()
 
 #### app/agents/agent_a_orchestrator.py
 **角色**: Agent A - 編排代理 (MCP 客戶端)  
-**模型**: GPT-OSS-20B  
+**模型**: Phi-4-mini  
 **功能**:
 - 讀取診斷資源 (MCP read_resource)
 - 評估信號 (UQ score, anomalies)
@@ -829,7 +829,7 @@ def route_by_analysis_mode(state):
 - `load_model(model_path, load_in_8bit)` - 載入模型
 
 **支援的模型**:
-- GPT-OSS-20B (Agent A)
+- Phi-4-mini (Agent A)
 - MedGemma-27B (Agent B)
 
 #### app/services/llm_providers/error_handling.py
@@ -1048,7 +1048,7 @@ NEO4J_PASSWORD=your_password
 OLLAMA_HOST=http://localhost:11434
 
 # HuggingFace 模型路徑 (可選)
-HF_MODEL_PATH_AGENT_A=D:/hf_models/gpt-oss-20b
+HF_MODEL_PATH_AGENT_A=D:/hf_models/Phi-4-mini-instruct
 HF_MODEL_PATH_AGENT_B=D:/hf_models/medgemma-27b
 ```
 
@@ -1081,9 +1081,9 @@ streamlit run app.py
 
 ### 1. 記憶體需求
 - **HuggingFace 模型**: 需要大量 GPU 記憶體
-  - GPT-OSS-20B: ~40GB (FP16) 或 ~20GB (8-bit)
+  - Phi-4-mini: ~8GB (FP16) 或 ~4GB (4-bit)
   - MedGemma-27B: ~54GB (FP16) 或 ~27GB (8-bit)
-- **建議**: 使用 8-bit 量化或降級到 Ollama
+- **建議**: 使用 4-bit 量化或降級到 Ollama
 
 ### 2. Neo4j 依賴
 - **問題**: 如果 Neo4j 不可用，知識圖譜功能受限

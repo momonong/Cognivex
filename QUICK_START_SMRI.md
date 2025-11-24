@@ -73,7 +73,7 @@ streamlit run app_smri.py
 mkdir D:\hf_models
 
 # 使用 HuggingFace CLI 下載
-huggingface-cli download gpt-oss-20b --local-dir D:\hf_models\gpt-oss-20b
+huggingface-cli download microsoft/Phi-4 --local-dir D:\hf_models\Phi-4-mini-instruct
 huggingface-cli download medgemma-27b --local-dir D:\hf_models\medgemma-27b
 ```
 
@@ -89,7 +89,7 @@ streamlit run app_smri.py
 #    - 選擇受試者
 #    - ✅ 勾選「啟用 LLM 模式」
 #    - 設定模型路徑:
-#      - Agent A: D:/hf_models/gpt-oss-20b
+#      - Agent A: D:/hf_models/Phi-4-mini-instruct
 #      - Agent B: D:/hf_models/medgemma-27b
 #    - 點擊「開始分析」
 

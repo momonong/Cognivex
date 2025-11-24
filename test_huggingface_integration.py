@@ -140,7 +140,7 @@ def test_cdda_agent_with_huggingface():
             consultant_model="test-model",
             consultant_model_path=model_path,
             use_llm=True,
-            load_in_8bit=True,
+            use_4bit=True,  # Changed from load_in_8bit to use_4bit
             verbose=True
         )
         

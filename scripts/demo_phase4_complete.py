@@ -52,8 +52,8 @@ def demo_complete_workflow():
     print("  ┌────────────────────▼────────────────────────────────────┐")
     print("  │         COGNITIVE LAYER: A2A Agent System               │")
     print("  │                                                         │")
-    print("  │  Agent A (Orchestrator) → ContextObject → Agent B      │")
-    print("  │  [GPT-OSS-20B]                          [MedGemma-27B] │")
+    print("  │  Agent A (Orchestrator) → ContextObject → Agent B       │")
+    print("  │  [GPT-OSS-20B]                          [MedGemma-27B]  │")
     print("  └─────────────────────────────────────────────────────────┘")
     
     print("\nInitializing CDDA Agent...")

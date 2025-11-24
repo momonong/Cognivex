@@ -37,7 +37,7 @@ graph TB
     
     subgraph "代理層 - CDDA Framework"
         CDDA[cdda_agent.py<br/>主控代理]
-        AgentA[agent_a_orchestrator.py<br/>編排代理<br/>GPT-OSS-20B]
+        AgentA[agent_a_orchestrator.py<br/>編排代理<br/>Phi-4-mini]
         AgentB[agent_b_consultant.py<br/>醫療顧問<br/>MedGemma-27B]
     end
     
@@ -192,7 +192,7 @@ sequenceDiagram
 - 聚合推理鏈
 - 返回 AgentResult
 
-**agent_a_orchestrator.py** - 編排代理 (GPT-OSS-20B)
+**agent_a_orchestrator.py** - 編排代理 (Phi-4-mini)
 - 讀取診斷報告 (MCP read_resource)
 - 評估 UQ 和異常
 - 決策工具調用 (反事實、知識圖譜)
@@ -300,7 +300,7 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
 
 # HuggingFace 模型路徑 (可選)
-HF_MODEL_PATH_AGENT_A=D:/hf_models/gpt-oss-20b
+HF_MODEL_PATH_AGENT_A=D:/hf_models/Phi-4-mini-instruct
 HF_MODEL_PATH_AGENT_B=D:/hf_models/medgemma-27b
 ```
 

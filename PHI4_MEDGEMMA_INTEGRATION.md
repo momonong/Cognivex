@@ -321,7 +321,7 @@ print(f"VRAM: {vram['allocated_gb']:.2f}GB / {vram['total_gb']:.2f}GB")
 3. **Run Demo**: Execute `python scripts/demo_phase4_complete.py` to test end-to-end
 4. **Monitor Performance**: Check inference speed and JSON compliance
 5. **Optimize Prompts**: Fine-tune prompts based on Phi-4's actual output
-6. **Benchmark**: Compare Phi-4 vs GPT-OSS for tool calling accuracy
+6. **Benchmark**: Compare Phi-4 performance for tool calling accuracy
 
 ## References
 

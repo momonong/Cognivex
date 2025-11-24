@@ -808,7 +808,7 @@ def demo_a2a_with_llm():
     
     try:
         agent = CDDAAgent(
-            orchestrator_model="gpt-oss-20b",
+            orchestrator_model="phi-4-mini",
             consultant_model="medgemma-27b",
             use_llm=True,
             verbose=True

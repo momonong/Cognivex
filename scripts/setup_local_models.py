@@ -5,7 +5,7 @@ This script helps configure Ollama to use locally downloaded models
 from HuggingFace (stored in D:\hf_models).
 
 Models:
-- GPT-OSS-20B: Agent A (Orchestrator)
+- Phi-4-mini: Agent A (Orchestrator)
 - MedGemma-27B: Agent B (Consultant)
 """
 

@@ -44,14 +44,14 @@ def initialize_cdda_agent(use_llm=False, orchestrator_model_path=None, consultan
     """初始化 CDDA Agent"""
     try:
         agent = CDDAAgent(
-            orchestrator_model="gpt-oss-20b",
-            orchestrator_model_path=orchestrator_model_path,
+            orchestrator_model="phi-4-mini",
+            orchestrator_model_path=orchestrator_model_path or "D:/hf_models/Phi-4-mini-instruct",
             consultant_model="medgemma-27b",
-            consultant_model_path=consultant_model_path,
-            model_path="model/cnn_rf/rf_model_NC_vs_AD_GM_only.joblib",
+            consultant_model_path=consultant_model_path or "D:/hf_models/medgemma-27b-text-it",
+            model_path="model/cnn_rf/rf_model_NC_MCI_AD.joblib",
             data_root="data/MRI_processed",
             use_llm=use_llm,
-            load_in_8bit=True,
+            use_4bit=True,  # Changed from load_in_8bit to use_4bit
             verbose=True
         )
         return agent
@@ -329,7 +329,7 @@ if use_llm:
     
     orchestrator_model_path = st.sidebar.text_input(
         "Agent A 模型路徑",
-        value="D:/hf_models/gpt-oss-20b",
+        value="D:/hf_models/Phi-4-mini-instruct",
         help="Agent A (Orchestrator) 的 HuggingFace 模型路徑"
     )
     

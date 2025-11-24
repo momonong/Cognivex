@@ -62,12 +62,12 @@ def initialize_cdda_agent(use_llm=False, orchestrator_model_path=None, consultan
     """初始化 CDDA Agent（快取以避免重複載入）"""
     try:
         agent = CDDAAgent(
-            orchestrator_model="gpt-oss-20b",
-            orchestrator_model_path=orchestrator_model_path,
+            orchestrator_model="phi-4-mini",
+            orchestrator_model_path=orchestrator_model_path or "D:/hf_models/Phi-4-mini-instruct",
             consultant_model="medgemma-27b",
-            consultant_model_path=consultant_model_path,
+            consultant_model_path=consultant_model_path or "D:/hf_models/medgemma-27b-text-it",
             use_llm=use_llm,
-            load_in_8bit=True,  # 使用 8-bit 量化節省記憶體
+            use_4bit=True,  # 使用 4-bit 量化節省 VRAM（從 load_in_8bit 更新）
             verbose=True
         )
         return agent
@@ -372,7 +372,7 @@ if st.session_state.cdda_mode:
         
         orchestrator_model_path = st.sidebar.text_input(
             "Agent A 模型路徑",
-            value="D:/hf_models/gpt-oss-20b",
+            value="D:/hf_models/Phi-4-mini-instruct",
             help="Agent A (Orchestrator) 的 HuggingFace 模型路徑"
         )
         

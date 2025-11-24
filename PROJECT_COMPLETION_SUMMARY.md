@@ -123,7 +123,7 @@
 │  ┌─────────────────┐         ┌──────────────────┐          │
 │  │   Agent A       │  A2A    │    Agent B       │          │
 │  │  Orchestrator   │ ──────> │   Consultant     │          │
-│  │ (GPT-OSS-20B)   │ Context │ (MedGemma-27B)   │          │
+│  │ (Phi-4-mini)    │ Context │ (MedGemma-27B)   │          │
 │  └────────┬────────┘  Object └──────────────────┘          │
 │           │                                                  │
 │           │ MCP Protocol                                     │

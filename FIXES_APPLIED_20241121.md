@@ -22,7 +22,7 @@
 ```python
 # 在 Streamlit 側邊欄中
 1. 勾選 "啟用 LLM 模式"
-2. 輸入 Agent A 模型路徑: D:/hf_models/gpt-oss-20b
+2. 輸入 Agent A 模型路徑: D:/hf_models/Phi-4-mini-instruct
 3. 輸入 Agent B 模型路徑: D:/hf_models/medgemma-27b
 4. 開始分析
 ```
