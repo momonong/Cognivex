@@ -48,21 +48,21 @@ def check_availability() -> bool:
 
 def load_model(
     model_path: str,
-    device: str = "auto",
+    device: str = "cuda:0",
     torch_dtype: str = "auto",
     load_in_8bit: bool = False,
     load_in_4bit: bool = False,
     trust_remote_code: bool = True
 ) -> tuple:
     """
-    Load model and tokenizer from local path
+    Load model and tokenizer from local path (transformers 4.57.1+ compatible)
     
     Args:
-        model_path: Path to model directory (e.g., "D:/hf_models/gpt-oss-20b")
+        model_path: Path to model directory (e.g., "D:/hf_models/Llama3.1-Aloe-Beta-8B")
         device: Device to load model on ("auto", "cuda", "cpu")
         torch_dtype: Data type ("auto", "float16", "bfloat16", "float32")
         load_in_8bit: Load model in 8-bit quantization
-        load_in_4bit: Load model in 4-bit quantization
+        load_in_4bit: Load model in 4-bit quantization (recommended)
         trust_remote_code: Trust remote code in model
     
     Returns:
@@ -72,13 +72,13 @@ def load_model(
         raise RuntimeError("transformers not installed")
     
     # Check cache
-    cache_key = f"{model_path}_{device}_{torch_dtype}"
+    cache_key = f"{model_path}_{device}_{torch_dtype}_{load_in_4bit}_{load_in_8bit}"
     if cache_key in _model_cache:
         print(f"[INFO] Using cached model: {model_path}")
         return _model_cache[cache_key], _tokenizer_cache[cache_key]
     
     print(f"\n[INFO] Loading model from: {model_path}")
-    print(f"[INFO] Device: {device}")
+    print(f"[INFO] Device map: {device}")
     print(f"[INFO] Dtype: {torch_dtype}")
     
     # Convert torch_dtype string to torch dtype
@@ -88,7 +88,7 @@ def load_model(
         "bfloat16": torch.bfloat16,
         "float32": torch.float32
     }
-    torch_dtype_obj = dtype_map.get(torch_dtype, "auto")
+    torch_dtype_obj = dtype_map.get(torch_dtype, torch.float16)
     
     # Load tokenizer
     print("[INFO] Loading tokenizer...")
@@ -97,38 +97,78 @@ def load_model(
         trust_remote_code=trust_remote_code
     )
     
-    # Load model
+    # Ensure pad_token is set
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    # Load model with 2025 API (transformers 4.57.1+)
     print("[INFO] Loading model (this may take a few minutes)...")
     
     model_kwargs = {
         "pretrained_model_name_or_path": model_path,
-        "torch_dtype": torch_dtype_obj,
         "device_map": device,
         "trust_remote_code": trust_remote_code
     }
     
-    # Add quantization if requested
-    if load_in_8bit:
-        model_kwargs["load_in_8bit"] = True
+    # Add quantization configuration (2025 API)
+    if load_in_4bit:
+        print("[INFO] Using 4-bit quantization (NF4 with double quantization)")
+        model_kwargs.update({
+            "load_in_4bit": True,
+            "torch_dtype": torch.float16,  # Required for 4-bit
+            "bnb_4bit_use_double_quant": True,  # Double quantization for better accuracy
+            "bnb_4bit_quant_type": "nf4",  # NF4 quantization type
+            "bnb_4bit_compute_dtype": torch.float16  # Compute dtype
+        })
+    elif load_in_8bit:
         print("[INFO] Using 8-bit quantization")
-    elif load_in_4bit:
-        model_kwargs["load_in_4bit"] = True
-        print("[INFO] Using 4-bit quantization")
+        model_kwargs.update({
+            "load_in_8bit": True,
+            "torch_dtype": torch.float16
+        })
+    else:
+        # No quantization
+        model_kwargs["torch_dtype"] = torch_dtype_obj
     
     # Try loading with quantization config first, fallback if model is already quantized
     try:
         model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
         print("[OK] Model loaded successfully")
+        
+        # Print model info
+        if hasattr(model, 'config'):
+            print(f"[INFO] Model type: {model.config.model_type if hasattr(model.config, 'model_type') else 'unknown'}")
+        
+        # Print device info
+        if hasattr(model, 'device'):
+            print(f"[INFO] Model device: {model.device}")
+        
     except ValueError as e:
         if "quantized" in str(e).lower() and (load_in_8bit or load_in_4bit):
             # Model is already quantized (e.g., with Mxfp4Config), remove quantization params
             print(f"[INFO] Model is already quantized, loading without additional quantization config")
-            model_kwargs.pop("load_in_8bit", None)
-            model_kwargs.pop("load_in_4bit", None)
+            model_kwargs = {
+                "pretrained_model_name_or_path": model_path,
+                "device_map": device,
+                "torch_dtype": torch_dtype_obj,
+                "trust_remote_code": trust_remote_code
+            }
             model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
             print("[OK] Model loaded successfully (using model's native quantization)")
         else:
             raise
+    except Exception as e:
+        print(f"[ERROR] Failed to load model: {e}")
+        print(f"[INFO] Attempting fallback loading without quantization...")
+        # Fallback: try loading without quantization
+        model_kwargs = {
+            "pretrained_model_name_or_path": model_path,
+            "device_map": device,
+            "torch_dtype": torch_dtype_obj,
+            "trust_remote_code": trust_remote_code
+        }
+        model = AutoModelForCausalLM.from_pretrained(**model_kwargs)
+        print("[OK] Model loaded successfully (fallback mode)")
     
     # Cache model and tokenizer
     _model_cache[cache_key] = model
@@ -153,7 +193,7 @@ def handle_text(
     max_new_tokens: int = 512,
     top_p: float = 0.9,
     top_k: int = 40,
-    device: str = "auto",
+    device: str = "cuda:0",
     torch_dtype: str = "auto",
     load_in_8bit: bool = False,
     load_in_4bit: bool = False,
@@ -213,24 +253,32 @@ def handle_text(
         
         print(f"[DEBUG] Prompt length: {len(full_prompt)} chars")
         
-        # Tokenize
-        inputs = tokenizer(full_prompt, return_tensors="pt")
+        # Tokenize (2025 API)
+        inputs = tokenizer(
+            full_prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=2048
+        )
         
-        # Move to device if needed
-        if device == "cuda" or (device == "auto" and torch.cuda.is_available()):
-            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        # Move to model's device (handles auto device_map correctly)
+        inputs = inputs.to(model.device)
         
-        # Generate
+        print(f"[DEBUG] Input device: {inputs['input_ids'].device}")
+        print(f"[DEBUG] Model device: {model.device}")
+        
+        # Generate (2025 API)
         print("[INFO] Generating response...")
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
-                temperature=temperature,
+                temperature=temperature if temperature > 0 else 0.1,
                 top_p=top_p,
                 top_k=top_k,
                 do_sample=temperature > 0,
-                pad_token_id=tokenizer.eos_token_id
+                pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+                eos_token_id=tokenizer.eos_token_id
             )
         
         # Decode
@@ -390,7 +438,7 @@ def demo_load_model():
     try:
         model, tokenizer = load_model(
             model_path=model_path,
-            device="auto",
+            device="cuda:0",
             torch_dtype="auto",
             load_in_8bit=True  # Use 8-bit to save memory
         )

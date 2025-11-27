@@ -74,7 +74,7 @@ mkdir D:\hf_models
 
 # 使用 HuggingFace CLI 下載
 huggingface-cli download microsoft/Phi-4 --local-dir D:\hf_models\Phi-4-mini-instruct
-huggingface-cli download medgemma-27b --local-dir D:\hf_models\medgemma-27b
+huggingface-cli download meta-llama/Llama-3.1-Aloe-Beta-8B --local-dir D:\hf_models\Llama3.1-Aloe-Beta-8B
 ```
 
 **注意**: 這些模型很大 (20GB + 27GB)，下載需要時間。
@@ -90,7 +90,7 @@ streamlit run app_smri.py
 #    - ✅ 勾選「啟用 LLM 模式」
 #    - 設定模型路徑:
 #      - Agent A: D:/hf_models/Phi-4-mini-instruct
-#      - Agent B: D:/hf_models/medgemma-27b
+#      - Agent B: D:\hf_models\Llama3.1-Aloe-Beta-8B
 #    - 點擊「開始分析」
 
 # 3. 等待分析完成 (約 2-5 分鐘，首次載入模型較慢)

@@ -273,7 +273,7 @@ python -c "from app.agents.cdda_agent import CDDAAgent; agent = CDDAAgent(use_ll
 #### CDDA 核心功能
 - ✅ **MCP Server**: 資源（Resources）與工具（Tools）的清晰分離
 - ✅ **Agent A (Orchestrator)**: 使用 Phi-4-mini 進行決策和工具編排
-- ✅ **Agent B (Consultant)**: 使用 MedGemma-27B 進行臨床推理和報告合成
+- ✅ **Agent B (Consultant)**: 使用 Llama3.1-Aloe-Beta-8B 進行臨床推理和報告合成
 - ✅ **三路決策邏輯**: 
   - 高不確定性 → 反事實模擬
   - 異常檢測 → 知識圖譜查詢
@@ -791,10 +791,10 @@ poetry run poe autoinstall-torch-cuda
   - **MCP Protocol**: Model Context Protocol for resource/tool separation
   - **A2A Pattern**: Agent-to-Agent handoff with dual-LLM architecture
   - **Agent A (Orchestrator)**: Phi-4-mini or similar for decision-making
-  - **Agent B (Consultant)**: MedGemma-27B or similar for clinical synthesis
+  - **Agent B (Consultant)**: Llama3.1-Aloe-Beta-8B or similar for clinical synthesis
 - **LLM Architecture**: Modular provider system with unified interface
   - **AWS Bedrock Claude**: Enterprise-grade text generation
-  - **Ollama**: Local LLM inference (MedGemma-27B, Phi-4-mini)
+  - **Ollama**: Local LLM inference (Llama3.1-Aloe-Beta-8B, Phi-4-mini)
   - **HuggingFace**: Local model support
 - **Deep Learning**: PyTorch 2.8.0, torchvision, torchinfo 1.8.0
 - **Explainability**: 
@@ -1122,7 +1122,7 @@ export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,roundup_power2_divisions:16
 │  ┌─────────────────┐         ┌──────────────────┐          │
 │  │   Agent A       │  A2A    │    Agent B       │          │
 │  │  Orchestrator   │ ──────> │   Consultant     │          │
-│  │ (Phi-4-mini)    │ Context │ (MedGemma-27B)   │          │
+│  │ (Phi-4-mini)    │ Context │ (Llama3.1-Aloe-Beta-8B) │          │
 │  └────────┬────────┘  Object └──────────────────┘          │
 │           │                                                  │
 │           │ MCP Protocol                                     │

@@ -46,8 +46,8 @@ def initialize_cdda_agent(use_llm=False, orchestrator_model_path=None, consultan
         agent = CDDAAgent(
             orchestrator_model="phi-4-mini",
             orchestrator_model_path=orchestrator_model_path or "D:/hf_models/Phi-4-mini-instruct",
-            consultant_model="medgemma-27b",
-            consultant_model_path=consultant_model_path or "D:/hf_models/medgemma-27b-text-it",
+            consultant_model="llama3.1-aloe-beta-8b",
+            consultant_model_path=consultant_model_path or r"D:\hf_models\Llama3.1-Aloe-Beta-8B",
             model_path="model/cnn_rf/rf_model_NC_MCI_AD.joblib",
             data_root="data/MRI_processed",
             use_llm=use_llm,
@@ -335,7 +335,7 @@ if use_llm:
     
     consultant_model_path = st.sidebar.text_input(
         "Agent B 模型路徑",
-        value="D:/hf_models/medgemma-27b",
+        value=r"D:\hf_models\Llama3.1-Aloe-Beta-8B",
         help="Agent B (Consultant) 的 HuggingFace 模型路徑"
     )
     

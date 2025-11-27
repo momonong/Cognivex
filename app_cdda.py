@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Cognivex CDDA - Streamlit Web Interface
-整合 CDDA Framework 的完整診斷系統
+Cognivex CDDA - Dashboard-First Interface
+專業醫療儀表板，整合互動式 AI 顧問
 """
 
 import os
 import sys
 import streamlit as st
 import glob
+import plotly.graph_objects as go
 from pathlib import Path
 import streamlit.components.v1 as components
 from datetime import datetime
@@ -20,34 +21,22 @@ from nilearn import image as nimg
 # CDDA Framework
 from app.agents.cdda_agent import CDDAAgent
 
-# 傳統 LangGraph 工作流（保留作為備選）
-from app.graph.workflow import app as langgraph_app
-
-# 結構性 MRI UI 組件
-from app.ui.structural_mri_components import (
-    render_analysis_mode_selector,
-    render_structural_results
-)
+# LLM providers for chat
+from app.services.llm_providers import llm_response
 
 
 # ============================================================================
 # 工具函數
 # ============================================================================
 
-@st.cache_resource(show_spinner="正在載入並處理 NIfTI 檔案...")
+@st.cache_resource(show_spinner="正在載入 NIfTI 檔案...")
 def load_nifti(path: str):
-    """
-    載入 NIfTI 檔案並回傳 nilearn 影像物件和時間點總數。
-    支援 3D (結構性 MRI) 和 4D (功能性 MRI) 影像。
-    """
+    """載入 NIfTI 檔案"""
     try:
         img = nimg.load_img(path)
         if len(img.shape) == 4:
-            # 4D 影像（功能性 MRI）
-            num_time_points = img.shape[3]
-            return img, num_time_points
+            return img, img.shape[3]
         elif len(img.shape) == 3:
-            # 3D 影像（結構性 MRI）
             return img, 1
         else:
             st.error(f"不支援的影像維度: {img.shape}")
@@ -59,15 +48,15 @@ def load_nifti(path: str):
 
 @st.cache_resource(show_spinner="正在初始化 CDDA Agent...")
 def initialize_cdda_agent(use_llm=False, orchestrator_model_path=None, consultant_model_path=None):
-    """初始化 CDDA Agent（快取以避免重複載入）"""
+    """初始化 CDDA Agent"""
     try:
         agent = CDDAAgent(
             orchestrator_model="phi-4-mini",
             orchestrator_model_path=orchestrator_model_path or "D:/hf_models/Phi-4-mini-instruct",
-            consultant_model="medgemma-27b",
-            consultant_model_path=consultant_model_path or "D:/hf_models/medgemma-27b-text-it",
+            consultant_model="llama3.1-aloe-beta-8b",
+            consultant_model_path=consultant_model_path or r"D:\hf_models\Llama3.1-Aloe-Beta-8B",
             use_llm=use_llm,
-            use_4bit=True,  # 使用 4-bit 量化節省 VRAM（從 load_in_8bit 更新）
+            use_4bit=True,
             verbose=True
         )
         return agent
@@ -78,198 +67,112 @@ def initialize_cdda_agent(use_llm=False, orchestrator_model_path=None, consultan
         return None
 
 
-def format_cdda_report(result) -> str:
-    """格式化 CDDA 分析結果為臨床報告"""
+def extract_key_insights(result) -> list:
+    """從推理鏈中提取關鍵洞察"""
+    insights = []
     
-    # 診斷結果的中文翻譯
-    diagnosis_map = {
-        'AD': '阿茲海默症 (Alzheimer\'s Disease)',
-        'MCI': '輕度認知障礙 (Mild Cognitive Impairment)',
-        'NC': '正常認知 (Normal Cognition)'
-    }
-    
-    # 代理決策的中文翻譯
-    decision_map = {
-        'SIMULATION_TRIGGERED': '高不確定性 - 已執行反事實模擬',
-        'ANOMALY_INVESTIGATION': '異常模式 - 已查詢知識圖譜',
-        'STANDARD_REPORT': '標準診斷流程'
-    }
-    
-    diagnosis_text = diagnosis_map.get(result.prediction, result.prediction)
-    decision_text = decision_map.get(result.agent_decision, result.agent_decision)
-    
-    # 信心度解釋
-    if result.confidence > 0.8:
-        confidence_level = "高信心度"
-        confidence_color = "#388e3c"
-    elif result.confidence > 0.6:
-        confidence_level = "中等信心度"
-        confidence_color = "#f57c00"
-    else:
-        confidence_level = "低信心度"
-        confidence_color = "#d32f2f"
-    
-    # 不確定性解釋
-    if result.uq_score > 0.8:
-        uq_level = "高不確定性 - 建議進一步檢查"
-        uq_color = "#d32f2f"
-    elif result.uq_score > 0.5:
-        uq_level = "中等不確定性"
-        uq_color = "#f57c00"
-    else:
-        uq_level = "低不確定性"
-        uq_color = "#388e3c"
-    
-    html = f"""
-    <div style="background-color: #ffffff; padding: 25px; border-radius: 10px; margin: 10px 0; border: 2px solid #e0e0e0;">
-        <h2 style="color: #1976d2; border-bottom: 2px solid #1976d2; padding-bottom: 10px;">
-            🏥 臨床診斷報告
-        </h2>
-        
-        <div style="margin: 20px 0; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #1976d2;">
-            <h3 style="color: #1565c0; margin-top: 0;">📋 診斷結果</h3>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                    <td style="padding: 8px; font-weight: bold; width: 30%;">受試者編號</td>
-                    <td style="padding: 8px;">{result.subject_id}</td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; font-weight: bold;">診斷</td>
-                    <td style="padding: 8px; color: {'#d32f2f' if result.prediction == 'AD' else '#388e3c'}; font-weight: bold; font-size: 1.1em;">
-                        {diagnosis_text}
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; font-weight: bold;">診斷信心度</td>
-                    <td style="padding: 8px;">
-                        <span style="color: {confidence_color}; font-weight: bold;">{result.confidence:.1%}</span>
-                        <span style="color: #666; margin-left: 10px;">({confidence_level})</span>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; font-weight: bold;">模型不確定性</td>
-                    <td style="padding: 8px;">
-                        <span style="color: {uq_color}; font-weight: bold;">{result.uq_score:.3f}</span>
-                        <span style="color: #666; margin-left: 10px;">({uq_level})</span>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding: 8px; font-weight: bold;">分析模式</td>
-                    <td style="padding: 8px;">{decision_text}</td>
-                </tr>
-            </table>
-        </div>
-    """
-    
-    # 顯示臨床報告（來自 Agent B）
-    if hasattr(result, 'clinical_report') and result.clinical_report:
-        html += f"""
-        <div style="margin: 20px 0; padding: 15px; background-color: #f5f5f5; border-radius: 5px;">
-            <h3 style="color: #424242;">📝 臨床分析</h3>
-            <div style="white-space: pre-wrap; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6;">
-{result.clinical_report}
-            </div>
-        </div>
-        """
-    
-    # 添加反事實分析（如果有）
+    # 檢查反事實分析
     if result.context_object and result.context_object.tool_results:
         tool_results = result.context_object.tool_results
         
         if 'counterfactual' in tool_results:
             cf = tool_results['counterfactual']
             confidence_delta = cf.get('confidence_delta', 0)
-            
-            # 判斷影響程度
-            if abs(confidence_delta) > 0.1:
-                impact_level = "關鍵診斷驅動因子"
-                impact_color = "#d32f2f"
-            elif abs(confidence_delta) > 0.05:
-                impact_level = "中等影響"
-                impact_color = "#f57c00"
-            else:
-                impact_level = "輕微影響"
-                impact_color = "#388e3c"
-            
-            html += f"""
-            <div style="margin: 20px 0; padding: 15px; background-color: #fff3e0; border-left: 4px solid #ff9800; border-radius: 5px;">
-                <h3 style="color: #e65100;">🔬 反事實模擬分析</h3>
-                <p style="color: #666; font-style: italic;">
-                    此分析用於識別哪些腦區對診斷結果影響最大
-                </p>
-                <table style="width: 100%; margin-top: 10px;">
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold;">原始預測</td>
-                        <td style="padding: 5px;">{cf.get('original_prediction', 'N/A')} ({cf.get('original_confidence', 0):.1%})</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold;">遮蔽關鍵特徵後</td>
-                        <td style="padding: 5px;">{cf.get('new_prediction', 'N/A')} ({cf.get('new_confidence', 0):.1%})</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 5px; font-weight: bold;">信心度變化</td>
-                        <td style="padding: 5px;">
-                            <span style="color: {impact_color}; font-weight: bold;">{confidence_delta:+.1%}</span>
-                            <span style="color: #666; margin-left: 10px;">({impact_level})</span>
-                        </td>
-                    </tr>
-                </table>
-                <div style="margin-top: 10px; padding: 10px; background-color: #ffffff; border-radius: 3px;">
-                    <strong>臨床意義:</strong> {cf.get('interpretation', 'N/A')}
-                </div>
-            </div>
-            """
+            impact = abs(confidence_delta) * 100
+            insights.append({
+                'icon': '🔬',
+                'text': f"執行反事實模擬 (影響: {impact:.1f}%)",
+                'type': 'simulation',
+                'details': cf.get('interpretation', '')
+            })
         
-        # 添加異常分析（如果有）
         if 'knowledge_context' in tool_results:
             kc = tool_results['knowledge_context']
             anomalous_regions = kc.get('query_regions', [])
-            
             if anomalous_regions:
-                html += f"""
-                <div style="margin: 20px 0; padding: 15px; background-color: #ffebee; border-left: 4px solid #f44336; border-radius: 5px;">
-                    <h3 style="color: #c62828;">⚠️ 異常模式檢測</h3>
-                    <p style="color: #666;">
-                        檢測到 <strong>{len(anomalous_regions)}</strong> 個腦區呈現統計異常模式（可能提示混合病理或非典型表現）
-                    </p>
-                    <div style="margin: 10px 0;">
-                        <strong>異常腦區:</strong>
-                        <ul style="margin: 5px 0;">
-                """
-                for region in anomalous_regions[:5]:
-                    html += f"<li>{region}</li>"
-                html += """
-                        </ul>
-                    </div>
-                """
-                
-                # 顯示知識圖譜摘要
-                summary = kc.get('summary', '')
-                if summary:
-                    html += f"""
-                    <div style="margin-top: 10px; padding: 10px; background-color: #ffffff; border-radius: 3px;">
-                        <strong>臨床背景知識:</strong>
-                        <p style="margin: 5px 0;">{summary}</p>
-                    </div>
-                    """
-                
-                html += "</div>"
+                insights.append({
+                    'icon': '⚠️',
+                    'text': f"檢測到 {len(anomalous_regions)} 個異常腦區",
+                    'type': 'anomaly',
+                    'details': kc.get('summary', '')
+                })
     
-    html += "</div>"
-    return html
+    # 添加標準診斷洞察
+    if result.confidence > 0.8:
+        insights.append({
+            'icon': '✅',
+            'text': f"高信心度診斷 ({result.confidence:.1%})",
+            'type': 'confidence',
+            'details': f"模型對 {result.prediction} 診斷具有高度信心"
+        })
+    elif result.uq_score > 0.8:
+        insights.append({
+            'icon': '🔍',
+            'text': f"高不確定性警示 (UQ: {result.uq_score:.3f})",
+            'type': 'uncertainty',
+            'details': "建議進行額外臨床驗證"
+        })
+    
+    return insights
 
 
-def display_reasoning_chain(reasoning_chain):
-    """顯示推理鏈"""
-    with st.expander("🔗 查看完整推理鏈", expanded=False):
-        st.markdown("### 代理推理過程")
-        for i, step in enumerate(reasoning_chain, 1):
-            if step.startswith("="*80):
-                st.markdown(f"**{step.replace('=', '')}**")
-            elif step.startswith("-"*80):
-                st.markdown(f"*{step.replace('-', '')}*")
-            else:
-                st.text(step)
+def _safe_get_feature_attr(feature, attr_name, default=None):
+    """安全地從 Feature 對象或字典中獲取屬性"""
+    if isinstance(feature, dict):
+        return feature.get(attr_name, default)
+    else:
+        return getattr(feature, attr_name, default)
+
+
+def create_shap_chart(result):
+    """創建 SHAP 值條形圖"""
+    try:
+        # 從 context_object 提取 top features
+        if not result.context_object or not result.context_object.diagnostic_report:
+            return None
+        
+        report = result.context_object.diagnostic_report
+        top_features = report.top_features[:10] if hasattr(report, 'top_features') else []
+        
+        if not top_features:
+            return None
+        
+        # 準備數據（支持 Feature 對象和字典）
+        roi_names = [_safe_get_feature_attr(f, 'roi_name', 'Unknown') for f in top_features]
+        shap_values = [_safe_get_feature_attr(f, 'shap_value', 0) for f in top_features]
+        z_scores = [_safe_get_feature_attr(f, 'z_score', 0) for f in top_features]
+        
+        # 創建 Plotly 圖表
+        fig = go.Figure()
+        
+        fig.add_trace(go.Bar(
+            y=roi_names,
+            x=shap_values,
+            orientation='h',
+            marker=dict(
+                color=shap_values,
+                colorscale='RdBu',
+                showscale=True,
+                colorbar=dict(title="SHAP Value")
+            ),
+            text=[f"Z={z:.2f}" for z in z_scores],
+            textposition='auto',
+            hovertemplate='<b>%{y}</b><br>SHAP: %{x:.4f}<br>Z-score: %{text}<extra></extra>'
+        ))
+        
+        fig.update_layout(
+            title="Top 10 診斷驅動因子 (SHAP Values)",
+            xaxis_title="SHAP Value (特徵重要性)",
+            yaxis_title="腦區 (ROI)",
+            height=400,
+            template="plotly_white"
+        )
+        
+        return fig
+    
+    except Exception as e:
+        print(f"[WARNING] Failed to create SHAP chart: {e}")
+        return None
 
 
 # ============================================================================
@@ -277,59 +180,42 @@ def display_reasoning_chain(reasoning_chain):
 # ============================================================================
 
 st.set_page_config(
-    page_title="Cognivex CDDA - Explainable fMRI Analysis",
+    page_title="Cognivex CDDA - Clinical Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-st.title("🧠 Cognivex CDDA Framework")
-st.markdown("""
-**Cognitive Discrepancy-Driven Agent** - 自主診斷代理系統
-
-整合雙 LLM 架構、MCP 協議和 A2A 模式的可解釋 AI 診斷系統
-""")
 
 # ============================================================================
 # 側邊欄控制
 # ============================================================================
 
-# 初始化分析狀態
 if "analysis_running" not in st.session_state:
     st.session_state.analysis_running = False
-if "cdda_mode" not in st.session_state:
-    st.session_state.cdda_mode = True  # 預設使用 CDDA
 
 st.sidebar.header("⚙️ 分析設定")
 
-# 分析模式選擇
-analysis_framework = st.sidebar.radio(
-    "選擇分析框架:",
-    ["CDDA Framework (推薦)", "傳統 LangGraph"],
-    help="CDDA Framework 提供自主決策、反事實分析和混合病理檢測"
-)
-st.session_state.cdda_mode = (analysis_framework == "CDDA Framework (推薦)")
-
 # 受試者選擇
-st.sidebar.markdown("---")
 st.sidebar.subheader("📁 受試者選擇")
 
-# 掃描可用的受試者
 subject_labels = {}
-# 修正：使用 sub-* 而不是 sub_*（匹配實際的目錄命名格式）
 data_folders = glob.glob("data/MRI_processed/*/sub-*")
 for folder_path in data_folders:
     parts = folder_path.split(os.sep)
     if len(parts) >= 3:
-        subject_id = parts[-1]  # sub-0001
-        label = parts[-2]  # AD, MCI, or NC
-        subject_labels[subject_id] = label
+        subject_id = parts[-1]
+        label = parts[-2]
+        
+        # 檢查是否有完整的 MRI 文件（至少 3 個 .nii.gz 文件）
+        nii_files = list(Path(folder_path).glob("*.nii.gz"))
+        if len(nii_files) >= 3:
+            subject_labels[subject_id] = label
 
 subject_list = sorted(subject_labels.keys())
 if not subject_list:
-    st.sidebar.error("找不到任何受試者資料。請確認資料在 data/MRI_processed/ 目錄下。")
+    st.sidebar.error("找不到任何有完整數據的受試者。")
+    st.sidebar.info("請確認 data/MRI_processed/ 目錄下的受試者資料夾包含至少 3 個 .nii.gz 文件（GM, FA, MD）")
     st.stop()
 
-# 保持當前選擇
 current_subject = st.session_state.get("selected_subject")
 if current_subject and current_subject in subject_list:
     default_index = subject_list.index(current_subject)
@@ -342,57 +228,41 @@ if is_running:
         "選擇受試者:",
         [current_subject or "N/A"],
         disabled=True,
-        help="分析進行中，受試者選擇已鎖定",
     )
 else:
     selected_subject = st.sidebar.selectbox(
         "選擇受試者:",
         subject_list,
         index=default_index,
-        help="選擇要分析的受試者",
     )
 
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
 st.sidebar.markdown(f"**真實標籤:** `{ground_truth_label}`")
 
 # CDDA 設定
-if st.session_state.cdda_mode:
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🤖 CDDA 設定")
-    
-    use_llm = st.sidebar.checkbox(
-        "啟用 LLM 模式",
-        value=False,
-        help="啟用雙 LLM 架構（Agent A + Agent B）。關閉則使用規則式降級"
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 CDDA 設定")
+
+use_llm = st.sidebar.checkbox(
+    "啟用 LLM 模式",
+    value=False,
+    help="啟用雙 LLM 架構（Phi-4 + Llama3.1-Aloe-Beta）"
+)
+
+if use_llm:
+    st.sidebar.markdown("**模型路徑**")
+    orchestrator_model_path = st.sidebar.text_input(
+        "Agent A (Phi-4)",
+        value="D:/hf_models/Phi-4-mini-instruct"
     )
-    
-    # HuggingFace 模型路徑設定
-    if use_llm:
-        st.sidebar.markdown("**HuggingFace 模型設定**")
-        
-        orchestrator_model_path = st.sidebar.text_input(
-            "Agent A 模型路徑",
-            value="D:/hf_models/Phi-4-mini-instruct",
-            help="Agent A (Orchestrator) 的 HuggingFace 模型路徑"
-        )
-        
-        consultant_model_path = st.sidebar.text_input(
-            "Agent B 模型路徑",
-            value="D:/hf_models/medgemma-27b",
-            help="Agent B (Consultant) 的 HuggingFace 模型路徑"
-        )
-        
-        st.session_state.orchestrator_model_path = orchestrator_model_path
-        st.session_state.consultant_model_path = consultant_model_path
-    
-    show_reasoning = st.sidebar.checkbox(
-        "顯示推理鏈",
-        value=True,
-        help="顯示完整的代理推理過程"
+    consultant_model_path = st.sidebar.text_input(
+        "Agent B (Llama3.1-Aloe-Beta)",
+        value=r"D:\hf_models\Llama3.1-Aloe-Beta-8B"
     )
-    
-    st.session_state.use_llm = use_llm
-    st.session_state.show_reasoning = show_reasoning
+    st.session_state.orchestrator_model_path = orchestrator_model_path
+    st.session_state.consultant_model_path = consultant_model_path
+
+st.session_state.use_llm = use_llm
 
 # 檢查參數變更
 prev_subject = st.session_state.get('selected_subject')
@@ -400,6 +270,8 @@ if prev_subject and prev_subject != selected_subject:
     st.session_state.run_complete = False
     if 'cdda_result' in st.session_state:
         del st.session_state['cdda_result']
+    if 'chat_history' in st.session_state:
+        del st.session_state['chat_history']
 
 st.session_state.selected_subject = selected_subject
 st.session_state.ground_truth_label = ground_truth_label
@@ -407,16 +279,10 @@ st.session_state.ground_truth_label = ground_truth_label
 # 按鈕區域
 st.sidebar.markdown("---")
 if is_running:
-    st.sidebar.button(
-        "分析進行中...",
-        type="primary",
-        use_container_width=True,
-        disabled=True,
-    )
+    st.sidebar.button("分析進行中...", type="primary", use_container_width=True, disabled=True)
     if st.sidebar.button("強制停止", type="secondary", use_container_width=True):
         st.session_state.analysis_running = False
         st.session_state.run_complete = False
-        st.sidebar.warning("分析已停止")
         st.rerun()
     start_button = False
 else:
@@ -424,18 +290,14 @@ else:
         "🚀 開始分析",
         type="primary",
         use_container_width=True,
-        help=f"開始分析 {selected_subject}"
     )
 
-# ADNI 致謝
 st.sidebar.markdown("---")
-adni_acknowledgement = """
+st.sidebar.markdown("""
 <div style="font-size: 0.75rem; color: grey;">
-Data used in preparation of this article were obtained from the Alzheimer's Disease 
-Neuroimaging Initiative (ADNI) database (adni.loni.usc.edu).
+Data from ADNI database (adni.loni.usc.edu)
 </div>
-"""
-st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ============================================================================
 # 分析邏輯
@@ -444,380 +306,446 @@ st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
 if start_button:
     st.session_state.analysis_running = True
     st.session_state.run_complete = False
-    
     if 'cdda_result' in st.session_state:
         del st.session_state['cdda_result']
-    if 'langgraph_result' in st.session_state:
-        del st.session_state['langgraph_result']
-    
+    if 'chat_history' in st.session_state:
+        del st.session_state['chat_history']
     st.rerun()
 
-# 執行分析
 if st.session_state.get("analysis_running", False) and not st.session_state.get("run_complete", False):
     progress_bar = st.progress(0)
     status_text = st.empty()
     
-    with st.spinner("正在分析腦部影像... 這可能需要幾分鐘。"):
+    with st.spinner("正在分析..."):
         try:
-            selected_subject = st.session_state.selected_subject
-            ground_truth_label = st.session_state.ground_truth_label
-            
             import time
             
-            if st.session_state.cdda_mode:
-                # ============================================================
-                # CDDA Framework 分析
-                # ============================================================
-                status_text.text("初始化 CDDA Agent...")
-                progress_bar.progress(10)
-                
-                use_llm = st.session_state.get('use_llm', False)
-                orchestrator_model_path = st.session_state.get('orchestrator_model_path', None) if use_llm else None
-                consultant_model_path = st.session_state.get('consultant_model_path', None) if use_llm else None
-                
-                agent = initialize_cdda_agent(
-                    use_llm=use_llm,
-                    orchestrator_model_path=orchestrator_model_path,
-                    consultant_model_path=consultant_model_path
-                )
-                
-                if agent is None:
-                    raise Exception("CDDA Agent 初始化失敗")
-                
-                status_text.text("執行 CDDA 分析...")
-                progress_bar.progress(30)
-                
-                # 執行分析
-                result = agent.run_analysis(selected_subject)
-                
-                status_text.text("生成診斷報告...")
-                progress_bar.progress(70)
-                
-                # 儲存結果
-                st.session_state['cdda_result'] = result
-                st.session_state['analysis_framework'] = 'CDDA'
-                
-                status_text.text("分析完成！")
-                progress_bar.progress(100)
-                
-            else:
-                # ============================================================
-                # 傳統 LangGraph 分析
-                # ============================================================
-                status_text.text("準備分析...")
-                progress_bar.progress(10)
-                
-                # 尋找 NIfTI 檔案
-                nii_search_pattern = f"data/fMRI/*/{selected_subject}/*.nii.gz"
-                nii_file_list = glob.glob(nii_search_pattern)
-                if not nii_file_list:
-                    raise FileNotFoundError(f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案")
-                
-                nii_path = nii_file_list[0]
-                model_path = "model/capsnet/best_capsnet_rnn.pth"
-                
-                status_text.text("載入資料檔案...")
-                progress_bar.progress(20)
-                
-                initial_state = {
-                    "subject_id": selected_subject,
-                    "fmri_scan_path": nii_path,
-                    "model_path": model_path,
-                    "model_name": "capsnet",
-                    "analysis_mode": "functional",
-                    "trace_log": [],
-                    "error_log": []
-                }
-                
-                status_text.text("執行 AI 分析管線...")
-                progress_bar.progress(50)
-                
-                final_state = langgraph_app.invoke(initial_state)
-                
-                status_text.text("完成結果...")
-                progress_bar.progress(90)
-                
-                st.session_state['langgraph_result'] = final_state
-                st.session_state['nii_path'] = nii_path
-                st.session_state['analysis_framework'] = 'LangGraph'
-                
-                status_text.text("分析完成！")
-                progress_bar.progress(100)
+            status_text.text("初始化 CDDA Agent...")
+            progress_bar.progress(10)
+            
+            use_llm = st.session_state.get('use_llm', False)
+            orchestrator_model_path = st.session_state.get('orchestrator_model_path', None) if use_llm else None
+            consultant_model_path = st.session_state.get('consultant_model_path', None) if use_llm else None
+            
+            agent = initialize_cdda_agent(
+                use_llm=use_llm,
+                orchestrator_model_path=orchestrator_model_path,
+                consultant_model_path=consultant_model_path
+            )
+            
+            if agent is None:
+                raise Exception("CDDA Agent 初始化失敗")
+            
+            status_text.text("執行 CDDA 分析...")
+            progress_bar.progress(30)
+            
+            result = agent.run_analysis(st.session_state.selected_subject)
+            
+            status_text.text("生成報告...")
+            progress_bar.progress(70)
+            
+            st.session_state['cdda_result'] = result
+            
+            status_text.text("完成！")
+            progress_bar.progress(100)
             
             st.session_state['run_complete'] = True
             st.session_state.analysis_running = False
             
             time.sleep(1)
-            st.success("✅ 分析成功完成！")
+            st.success("✅ 分析完成！")
             st.rerun()
             
         except Exception as e:
             status_text.text("分析失敗")
             progress_bar.progress(0)
-            
-            st.error(f"分析過程中發生錯誤: {e}")
+            st.error(f"錯誤: {e}")
             st.session_state['run_complete'] = False
             st.session_state.analysis_running = False
 
 # ============================================================================
-# 結果顯示
+# Dashboard 顯示
 # ============================================================================
 
 if st.session_state.get("run_complete", False):
+    result = st.session_state['cdda_result']
+    ground_truth = st.session_state.get("ground_truth_label", "N/A")
+    
+    diagnosis_map = {
+        'AD': '阿茲海默症',
+        'MCI': '輕度認知障礙',
+        'NC': '正常認知'
+    }
+    
+    # ========================================================================
+    # 1. Header & Metrics (Top Row)
+    # ========================================================================
+    
+    st.title("🧠 CDDA 臨床診斷儀表板")
+    st.markdown(f"**受試者:** {result.subject_id} | **真實標籤:** {diagnosis_map.get(ground_truth, ground_truth)}")
+    
     st.markdown("---")
-    st.header("📊 分析結果")
     
-    analysis_framework = st.session_state.get('analysis_framework', 'Unknown')
+    # 主要指標行
+    col1, col2, col3, col4, col5 = st.columns(5)
     
-    if analysis_framework == 'CDDA':
-        # ================================================================
-        # CDDA 結果顯示
-        # ================================================================
-        result = st.session_state['cdda_result']
-        ground_truth = st.session_state.get("ground_truth_label", "N/A")
+    with col1:
+        pred_color = "🔴" if result.prediction == 'AD' else ("🟡" if result.prediction == 'MCI' else "🟢")
+        st.metric(
+            "AI 診斷",
+            f"{pred_color} {diagnosis_map.get(result.prediction, result.prediction)}",
+            delta="正確" if ground_truth == result.prediction else "錯誤",
+            delta_color="normal" if ground_truth == result.prediction else "inverse"
+        )
+    
+    with col2:
+        conf_delta = "高" if result.confidence > 0.8 else ("中" if result.confidence > 0.6 else "低")
+        st.metric(
+            "信心度",
+            f"{result.confidence:.1%}",
+            delta=conf_delta,
+            delta_color="normal" if result.confidence > 0.7 else "inverse"
+        )
+    
+    with col3:
+        uq_status = "高不確定性" if result.uq_score > 0.8 else ("中等" if result.uq_score > 0.5 else "低")
+        st.metric(
+            "不確定性評分",
+            f"{result.uq_score:.3f}",
+            delta=uq_status,
+            delta_color="inverse" if result.uq_score > 0.8 else "normal"
+        )
+    
+    with col4:
+        anomaly_count = 0
+        anomaly_status = "Pass"
+        if result.context_object and result.context_object.tool_results:
+            kc = result.context_object.tool_results.get('knowledge_context', {})
+            anomaly_count = len(kc.get('query_regions', []))
+            anomaly_status = "Alert" if anomaly_count > 0 else "Pass"
         
-        # 診斷結果的中文翻譯
-        diagnosis_map = {
-            'AD': '阿茲海默症',
-            'MCI': '輕度認知障礙',
-            'NC': '正常認知'
+        st.metric(
+            "異常檢查",
+            anomaly_status,
+            delta=f"{anomaly_count} 個異常區域" if anomaly_count > 0 else "無異常",
+            delta_color="inverse" if anomaly_count > 0 else "normal"
+        )
+    
+    with col5:
+        decision_icon = "🔬" if result.agent_decision == 'SIMULATION_TRIGGERED' else ("⚠️" if result.agent_decision == 'ANOMALY_INVESTIGATION' else "📋")
+        decision_short = {
+            'SIMULATION_TRIGGERED': '反事實',
+            'ANOMALY_INVESTIGATION': '異常調查',
+            'STANDARD_REPORT': '標準'
         }
-        
-        # 顯示診斷報告
-        report_html = format_cdda_report(result)
-        st.markdown(report_html, unsafe_allow_html=True)
-        
-        # 預測驗證（更清晰的顯示）
-        st.markdown("---")
-        st.subheader("🎯 診斷驗證")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.metric(
-                "真實診斷", 
-                diagnosis_map.get(ground_truth, ground_truth),
-                help="受試者的實際診斷標籤"
-            )
-        
-        with col2:
-            st.metric(
-                "AI 預測", 
-                diagnosis_map.get(result.prediction, result.prediction),
-                help="CDDA 系統的預測結果"
-            )
-        
-        with col3:
-            if ground_truth == result.prediction:
-                st.success("✅ 預測正確")
-            else:
-                st.error("❌ 預測錯誤")
-                st.warning(f"預測為 {diagnosis_map.get(result.prediction, result.prediction)}，實際為 {diagnosis_map.get(ground_truth, ground_truth)}")
-        
-        # 關鍵指標
-        st.markdown("---")
-        st.subheader("📊 關鍵診斷指標")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            confidence_delta = None
-            if result.confidence > 0.8:
-                confidence_delta = "高"
-                confidence_color = "normal"
-            elif result.confidence > 0.6:
-                confidence_delta = "中"
-                confidence_color = "off"
-            else:
-                confidence_delta = "低"
-                confidence_color = "inverse"
-            
-            st.metric(
-                "診斷信心度", 
-                f"{result.confidence:.1%}",
-                delta=confidence_delta,
-                delta_color=confidence_color,
-                help="模型對診斷結果的信心程度"
-            )
-        
-        with col2:
-            uq_delta = None
-            if result.uq_score > 0.8:
-                uq_delta = "高 - 需注意"
-                uq_color = "inverse"
-            elif result.uq_score > 0.5:
-                uq_delta = "中等"
-                uq_color = "off"
-            else:
-                uq_delta = "低"
-                uq_color = "normal"
-            
-            st.metric(
-                "不確定性評分", 
-                f"{result.uq_score:.3f}",
-                delta=uq_delta,
-                delta_color=uq_color,
-                help="模型的不確定性程度，越高表示需要更多臨床驗證"
-            )
-        
-        with col3:
-            # 顯示異常區域數量
-            anomaly_count = 0
-            if result.context_object and result.context_object.tool_results:
-                kc = result.context_object.tool_results.get('knowledge_context', {})
-                anomaly_count = len(kc.get('query_regions', []))
-            
-            st.metric(
-                "異常腦區數量", 
-                anomaly_count,
-                help="檢測到統計異常的腦區數量"
-            )
-        
-        with col4:
-            # 顯示是否執行了反事實分析
-            cf_performed = "是" if (result.context_object and 
-                                   result.context_object.tool_results and 
-                                   'counterfactual' in result.context_object.tool_results) else "否"
-            
-            st.metric(
-                "反事實分析", 
-                cf_performed,
-                help="是否執行了反事實模擬以識別關鍵診斷驅動因子"
-            )
-        
-        # 顯示推理鏈
-        if st.session_state.get('show_reasoning', True) and result.reasoning_chain:
-            display_reasoning_chain(result.reasoning_chain)
-        
-        # 顯示元數據
-        with st.expander("📋 技術細節與元數據", expanded=False):
-            st.json(result.metadata)
+        st.metric(
+            "分析模式",
+            f"{decision_icon} {decision_short.get(result.agent_decision, result.agent_decision)}"
+        )
     
+    st.markdown("---")
+    
+    # ========================================================================
+    # 2. Clinical Executive Summary (At-a-Glance)
+    # ========================================================================
+    
+    st.subheader("📋 臨床執行摘要")
+    
+    # Extract executive summary from metadata
+    executive_summary = result.metadata.get('executive_summary', {})
+    
+    if executive_summary:
+        # Headline
+        headline = executive_summary.get('headline', 'No summary available')
+        risk_level = executive_summary.get('risk_level', 'Medium')
+        
+        # Display headline with appropriate styling
+        if risk_level == 'High':
+            st.error(f"⚠️ **{headline}**")
+        elif risk_level == 'Medium':
+            st.warning(f"⚡ **{headline}**")
+        else:
+            st.info(f"✅ **{headline}**")
+        
+        # Key Findings and Recommended Actions side-by-side
+        col_findings, col_actions = st.columns(2)
+        
+        with col_findings:
+            st.markdown("#### 🔍 關鍵發現")
+            key_findings = executive_summary.get('key_findings', [])
+            if key_findings:
+                for finding in key_findings:
+                    st.markdown(f"• {finding}")
+            else:
+                st.caption("無特殊發現")
+        
+        with col_actions:
+            st.markdown("#### 💡 建議行動")
+            recommended_actions = executive_summary.get('recommended_actions', [])
+            if recommended_actions:
+                for action in recommended_actions:
+                    st.markdown(f"• {action}")
+            else:
+                st.caption("標準追蹤即可")
     else:
-        # ================================================================
-        # LangGraph 結果顯示（保留原有邏輯）
-        # ================================================================
-        final_state = st.session_state['langgraph_result']
-        ground_truth = st.session_state.get("ground_truth_label", "N/A")
+        # Fallback: use old insight extraction
+        st.markdown("**AI 分析邏輯**")
+        insights = extract_key_insights(result)
         
-        # 顯示激活圖
-        st.subheader("腦部激活圖")
-        try:
-            viz_path = final_state.get("visualization_paths", [])[0]
-            st.image(viz_path, caption=f"激活圖 - {selected_subject}")
-        except Exception as e:
-            st.error(f"無法顯示圖像: {e}")
-        
-        # 預測驗證
-        predicted_label = final_state.get("classification_result", "N/A")
-        st.subheader("預測驗證")
-        col1, col2 = st.columns(2)
-        col1.metric("真實標籤", ground_truth)
-        col2.metric("模型預測", predicted_label)
-        
-        if ground_truth == predicted_label:
-            st.success("✅ 預測正確")
-        else:
-            st.error("❌ 預測錯誤")
-        
-        # 顯示報告
-        reports = final_state.get("generated_reports", {})
-        report_en = reports.get("en", "No English report was generated.")
-        report_zh = reports.get("zh", "沒有生成中文報告。")
-        
-        tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
-        with tab_en:
-            st.subheader("Clinical Report (English)")
-            st.markdown(report_en, unsafe_allow_html=True)
-        with tab_zh:
-            st.subheader("臨床分析報告 (繁體中文)")
-            st.markdown(report_zh, unsafe_allow_html=True)
+        if insights:
+            for insight in insights:
+                with st.container():
+                    col_icon, col_text = st.columns([1, 20])
+                    with col_icon:
+                        st.markdown(f"### {insight['icon']}")
+                    with col_text:
+                        st.markdown(f"**{insight['text']}**")
+                        if insight['details']:
+                            st.caption(insight['details'])
     
-    # ====================================================================
-    # 互動式 MRI 檢視器（兩種模式共用）
-    # ====================================================================
-    with st.expander("🔍 探索原始 MRI 掃描（互動式切片器）", expanded=False):
-        # 嘗試找到 NIfTI 檔案
-        nii_path = st.session_state.get("nii_path")
+    # 顯示完整臨床報告（摺疊）
+    if hasattr(result, 'clinical_report') and result.clinical_report:
+        with st.expander("📄 查看完整詳細報告", expanded=False):
+            st.markdown("### 完整臨床分析報告")
+            st.markdown(result.clinical_report)
+    
+    st.markdown("---")
+    
+    # ========================================================================
+    # 3. Visual Evidence (Middle Row)
+    # ========================================================================
+    
+    st.subheader("📊 視覺化證據")
+    
+    col_left, col_right = st.columns(2)
+    
+    with col_left:
+        st.markdown("#### 🧠 MRI 影像")
         
-        # 如果沒有 nii_path，嘗試從 MRI_processed 目錄找
-        if not nii_path or not Path(nii_path).exists():
-            selected_subject = st.session_state.get("selected_subject")
-            ground_truth_label = st.session_state.get("ground_truth_label", "N/A")
-            
-            if selected_subject and ground_truth_label != "N/A":
-                # 嘗試多個可能的路徑和檔案名稱模式
-                possible_paths = [
-                    # MRI_processed 目錄 (處理後的檔案)
-                    f"data/MRI_processed/{ground_truth_label}/{selected_subject}/{selected_subject}_GM_to_MNI.nii.gz",
-                    f"data/MRI_processed/{ground_truth_label}/{selected_subject}/{selected_subject}_FA_to_MNI.nii.gz",
-                    f"data/MRI_processed/{ground_truth_label}/{selected_subject}/{selected_subject}_MD_to_MNI.nii.gz",
-                    # 標準 BIDS 格式
-                    f"data/MRI_processed/{ground_truth_label}/{selected_subject}/anat/{selected_subject}_T1w.nii.gz",
-                    f"data/MRI_processed/{ground_truth_label}/{selected_subject}/{selected_subject}_T1w.nii.gz",
-                    # sMRI 目錄
-                    f"data/sMRI/{ground_truth_label}/{selected_subject}/anat/{selected_subject}_T1w.nii.gz",
-                    f"data/sMRI/{ground_truth_label}/{selected_subject}/{selected_subject}_T1w.nii.gz",
-                    # fMRI 目錄
-                    f"data/fMRI/{ground_truth_label}/{selected_subject}/func/{selected_subject}_task-rest_bold.nii.gz",
-                    f"data/fMRI/{ground_truth_label}/{selected_subject}/{selected_subject}_task-rest_bold.nii.gz",
-                ]
-                
-                for path in possible_paths:
-                    if Path(path).exists():
-                        nii_path = path
-                        st.session_state["nii_path"] = nii_path
-                        break
+        # 尋找 NIfTI 檔案
+        nii_path = None
+        possible_paths = [
+            f"data/MRI_processed/{ground_truth}/{result.subject_id}/{result.subject_id}_GM_to_MNI.nii.gz",
+            f"data/MRI_processed/{ground_truth}/{result.subject_id}/{result.subject_id}_T1w.nii.gz",
+        ]
         
-        if nii_path and Path(nii_path).exists():
-            st.info(f"📁 載入檔案: {nii_path}")
-            
-            img, num_time_points = load_nifti(nii_path)
-            
-            if img and num_time_points > 0:
-                if num_time_points > 1:
-                    selected_time_point_display = st.slider(
-                        "時間點（Volume）",
-                        min_value=1,
-                        max_value=num_time_points,
-                        value=1,
-                        help=f"此掃描有 {num_time_points} 個 volumes"
-                    )
-                    selected_time_point_index = selected_time_point_display - 1
-                    img_3d_at_t = nimg.index_img(img, selected_time_point_index)
-                    title = f"Volume at T={selected_time_point_display}"
-                else:
-                    img_3d_at_t = img
-                    title = "Structural MRI (T1-weighted)"
-                
-                viewer = plotting.view_img(
-                    img_3d_at_t,
-                    bg_img=None,
-                    cmap="gray",
-                    threshold=None,
-                    title=title,
-                    resampling_interpolation="nearest",
-                    colorbar=False,
-                    annotate=True,
-                    black_bg=True,
-                )
-                
-                components.html(viewer.html, height=600, scrolling=False)
+        for path in possible_paths:
+            if Path(path).exists():
+                nii_path = path
+                break
+        
+        if nii_path:
+            img, _ = load_nifti(nii_path)
+            if img:
+                try:
+                    # 創建靜態切片視圖
+                    from nilearn import plotting as niplot
+                    import matplotlib
+                    matplotlib.use('Agg')  # 使用非互動式後端
+                    import matplotlib.pyplot as plt
+                    
+                    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+                    niplot.plot_anat(img, display_mode='x', cut_coords=1, axes=axes[0], title="Sagittal")
+                    niplot.plot_anat(img, display_mode='y', cut_coords=1, axes=axes[1], title="Coronal")
+                    niplot.plot_anat(img, display_mode='z', cut_coords=1, axes=axes[2], title="Axial")
+                    st.pyplot(fig)
+                    plt.close()
+                except Exception as e:
+                    st.warning(f"無法顯示 MRI 切片視圖: {e}")
+                    st.info("使用互動式檢視器作為替代")
+                    # 備用：使用 nilearn 的互動式檢視器
+                    viewer = plotting.view_img(img, bg_img=None, cmap="gray", black_bg=True)
+                    components.html(viewer.html, height=400, scrolling=False)
         else:
-            st.warning(f"找不到原始 NIfTI 檔案。受試者: {st.session_state.get('selected_subject', 'N/A')}")
-            st.info("請確認資料位於以下目錄之一：\n- data/MRI_processed/\n- data/sMRI/\n- data/fMRI/")
+            st.warning("找不到 MRI 影像檔案")
+    
+    with col_right:
+        st.markdown("#### 📈 診斷驅動因子 (SHAP)")
+        
+        shap_fig = create_shap_chart(result)
+        if shap_fig:
+            st.plotly_chart(shap_fig, use_container_width=True)
+        else:
+            st.info("SHAP 數據不可用")
+    
+    st.markdown("---")
+    
+    # ========================================================================
+    # 4. Contextual Chatbot (Bottom/Expandable)
+    # ========================================================================
+    
+    with st.expander("💬 與 CDDA 顧問討論此案例", expanded=False):
+        st.markdown("### 互動式 AI 顧問")
+        st.caption("詢問關於此診斷的任何問題，AI 顧問將基於當前分析結果回答")
+        
+        # 初始化聊天歷史
+        if 'chat_history' not in st.session_state:
+            st.session_state.chat_history = []
+            # 添加系統上下文
+            system_context = f"""
+你是一位專業的神經影像學 AI 顧問。當前案例資訊：
+
+受試者: {result.subject_id}
+診斷: {result.prediction} (信心度: {result.confidence:.1%})
+不確定性: {result.uq_score:.3f}
+分析模式: {result.agent_decision}
+
+臨床報告摘要:
+{result.clinical_report[:500] if hasattr(result, 'clinical_report') else '無報告'}
+
+請基於以上資訊回答用戶的問題。保持專業、簡潔，並提供臨床相關的見解。
+"""
+            st.session_state.system_context = system_context
+        
+        # 顯示聊天歷史
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg['role']):
+                st.markdown(msg['content'])
+        
+        # 聊天輸入
+        if prompt := st.chat_input("詢問關於此診斷的問題..."):
+            # 添加用戶消息
+            st.session_state.chat_history.append({'role': 'user', 'content': prompt})
+            with st.chat_message('user'):
+                st.markdown(prompt)
+            
+            # 生成 AI 回應
+            with st.chat_message('assistant'):
+                with st.spinner("思考中..."):
+                    try:
+                        # 構建基於規則的智能回應
+                        response_parts = []
+                        
+                        # 基本回應
+                        response_parts.append(f"關於「{prompt}」的問題：\n")
+                        
+                        # 根據問題關鍵詞提供相關資訊
+                        prompt_lower = prompt.lower()
+                        
+                        if any(word in prompt_lower for word in ['為什麼', 'why', '原因', 'reason']):
+                            response_parts.append(f"\n基於當前分析，{result.prediction} 診斷的信心度為 {result.confidence:.1%}。")
+                            
+                            # 添加關鍵驅動因子
+                            if result.context_object and result.context_object.diagnostic_report:
+                                top_features = result.context_object.diagnostic_report.top_features[:3]
+                                if top_features:
+                                    response_parts.append("\n\n**關鍵診斷驅動因子：**")
+                                    for i, feat in enumerate(top_features, 1):
+                                        roi_name = _safe_get_feature_attr(feat, 'roi_name', 'Unknown')
+                                        shap_val = _safe_get_feature_attr(feat, 'shap_value', 0)
+                                        z_score = _safe_get_feature_attr(feat, 'z_score', 0)
+                                        response_parts.append(f"\n{i}. {roi_name} (SHAP: {shap_val:.4f}, Z-score: {z_score:.2f})")
+                        
+                        elif any(word in prompt_lower for word in ['不確定', 'uncertainty', '可靠', 'reliable', 'trust']):
+                            response_parts.append(f"\n**不確定性評估：**")
+                            response_parts.append(f"\n- 不確定性評分: {result.uq_score:.3f}")
+                            
+                            if result.uq_score > 0.8:
+                                response_parts.append("\n- ⚠️ 高不確定性：建議進行額外的臨床驗證")
+                                response_parts.append("\n- 系統已執行反事實分析以識別關鍵因子")
+                            elif result.uq_score > 0.5:
+                                response_parts.append("\n- 中等不確定性：診斷結果需要臨床醫師確認")
+                            else:
+                                response_parts.append("\n- 低不確定性：模型對此診斷較有信心")
+                        
+                        elif any(word in prompt_lower for word in ['異常', 'anomaly', '特殊', 'unusual']):
+                            if result.context_object and result.context_object.tool_results:
+                                kc = result.context_object.tool_results.get('knowledge_context', {})
+                                anomalous_regions = kc.get('query_regions', [])
+                                
+                                if anomalous_regions:
+                                    response_parts.append(f"\n**異常檢測結果：**")
+                                    response_parts.append(f"\n檢測到 {len(anomalous_regions)} 個統計異常腦區：")
+                                    for region in anomalous_regions[:5]:
+                                        response_parts.append(f"\n- {region}")
+                                    
+                                    summary = kc.get('summary', '')
+                                    if summary:
+                                        response_parts.append(f"\n\n**臨床意義：**\n{summary}")
+                                else:
+                                    response_parts.append("\n未檢測到統計異常的腦區。")
+                        
+                        elif any(word in prompt_lower for word in ['反事實', 'counterfactual', '模擬', 'simulation']):
+                            if result.context_object and result.context_object.tool_results:
+                                cf = result.context_object.tool_results.get('counterfactual', {})
+                                
+                                if cf:
+                                    response_parts.append("\n**反事實模擬結果：**")
+                                    response_parts.append(f"\n- 原始預測: {cf.get('original_prediction', 'N/A')} ({cf.get('original_confidence', 0):.1%})")
+                                    response_parts.append(f"\n- 遮蔽關鍵特徵後: {cf.get('new_prediction', 'N/A')} ({cf.get('new_confidence', 0):.1%})")
+                                    response_parts.append(f"\n- 信心度變化: {cf.get('confidence_delta', 0):+.1%}")
+                                    response_parts.append(f"\n\n**解釋：** {cf.get('interpretation', 'N/A')}")
+                                else:
+                                    response_parts.append("\n此案例未執行反事實模擬（不確定性較低）。")
+                        
+                        else:
+                            # 通用回應
+                            response_parts.append(f"\n基於當前分析：")
+                            response_parts.append(f"\n- 診斷: {result.prediction}")
+                            response_parts.append(f"\n- 信心度: {result.confidence:.1%}")
+                            response_parts.append(f"\n- 不確定性: {result.uq_score:.3f}")
+                            response_parts.append(f"\n- 分析模式: {result.agent_decision}")
+                        
+                        # 添加 LLM 模式提示
+                        if not st.session_state.get('use_llm', False):
+                            response_parts.append("\n\n💡 *提示：啟用 LLM 模式可獲得更深入的 AI 對話體驗*")
+                        
+                        response = ''.join(response_parts)
+                        
+                        st.markdown(response)
+                        st.session_state.chat_history.append({'role': 'assistant', 'content': response})
+                    
+                    except Exception as e:
+                        error_msg = f"抱歉，處理您的問題時發生錯誤：{str(e)}"
+                        st.error(error_msg)
+                        st.session_state.chat_history.append({'role': 'assistant', 'content': error_msg})
+    
+    # ========================================================================
+    # 技術細節（可選）
+    # ========================================================================
+    
+    with st.expander("🔧 技術細節與推理鏈", expanded=False):
+        tab1, tab2 = st.tabs(["元數據", "完整推理鏈"])
+        
+        with tab1:
+            st.json(result.metadata)
+        
+        with tab2:
+            for step in result.reasoning_chain:
+                if step.startswith("="*80):
+                    st.markdown(f"**{step.replace('=', '')}**")
+                elif step.startswith("-"*80):
+                    st.markdown(f"*{step.replace('-', '')}*")
+                else:
+                    st.text(step)
 
 else:
-    st.info("👈 請在側邊欄選擇受試者和分析框架，然後點擊「開始分析」查看結果。")
+    # 歡迎畫面
+    st.title("🧠 Cognivex CDDA 臨床診斷儀表板")
+    st.markdown("---")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 🎯 智能診斷")
+        st.markdown("雙 LLM 架構提供高精度 AD/MCI/NC 分類")
+    
+    with col2:
+        st.markdown("### 🔬 可解釋 AI")
+        st.markdown("反事實分析與 SHAP 值揭示診斷邏輯")
+    
+    with col3:
+        st.markdown("### 💬 互動顧問")
+        st.markdown("與 AI 討論案例，獲得深入見解")
+    
+    st.markdown("---")
+    st.info("👈 請在側邊欄選擇受試者，然後點擊「開始分析」")
 
-# ============================================================================
-# 頁尾資訊
-# ============================================================================
-
+# 頁尾
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: grey; font-size: 0.9rem;">
-    <p><strong>Cognivex CDDA Framework</strong> - Making neuroimaging AI explainable and trustworthy</p>
-    <p>整合雙 LLM 架構、MCP 協議和 A2A 模式的自主診斷代理系統</p>
+    <p><strong>Cognivex CDDA Framework</strong> - Dashboard-First Clinical AI</p>
+    <p>Phi-4-mini (Orchestrator) + Llama3.1-Aloe-Beta-8B (Consultant)</p>
 </div>
 """, unsafe_allow_html=True)

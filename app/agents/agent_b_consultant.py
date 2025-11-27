@@ -8,7 +8,7 @@ Agent B is responsible for:
 3. Generating comprehensive diagnostic reports
 4. Interpreting counterfactual results and anomalies
 
-Agent B uses MedGemma-27B (or similar medical domain model) for clinical reasoning.
+Agent B uses Llama3.1-Aloe-Beta-8B, a specialized medical AI model for clinical reasoning.
 IMPORTANT: Agent B has NO direct access to MCP server or tools.
 
 Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 7.2, 7.3, 7.4
@@ -42,9 +42,9 @@ from app.services.llm_providers.error_handling import (
 @dataclass
 class AgentBConfig:
     """Configuration for Agent B"""
-    model: str = "medgemma-27b"  # MedGemma-27B for medical reasoning
-    model_path: Optional[str] = None  # Path for HuggingFace models
-    provider: str = "ollama"  # "ollama" or "huggingface"
+    model: str = "llama3.1-aloe-beta-8b"  # Llama3.1-Aloe-Beta-8B for medical reasoning
+    model_path: Optional[str] = r"D:\hf_models\Llama3.1-Aloe-Beta-8B"  # Path for HuggingFace models
+    provider: str = "huggingface"  # "ollama" or "huggingface"
     temperature: float = 0.3  # Higher than Agent A for more creative synthesis
     use_llm: bool = True  # If False, use template-based generation
     load_in_8bit: bool = True  # Use 8-bit quantization to save memory
@@ -90,9 +90,11 @@ class AgentB:
         
         if self.config.verbose:
             print("\n" + "="*80)
-            print("AGENT B - CLINICAL CONSULTANT (MedGemma-27B)")
+            print("AGENT B - CLINICAL CONSULTANT (Llama3.1-Aloe-Beta-8B)")
             print("="*80)
             print(f"Model: {self.config.model}")
+            if self.config.model_path:
+                print(f"Path: {self.config.model_path}")
             print(f"Temperature: {self.config.temperature}")
             print(f"LLM Mode: {'Enabled' if self.config.use_llm else 'Template-based fallback'}")
             print("="*80)

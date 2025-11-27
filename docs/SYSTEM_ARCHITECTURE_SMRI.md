@@ -38,7 +38,7 @@ graph TB
     subgraph "代理層 - CDDA Framework"
         CDDA[cdda_agent.py<br/>主控代理]
         AgentA[agent_a_orchestrator.py<br/>編排代理<br/>Phi-4-mini]
-        AgentB[agent_b_consultant.py<br/>醫療顧問<br/>MedGemma-27B]
+        AgentB[agent_b_consultant.py<br/>醫療顧問<br/>Llama3.1-Aloe-Beta-8B]
     end
     
     subgraph "核心層"
@@ -162,7 +162,7 @@ sequenceDiagram
     
     Note over CDDA,AgentB: PHASE 2: Agent B 合成
     CDDA->>AgentB: synthesize(ContextObject)
-    Note over AgentB: 使用 MedGemma-27B<br/>生成繁體中文臨床報告
+    Note over AgentB: 使用 Llama3.1-Aloe-Beta-8B<br/>生成繁體中文臨床報告
     AgentB-->>CDDA: ClinicalReport + ReasoningChain
     
     Note over CDDA: PHASE 3: 推理鏈聚合
@@ -198,7 +198,7 @@ sequenceDiagram
 - 決策工具調用 (反事實、知識圖譜)
 - 編譯 ContextObject
 
-**agent_b_consultant.py** - 醫療顧問 (MedGemma-27B)
+**agent_b_consultant.py** - 醫療顧問 (Llama3.1-Aloe-Beta-8B)
 - 接收 ContextObject
 - 生成繁體中文臨床報告
 - 解釋反事實結果
@@ -301,7 +301,7 @@ NEO4J_PASSWORD=your_password
 
 # HuggingFace 模型路徑 (可選)
 HF_MODEL_PATH_AGENT_A=D:/hf_models/Phi-4-mini-instruct
-HF_MODEL_PATH_AGENT_B=D:/hf_models/medgemma-27b
+HF_MODEL_PATH_AGENT_B=D:\hf_models\Llama3.1-Aloe-Beta-8B
 ```
 
 ---

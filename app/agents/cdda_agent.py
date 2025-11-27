@@ -18,13 +18,38 @@ Reference: docs/CDDA_Architecture_Spec.md
 
 import sys
 import json
+import torch
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _safe_get_attr(obj: Any, attr_name: str, default: Any = None) -> Any:
+    """
+    安全地從對象或字典中獲取屬性
+    
+    支持 Feature dataclass 對象和字典兩種格式
+    
+    Args:
+        obj: Feature 對象或字典
+        attr_name: 屬性名稱
+        default: 預設值
+    
+    Returns:
+        屬性值或預設值
+    """
+    if isinstance(obj, dict):
+        return obj.get(attr_name, default)
+    else:
+        return getattr(obj, attr_name, default)
 
 from app.core.ml_processing.cdda_tools import CDDAToolKit
 from app.core.knowledge.graph_rag import GraphRAG
@@ -54,8 +79,8 @@ class CDDAAgent:
         self,
         orchestrator_model: str = "phi-4-mini",
         orchestrator_model_path: Optional[str] = "D:/hf_models/Phi-4-mini-instruct",
-        consultant_model: str = "medgemma-27b",
-        consultant_model_path: Optional[str] = "D:/hf_models/medgemma-27b-text-it",
+        consultant_model: str = "llama3.1-aloe-beta-8b",
+        consultant_model_path: Optional[str] = "D:/hf_models/Llama3.1-Aloe-Beta-8B",
         model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
         data_root: str = "data/MRI_processed",
         uq_threshold: float = 0.8,
@@ -70,8 +95,8 @@ class CDDAAgent:
         Args:
             orchestrator_model: Model for Agent A (default: "phi-4-mini")
             orchestrator_model_path: Path for Phi-4-mini model (Agent A)
-            consultant_model: Model for Agent B (default: "medgemma-27b")
-            consultant_model_path: Path for MedGemma model (Agent B)
+            consultant_model: Model for Agent B (default: "llama3.1-aloe-beta-8b")
+            consultant_model_path: Path for Llama3.1-Aloe-Beta-8B model (Agent B)
             model_path: Path to trained CNN-RF model (default: 3-class model)
             data_root: Root directory for MRI data
             uq_threshold: Threshold for high uncertainty trigger
@@ -171,7 +196,7 @@ class CDDAAgent:
         self.use_llm = use_llm
         
         if self.verbose:
-            print(f"\n[INFO] Orchestrator: Phi-4-mini | Consultant: MedGemma-27b")
+            print(f"\n[INFO] Orchestrator: Phi-4-mini | Consultant: Llama3.1-Aloe-Beta-8B")
             print(f"[OK] CDDA Agent ready (A2A mode)")
             print(f"   Decision Thresholds:")
             print(f"      UQ > {uq_threshold} → Trigger Counterfactual Simulation")
@@ -300,6 +325,238 @@ class CDDAAgent:
         
         if self.verbose:
             print(f"\n[LOG] Reasoning log saved to: {output_path}")
+    
+    def generate_executive_summary(
+        self,
+        clinical_report: str,
+        context_object: ContextObject
+    ) -> Dict:
+        """
+        Generate executive summary using Agent A (Phi-4) for rapid clinical review
+        
+        This method uses the orchestrator LLM to extract key information from
+        the detailed clinical report and structure it into a JSON format suitable
+        for dashboard widgets.
+        
+        Args:
+            clinical_report: Full text report from Agent B
+            context_object: ContextObject with diagnostic information
+        
+        Returns:
+            Dictionary with structured summary:
+            {
+                'headline': str,
+                'key_findings': List[str],
+                'recommended_actions': List[str],
+                'risk_level': str
+            }
+        """
+        if self.verbose:
+            print(f"\n[SUMMARIZATION] Generating executive summary...")
+        
+        # Extract key information from context
+        prediction = context_object.diagnostic_report.prediction_result
+        confidence = context_object.diagnostic_report.confidence
+        uq_score = context_object.diagnostic_report.uq_score
+        
+        # Determine risk level
+        if uq_score > 0.8 or confidence < 0.6:
+            risk_level = "High"
+        elif uq_score > 0.5 or confidence < 0.8:
+            risk_level = "Medium"
+        else:
+            risk_level = "Low"
+        
+        # If LLM mode is disabled, use rule-based summary
+        if not self.use_llm:
+            return self._generate_rule_based_summary(
+                clinical_report, context_object, risk_level
+            )
+        
+        # Construct prompt for Phi-4
+        prompt = f"""You are a Medical Secretary. Read the following clinical report and extract key information into strict JSON format.
+
+CLINICAL REPORT:
+{clinical_report[:2000]}  
+
+DIAGNOSTIC DATA:
+- Prediction: {prediction}
+- Confidence: {confidence:.1%}
+- Uncertainty Score: {uq_score:.3f}
+
+Extract the following information and output ONLY valid JSON (no markdown, no explanation):
+
+{{
+  "headline": "Short 1-sentence summary (e.g., 'Probable AD with high confidence and hippocampal atrophy')",
+  "key_findings": [
+    "Finding 1 (focus on top brain regions and their clinical significance)",
+    "Finding 2 (mention any anomalies or counterfactual results)",
+    "Finding 3 (note uncertainty or confidence issues)"
+  ],
+  "recommended_actions": [
+    "Action 1 (e.g., 'Clinical correlation recommended')",
+    "Action 2 (e.g., 'Follow-up imaging in 6 months')"
+  ],
+  "risk_level": "{risk_level}"
+}}
+
+Output ONLY the JSON object, nothing else:"""
+        
+        try:
+            # Use Agent A's LLM (Phi-4) for summarization
+            if hasattr(self.agent_a, 'llm') and self.agent_a.llm and hasattr(self.agent_a, 'tokenizer'):
+                # Generate using the model directly
+                inputs = self.agent_a.tokenizer(
+                    prompt,
+                    return_tensors="pt",
+                    truncation=True,
+                    max_length=2048
+                ).to(self.agent_a.llm.device)
+                
+                with torch.no_grad():
+                    outputs = self.agent_a.llm.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        temperature=0.1,
+                        do_sample=True,
+                        pad_token_id=self.agent_a.tokenizer.eos_token_id
+                    )
+                
+                response = self.agent_a.tokenizer.decode(
+                    outputs[0][inputs['input_ids'].shape[1]:],
+                    skip_special_tokens=True
+                )
+                
+                # Parse JSON response
+                import json
+                import re
+                
+                # Extract JSON from response
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if json_match:
+                    summary = json.loads(json_match.group(0))
+                    
+                    # Validate required fields
+                    required_fields = ['headline', 'key_findings', 'recommended_actions', 'risk_level']
+                    if all(field in summary for field in required_fields):
+                        if self.verbose:
+                            print(f"   LLM-generated summary: {summary.get('headline', 'N/A')}")
+                        return summary
+                    else:
+                        if self.verbose:
+                            print(f"   [WARNING] Incomplete JSON, using rule-based fallback")
+                        return self._generate_rule_based_summary(
+                            clinical_report, context_object, risk_level
+                        )
+                else:
+                    if self.verbose:
+                        print(f"   [WARNING] Failed to parse JSON, using rule-based fallback")
+                    return self._generate_rule_based_summary(
+                        clinical_report, context_object, risk_level
+                    )
+            else:
+                # No LLM available, use rule-based
+                if self.verbose:
+                    print(f"   [INFO] LLM not available, using rule-based summary")
+                return self._generate_rule_based_summary(
+                    clinical_report, context_object, risk_level
+                )
+        
+        except Exception as e:
+            if self.verbose:
+                print(f"   [WARNING] Summarization failed: {e}, using rule-based fallback")
+            
+            return self._generate_rule_based_summary(
+                clinical_report, context_object, risk_level
+            )
+    
+    def _generate_rule_based_summary(
+        self,
+        clinical_report: str,
+        context_object: ContextObject,
+        risk_level: str
+    ) -> Dict:
+        """
+        Generate executive summary using rule-based logic (fallback)
+        
+        Args:
+            clinical_report: Full text report
+            context_object: ContextObject with diagnostic information
+            risk_level: Pre-calculated risk level
+        
+        Returns:
+            Dictionary with structured summary
+        """
+        prediction = context_object.diagnostic_report.prediction_result
+        confidence = context_object.diagnostic_report.confidence
+        uq_score = context_object.diagnostic_report.uq_score
+        
+        # Generate headline
+        diagnosis_map = {
+            'AD': 'Alzheimer\'s Disease',
+            'MCI': 'Mild Cognitive Impairment',
+            'NC': 'Normal Cognition'
+        }
+        diagnosis_text = diagnosis_map.get(prediction, prediction)
+        
+        if confidence > 0.8:
+            headline = f"Probable {diagnosis_text} with high confidence"
+        elif confidence > 0.6:
+            headline = f"Possible {diagnosis_text} with moderate confidence"
+        else:
+            headline = f"Uncertain diagnosis, {diagnosis_text} suggested"
+        
+        # Extract key findings
+        key_findings = []
+        
+        # Add top features
+        top_features = context_object.diagnostic_report.top_features[:3]
+        if top_features:
+            regions = [_safe_get_attr(f, 'roi_name', 'Unknown') for f in top_features]
+            key_findings.append(f"Primary drivers: {', '.join(regions)}")
+        
+        # Add counterfactual info
+        tool_results = context_object.tool_results or {}
+        if 'counterfactual' in tool_results:
+            cf = tool_results['counterfactual']
+            confidence_delta = cf.get('confidence_delta', 0)
+            key_findings.append(
+                f"Counterfactual analysis shows {abs(confidence_delta):.1%} impact on confidence"
+            )
+        
+        # Add anomaly info
+        if 'knowledge_context' in tool_results:
+            kc = tool_results['knowledge_context']
+            anomalous_regions = kc.get('query_regions', [])
+            if anomalous_regions:
+                key_findings.append(
+                    f"Detected {len(anomalous_regions)} anomalous regions suggesting mixed pathology"
+                )
+        
+        # Add uncertainty info
+        if uq_score > 0.8:
+            key_findings.append(f"High uncertainty (UQ: {uq_score:.3f}) - additional validation recommended")
+        
+        # Generate recommended actions
+        recommended_actions = []
+        
+        if uq_score > 0.8:
+            recommended_actions.append("Clinical correlation strongly recommended")
+            recommended_actions.append("Consider additional imaging or biomarker testing")
+        elif uq_score > 0.5:
+            recommended_actions.append("Clinical review recommended")
+        else:
+            recommended_actions.append("Standard clinical follow-up appropriate")
+        
+        if 'knowledge_context' in tool_results:
+            recommended_actions.append("Evaluate for potential mixed pathology")
+        
+        return {
+            'headline': headline,
+            'key_findings': key_findings if key_findings else ["Standard diagnostic pattern observed"],
+            'recommended_actions': recommended_actions,
+            'risk_level': risk_level
+        }
     
     def _determine_agent_decision(self, context_object: ContextObject) -> str:
         """
@@ -463,7 +720,25 @@ class CDDAAgent:
             print(f"   Total reasoning steps: {len(combined_reasoning)}")
         
         # ====================================================================
-        # PHASE 4: Build Final Result
+        # PHASE 4: Post-Processing Summarization (Agent A)
+        # ====================================================================
+        
+        if self.verbose:
+            print(f"\n[PHASE 4] Post-Processing Summarization")
+            print("-" * 80)
+        
+        # Generate executive summary using Agent A (Phi-4)
+        executive_summary = self.generate_executive_summary(
+            clinical_report=clinical_report,
+            context_object=context_object
+        )
+        
+        if self.verbose:
+            print(f"   Executive summary generated")
+            print(f"   Headline: {executive_summary.get('headline', 'N/A')}")
+        
+        # ====================================================================
+        # PHASE 5: Build Final Result
         # ====================================================================
         
         # Determine agent decision type
@@ -484,7 +759,8 @@ class CDDAAgent:
                 'agent_a_steps': len(context_object.agent_a_reasoning),
                 'agent_b_steps': len(agent_b_reasoning),
                 'mcp_actions': len(context_object.mcp_actions),
-                'use_llm': self.use_llm
+                'use_llm': self.use_llm,
+                'executive_summary': executive_summary  # Add executive summary to metadata
             }
         )
         
@@ -526,7 +802,7 @@ the prediction may be sensitive to specific features. To identify key drivers,
 a counterfactual simulation was performed.
 
 COUNTERFACTUAL SIMULATION RESULTS:
-Masked Features: {', '.join([f['roi_name'] for f in cf_result['masked_features'][:3]])}
+Masked Features: {', '.join([_safe_get_attr(f, 'roi_name', 'Unknown') for f in cf_result.get('masked_features', [])[:3]])}
 
 Original Prediction: {cf_result['original_prediction']} ({cf_result['original_confidence']:.1%})
 Counterfactual Prediction: {cf_result['new_prediction']} ({cf_result['new_confidence']:.1%})
@@ -541,14 +817,17 @@ these brain regions are {impact_level} contributors to the diagnosis.
 TOP CONTRIBUTING FEATURES:
 """
         
-        for i, feat in enumerate(report['top_features'][:5], 1):
-            explanation += f"\n{i}. {feat['roi_name']}: Z-score={feat['z_score']:+.2f}, SHAP={feat['shap_value']:+.4f}"
+        for i, feat in enumerate(report.get('top_features', [])[:5], 1):
+            roi_name = _safe_get_attr(feat, 'roi_name', 'Unknown')
+            z_score = _safe_get_attr(feat, 'z_score', 0)
+            shap_value = _safe_get_attr(feat, 'shap_value', 0)
+            explanation += f"\n{i}. {roi_name}: Z-score={z_score:+.2f}, SHAP={shap_value:+.4f}"
         
         explanation += f"""
 
 RECOMMENDATION:
 Given the high uncertainty, clinical correlation is recommended. The counterfactual 
-analysis suggests focusing on {', '.join([f['roi_name'] for f in cf_result['masked_features'][:2]])} 
+analysis suggests focusing on {', '.join([_safe_get_attr(f, 'roi_name', 'Unknown') for f in cf_result.get('masked_features', [])[:2]])} 
 for further investigation.
 """
         
@@ -566,7 +845,7 @@ for further investigation.
                 f"2. Detected high uncertainty: UQ={report['uq_score']:.3f} > {self.uq_threshold}",
                 f"3. Triggered counterfactual simulation on top 3 features",
                 f"4. Simulation showed {cf_result['confidence_delta']:+.1%} confidence change",
-                f"5. Identified key drivers: {', '.join([f['roi_name'] for f in cf_result['masked_features'][:2]])}"
+                f"5. Identified key drivers: {', '.join([_safe_get_attr(f, 'roi_name', 'Unknown') for f in cf_result.get('masked_features', [])[:2]])}"
             ],
             'timestamp': datetime.now().isoformat()
         }
@@ -621,9 +900,12 @@ DETAILED CONTEXT:
 TOP CONTRIBUTING FEATURES:
 """
         
-        for i, feat in enumerate(report['top_features'][:5], 1):
-            anomaly_marker = "⚠️ ANOMALY" if abs(feat['z_score']) > self.z_score_threshold else ""
-            explanation += f"\n{i}. {feat['roi_name']}: Z-score={feat['z_score']:+.2f}, SHAP={feat['shap_value']:+.4f} {anomaly_marker}"
+        for i, feat in enumerate(report.get('top_features', [])[:5], 1):
+            roi_name = _safe_get_attr(feat, 'roi_name', 'Unknown')
+            z_score = _safe_get_attr(feat, 'z_score', 0)
+            shap_value = _safe_get_attr(feat, 'shap_value', 0)
+            anomaly_marker = "⚠️ ANOMALY" if abs(z_score) > self.z_score_threshold else ""
+            explanation += f"\n{i}. {roi_name}: Z-score={z_score:+.2f}, SHAP={shap_value:+.4f} {anomaly_marker}"
         
         explanation += f"""
 
@@ -680,9 +962,12 @@ The model provides a clear prediction with reasonable confidence and low uncerta
 TOP CONTRIBUTING FEATURES:
 """
         
-        for i, feat in enumerate(report['top_features'][:5], 1):
-            direction = "↓ Atrophy" if feat['z_score'] < 0 else "↑ Preserved"
-            explanation += f"\n{i}. {feat['roi_name']}: Z-score={feat['z_score']:+.2f}, SHAP={feat['shap_value']:+.4f} {direction}"
+        for i, feat in enumerate(report.get('top_features', [])[:5], 1):
+            roi_name = _safe_get_attr(feat, 'roi_name', 'Unknown')
+            z_score = _safe_get_attr(feat, 'z_score', 0)
+            shap_value = _safe_get_attr(feat, 'shap_value', 0)
+            direction = "↓ Atrophy" if z_score < 0 else "↑ Preserved"
+            explanation += f"\n{i}. {roi_name}: Z-score={z_score:+.2f}, SHAP={shap_value:+.4f} {direction}"
         
         explanation += f"""
 

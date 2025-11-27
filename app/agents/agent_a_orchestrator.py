@@ -507,6 +507,11 @@ Respond with JSON containing:
             # Call MCP server
             result = self.mcp_server.read_resource(uri)
             
+            if self.config.verbose:
+                print(f"[DEBUG] MCP server returned: {type(result)}")
+                if isinstance(result, dict):
+                    print(f"[DEBUG] Keys: {list(result.keys())}")
+            
             # Mark action as successful
             action.mark_success(result)
             
@@ -514,14 +519,34 @@ Respond with JSON containing:
             self.mcp_actions.append(action)
             self._log_reasoning(f"Read diagnostic report for {subject_id}")
             
+            # Check for errors in result
+            if 'error' in result:
+                raise ValueError(f"MCP server returned error: {result['error']}")
+            
+            # Ensure subject_id is present
+            if 'subject_id' not in result:
+                if self.config.verbose:
+                    print(f"[WARNING] subject_id not in result, adding it")
+                result['subject_id'] = subject_id
+            
             # Convert to DiagnosticReport object
             # MCP server now returns flattened structure
             if 'data' in result:
                 # Old nested structure
-                diagnostic_report = DiagnosticReport.from_toolkit_report(result['data'])
+                if self.config.verbose:
+                    print(f"[DEBUG] Using nested structure (result['data'])")
+                data = result['data']
+                if 'subject_id' not in data:
+                    data['subject_id'] = subject_id
+                diagnostic_report = DiagnosticReport.from_toolkit_report(data)
             else:
                 # New flattened structure
+                if self.config.verbose:
+                    print(f"[DEBUG] Using flattened structure")
                 diagnostic_report = DiagnosticReport.from_toolkit_report(result)
+            
+            if self.config.verbose:
+                print(f"[DEBUG] DiagnosticReport created: subject_id={diagnostic_report.subject_id}")
             
             return diagnostic_report
             
@@ -530,6 +555,13 @@ Respond with JSON containing:
             action.mark_error(str(e))
             self.mcp_actions.append(action)
             self._log_reasoning(f"Failed to read diagnostic report: {e}")
+            
+            # Print detailed error info
+            if self.config.verbose:
+                print(f"[ERROR] Failed to read diagnostic report: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
+            
             raise e
     
     def _read_knowledge_context(self, region_name: str) -> Optional[Dict]:

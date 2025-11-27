@@ -65,7 +65,7 @@ class LLMFactory:
     def get_orchestrator(
         model_path: str = "D:/hf_models/Phi-4-mini-instruct",
         use_4bit: bool = True,
-        device_map: str = "auto",
+        device_map: str = "cuda:0",
         max_new_tokens: int = 512,
         temperature: float = 0.1
     ) -> Dict[str, Any]:
@@ -169,7 +169,7 @@ class LLMFactory:
     def get_medgemma(
         model_path: str = "D:/hf_models/medgemma-27b-text-it",
         use_4bit: bool = True,
-        device_map: str = "auto",
+        device_map: str = "cuda:0",
         max_new_tokens: int = 2048,
         temperature: float = 0.3
     ) -> Dict[str, Any]:
