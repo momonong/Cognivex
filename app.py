@@ -1,18 +1,22 @@
-# app/main.py (Final Integrated Version)
+# app/main.py (Professional Dashboard Version)
 import os
 import streamlit as st
 import glob
 from pathlib import Path
 import streamlit.components.v1 as components
+import json
 
-# --- 視覺化相關 ---
+# --- Visualization ---
 from nilearn import plotting
 from nilearn import image as nimg
 
-# ---### 變更點 1: 匯入 LangGraph App ###---
+# --- LangGraph App ---
 from app.graph.workflow import app
 
-# ---### 變更點 2: 匯入結構性 MRI UI 組件 ###---
+# --- CDDA Agent for Executive Summary ---
+from app.agents.cdda_agent import CDDAAgent
+
+# --- Structural MRI UI Components ---
 from app.ui.structural_mri_components import (
     render_analysis_mode_selector,
     render_structural_results
@@ -45,19 +49,35 @@ def load_nifti(path: str):
         return None, 0
 
 
-# --- STREAMLIT 前端介面 ---
+# --- STREAMLIT FRONTEND ---
 
-st.set_page_config(page_title="fMRI Analysis Framework", layout="wide")
-st.title("Explainable fMRI Analysis for Alzheimer's Disease")
-st.markdown(
-    "An agent-based framework for generating knowledge-grounded clinical interpretations from fMRI data."
+st.set_page_config(
+    page_title="CDDA Clinical Dashboard",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# --- 側邊欄控制項 ---
-# 初始化分析狀態
+# Professional Header
+st.markdown("""
+<div style="background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
+    <h1 style="color: white; margin: 0; font-size: 2.5rem;">🧠 CDDA Clinical Dashboard</h1>
+    <p style="color: #e0e7ff; margin: 0.5rem 0 0 0; font-size: 1.1rem;">
+        Cognitive Discrepancy-Driven Agent for Alzheimer's Disease Diagnosis
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# --- SIDEBAR CONTROLS ---
+# Initialize analysis state
 if "analysis_running" not in st.session_state:
     st.session_state.analysis_running = False
-st.sidebar.header("Analysis Controls")
+
+st.sidebar.markdown("""
+<div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 1rem;">
+    <h3 style="margin: 0; color: #1e40af;">⚙️ Analysis Configuration</h3>
+</div>
+""", unsafe_allow_html=True)
 
 # 分析模式選擇
 analysis_mode = render_analysis_mode_selector()
@@ -97,15 +117,15 @@ else:
 
 subject_list = sorted(subject_labels.keys())
 if not subject_list:
-    mode_name = "結構性 MRI (sMRI)" if st.session_state.analysis_mode == "structural" else "功能性 MRI (fMRI)"
+    mode_name = "Structural MRI (sMRI)" if st.session_state.analysis_mode == "structural" else "Functional MRI (fMRI)"
     data_path = "data/sMRI/" if st.session_state.analysis_mode == "structural" else "data/fMRI/"
     st.sidebar.error(
-        f"找不到任何 {mode_name} 受試者資料。\n"
-        f"請確認資料在 {data_path} 目錄下。"
+        f"⚠️ No {mode_name} subject data found.\n"
+        f"Please ensure data exists in {data_path} directory."
     )
     st.stop()
 
-# 保持當前選擇（如果存在）
+# Maintain current selection (if exists)
 current_subject = st.session_state.get("selected_subject")
 if current_subject and current_subject in subject_list:
     default_index = subject_list.index(current_subject)
@@ -113,29 +133,40 @@ else:
     default_index = 0
 
 is_running = st.session_state.get("analysis_running", False)
+
+st.sidebar.markdown("#### 👤 Subject Selection")
 if is_running:
-    # 分析中：顯示當前選擇但禁用
+    # Analysis running: show current selection but disabled
     selected_subject = st.sidebar.selectbox(
-        "Select Subject:",
+        "Subject ID",
         [current_subject or "N/A"],
         disabled=True,
         help="Subject selection is locked during analysis.",
+        label_visibility="collapsed"
     )
 else:
-    # 正常狀態：正常選擇
+    # Normal state: normal selection
     selected_subject = st.sidebar.selectbox(
-        "Select Subject:",
+        "Subject ID",
         subject_list,
         index=default_index,
-        help="Choose a subject for fMRI analysis.",
+        help="Choose a subject for analysis.",
+        label_visibility="collapsed"
     )
 ground_truth_label = subject_labels.get(selected_subject, "N/A")
-st.sidebar.markdown(f"**Ground Truth:** `{ground_truth_label}`")
+st.sidebar.markdown(f"""
+<div style="background: #f1f5f9; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem;">
+    <span style="color: #64748b; font-size: 0.875rem;">Ground Truth:</span>
+    <span style="color: #1e293b; font-weight: bold; margin-left: 0.5rem;">{ground_truth_label}</span>
+</div>
+""", unsafe_allow_html=True)
 
 
-# 模型選擇 - 根據分析模式顯示不同選項
+# Model Selection - Different options based on analysis mode
+st.sidebar.markdown("#### 🤖 Model Selection")
+
 if st.session_state.analysis_mode == "structural":
-    # 結構性 MRI - 使用機器學習模型（仿照 fMRI 的呈現方式）
+    # Structural MRI - Machine Learning Models
     models = {"Random Forest": "random_forest"}
     
     current_model = st.session_state.get("selected_model_display")
@@ -146,39 +177,44 @@ if st.session_state.analysis_mode == "structural":
         default_model_index = 0
     
     if is_running:
-        # 分析中：顯示當前模型但禁用
         selected_model_display = st.sidebar.selectbox(
-            "Select ML Model:",
+            "ML Model",
             [current_model or "N/A"],
             disabled=True,
             help="Model selection is locked during analysis.",
+            label_visibility="collapsed"
         )
     else:
-        # 正常狀態：正常選擇
         selected_model_display = st.sidebar.selectbox(
-            "Select ML Model:",
+            "ML Model",
             model_list,
             index=default_model_index,
             help="Choose the machine learning model for structural MRI classification.",
+            label_visibility="collapsed"
         )
     selected_model_key = models[selected_model_display]
-    model_path = None  # Will use default from config
+    model_path = None
     
-    # 顯示模型詳細信息
+    # Model information
     model_info = {
         "random_forest": {
             "type": "Random Forest Classifier",
-            "description": "Ensemble learning method using ROI-based features from AAL atlas",
-            "best_for": "Structural MRI analysis with 32 ROI features, interpretable results",
+            "description": "Ensemble learning with ROI-based features from AAL atlas",
+            "best_for": "Interpretable structural MRI analysis",
         }
     }
     if selected_model_key in model_info:
         info = model_info[selected_model_key]
-        st.sidebar.caption(f"**Model Type:** {info['type']}")
-        st.sidebar.caption(f"**Description:** {info['description']}")
-        st.sidebar.caption(f"**Best for:** {info['best_for']}")
+        st.sidebar.markdown(f"""
+        <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem; font-size: 0.875rem;">
+            <div style="color: #64748b; margin-bottom: 0.25rem;">Model Type</div>
+            <div style="color: #1e293b; font-weight: 500;">{info['type']}</div>
+            <div style="color: #64748b; margin-top: 0.5rem; margin-bottom: 0.25rem;">Best For</div>
+            <div style="color: #1e293b;">{info['best_for']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 else:
-    # 功能性 MRI - 使用深度學習模型
+    # Functional MRI - Deep Learning Models
     models = {"ShuffleNet": "shufflenet", "CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
 
     current_model = st.session_state.get("selected_model_display")
@@ -186,50 +222,54 @@ else:
     if current_model and current_model in model_list:
         default_model_index = model_list.index(current_model)
     else:
-        # 設定 ShuffleNet 為預設選項（第一個）
         default_model_index = 0
 
     if is_running:
-        # 分析中：顯示當前模型但禁用
         selected_model_display = st.sidebar.selectbox(
-            "Select Inference Model:",
+            "Neural Network Model",
             [current_model or "N/A"],
             disabled=True,
             help="Model selection is locked during analysis.",
+            label_visibility="collapsed"
         )
     else:
-        # 正常狀態：正常選擇
         selected_model_display = st.sidebar.selectbox(
-            "Select Inference Model:",
+            "Neural Network Model",
             model_list,
             index=default_model_index,
             help="Choose the neural network model for fMRI classification.",
+            label_visibility="collapsed"
         )
     selected_model_key = models[selected_model_display]
 
-    # 顯示模型詳細信息
+    # Model information
     model_info = {
         "shufflenet": {
-            "type": "2D ShuffleNet with ECA Attention",
-            "description": "High-accuracy 2D CNN with attention mechanism for slice-based analysis",
-            "best_for": "High-accuracy AD/NC classification (80%+), efficient 2D processing",
+            "type": "2D ShuffleNet + ECA Attention",
+            "description": "High-accuracy 2D CNN with attention mechanism",
+            "best_for": "High-accuracy AD/NC classification (80%+)",
         },
         "capsnet": {
             "type": "3D Capsule Network",
-            "description": "Advanced neural network with capsule layers for spatial relationships",
-            "best_for": "Complex 3D fMRI patterns, part-whole relationships",
+            "description": "Advanced capsule layers for spatial relationships",
+            "best_for": "Complex 3D fMRI patterns",
         },
         "mcadnnet": {
             "type": "2D Convolutional Neural Network",
-            "description": "Traditional CNN architecture for 2D slice analysis",
-            "best_for": "2D brain slice patterns, computational efficiency",
+            "description": "Traditional CNN for 2D slice analysis",
+            "best_for": "Computational efficiency",
         },
     }
     if selected_model_key in model_info:
         info = model_info[selected_model_key]
-        st.sidebar.caption(f"**Model Type:** {info['type']}")
-        st.sidebar.caption(f"**Description:** {info['description']}")
-        st.sidebar.caption(f"**Best for:** {info['best_for']}")
+        st.sidebar.markdown(f"""
+        <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem; font-size: 0.875rem;">
+            <div style="color: #64748b; margin-bottom: 0.25rem;">Model Type</div>
+            <div style="color: #1e293b; font-weight: 500;">{info['type']}</div>
+            <div style="color: #64748b; margin-top: 0.5rem; margin-bottom: 0.25rem;">Best For</div>
+            <div style="color: #1e293b;">{info['best_for']}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # 檢查是否有參數變更，如果有則重置分析狀態
 prev_subject = st.session_state.get('selected_subject')
@@ -250,43 +290,60 @@ st.session_state.selected_model_display = selected_model_display
 st.session_state.selected_model_key = selected_model_key
 st.session_state.ground_truth_label = ground_truth_label
 
-# 按鈕區域 - 保持固定布局
+# Action Buttons
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
 if is_running:
-    # 分析中：禁用主按鈕 + Force Stop
+    # Analysis running: disabled main button + Force Stop
     st.sidebar.button(
-        "Analysis Running...",
+        "🔄 Analysis Running...",
         type="primary",
         use_container_width=True,
         disabled=True,
         help="Analysis in progress...",
     )
-    # Force Stop 按鈕
+    # Force Stop button
     if st.sidebar.button(
-        "Force Stop Analysis",
+        "⏹️ Force Stop Analysis",
         type="secondary",
         use_container_width=True,
     ):
         st.session_state.analysis_running = False
         st.session_state.run_complete = False
-        st.sidebar.warning("Analysis has been stopped.")
+        st.sidebar.warning("⚠️ Analysis has been stopped.")
         st.rerun()
     start_button = False
 else:
-    # 正常狀態：正常開始按鈕
+    # Normal state: normal start button
     start_button = st.sidebar.button(
-        "Start Analysis",
+        "▶️ Start Analysis",
         type="primary",
         use_container_width=True,
         help=f"Start analysis for {selected_subject} using {selected_model_display}",
     )
 
 st.sidebar.markdown("---")
-adni_acknowledgement = """
-<div style="font-size: 0.75rem; color: grey;">
-Data used in preparation of this article were obtained from the Alzheimer's Disease Neuroimaging Initiative (ADNI) database (adni.loni.usc.edu). As such, the investigators within the ADNI contributed to the design and implementation of ADNI and/or provided data but did not participate in analysis or writing of this report. A complete listing of ADNI investigators can be found at: <a href="http://adni.loni.usc.edu/wp-content/uploads/how_to_apply/ADNI_Acknowledgement_List.pdf" target="_blank">ADNI Acknowledgement List</a>.
+
+# ADNI Acknowledgement
+st.sidebar.markdown("""
+<div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-top: 1rem;">
+    <div style="font-size: 0.75rem; color: #64748b; line-height: 1.5;">
+        <strong style="color: #475569;">Data Source:</strong><br>
+        Alzheimer's Disease Neuroimaging Initiative (ADNI)<br>
+        <a href="http://adni.loni.usc.edu" target="_blank" style="color: #3b82f6;">adni.loni.usc.edu</a>
+    </div>
 </div>
-"""
-st.sidebar.markdown(adni_acknowledgement, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
+
+# System Information
+st.sidebar.markdown("""
+<div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
+    <div style="font-size: 0.75rem; color: #64748b;">
+        <strong style="color: #475569;">CDDA Framework v1.0</strong><br>
+        Dual-LLM A2A Architecture<br>
+        Phi-4-mini + Llama3.1-Aloe-Beta-8B
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # --- 分析邏輯 ---
@@ -429,59 +486,228 @@ if st.session_state.get("analysis_running", False) and not st.session_state.get(
             # 發生錯誤時也要恢復正常狀態
             st.session_state.analysis_running = False
 
-# --- 結果顯示區塊 ---
+# --- RESULTS DISPLAY ---
 if st.session_state.get("run_complete", False):
     final_state = st.session_state["final_state"]
     report_ground_truth = st.session_state.get("ground_truth_label", "N/A")
-
-    # 從 session state 取得分析時使用的 subject_id
     analyzed_subject = final_state.get(
         "subject_id", st.session_state.get("selected_subject", "Unknown")
     )
-
-    st.markdown("---")
-    st.header("Analysis Results")
-
-    # 判斷分析模式並顯示對應結果
+    
     analysis_mode = final_state.get("analysis_mode", "functional")
     
-    if analysis_mode == "structural":
-        # 顯示結構性 MRI 結果
-        render_structural_results(final_state, report_ground_truth)
-    else:
-        # 顯示功能性 MRI 結果（原有邏輯）
-        # 活化圖與預測結果顯示
-        st.subheader("Subject Activation overlay on brain.")
+    # Generate Executive Summary
+    if "executive_summary" not in st.session_state:
+        predicted_label = final_state.get("classification_result", "N/A")
+        
+        # Simple rule-based summary (no LLM required)
+        # This avoids complex dependencies and provides immediate results
+        
+        # Determine risk level based on prediction match
+        is_correct = report_ground_truth == predicted_label
+        if is_correct:
+            risk_level = "Low"
+            headline = f"Confirmed {predicted_label} diagnosis with model agreement"
+        else:
+            risk_level = "High"
+            headline = f"Predicted {predicted_label} (Ground Truth: {report_ground_truth}) - Discrepancy detected"
+        
+        # Generate key findings
+        key_findings = [
+            f"AI Model Prediction: {predicted_label}",
+            f"Clinical Ground Truth: {report_ground_truth}",
+            f"Prediction Accuracy: {'Correct ✓' if is_correct else 'Incorrect ✗'}"
+        ]
+        
+        # Add analysis mode specific findings
+        if analysis_mode == "structural":
+            key_findings.append("Analysis Type: Structural MRI (sMRI) with Random Forest")
+        else:
+            model_name = st.session_state.get("selected_model_display", "Unknown")
+            key_findings.append(f"Analysis Type: Functional MRI (fMRI) with {model_name}")
+        
+        # Generate recommended actions
+        if is_correct:
+            recommended_actions = [
+                "Model prediction aligns with clinical diagnosis",
+                "Review detailed report for feature analysis",
+                "Standard clinical follow-up appropriate"
+            ]
+        else:
+            recommended_actions = [
+                "⚠️ Prediction discrepancy requires clinical review",
+                "Examine detailed report for potential explanations",
+                "Consider additional diagnostic tests or imaging",
+                "Consult with clinical team for final diagnosis"
+            ]
+        
+        st.session_state.executive_summary = {
+            "headline": headline,
+            "key_findings": key_findings,
+            "recommended_actions": recommended_actions,
+            "risk_level": risk_level
+        }
+    
+    executive_summary = st.session_state.get("executive_summary", {})
+    
+    # Professional Dashboard Header
+    st.markdown("---")
+    st.markdown("""
+    <div style="background: #f8fafc; padding: 1.5rem; border-radius: 10px; border-left: 5px solid #3b82f6; margin-bottom: 2rem;">
+        <h2 style="margin: 0; color: #1e40af;">📊 Clinical Executive Summary</h2>
+        <p style="margin: 0.5rem 0 0 0; color: #64748b;">AI-Generated Diagnostic Overview</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Risk Level Badge
+    risk_level = executive_summary.get("risk_level", "Medium")
+    risk_colors = {
+        "High": ("#dc2626", "#fef2f2", "⚠️"),
+        "Medium": ("#f59e0b", "#fffbeb", "⚡"),
+        "Low": ("#10b981", "#f0fdf4", "✅")
+    }
+    risk_color, risk_bg, risk_icon = risk_colors.get(risk_level, ("#6b7280", "#f9fafb", "ℹ️"))
+    
+    # Headline with Risk Badge
+    headline = executive_summary.get("headline", "Analysis completed")
+    st.markdown(f"""
+    <div style="background: {risk_bg}; padding: 1.5rem; border-radius: 8px; border: 2px solid {risk_color}; margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="font-size: 2rem;">{risk_icon}</span>
+            <div style="flex: 1;">
+                <div style="background: {risk_color}; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; display: inline-block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.5rem;">
+                    RISK LEVEL: {risk_level.upper()}
+                </div>
+                <h3 style="margin: 0; color: {risk_color}; font-size: 1.5rem;">{headline}</h3>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Key Metrics Row
+    col1, col2, col3, col4 = st.columns(4)
+    
+    predicted_label = final_state.get("classification_result", "N/A")
+    is_correct = report_ground_truth == predicted_label
+    
+    with col1:
+        st.markdown(f"""
+        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">SUBJECT ID</div>
+            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{analyzed_subject}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">GROUND TRUTH</div>
+            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{report_ground_truth}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">AI PREDICTION</div>
+            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{predicted_label}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        accuracy_color = "#10b981" if is_correct else "#dc2626"
+        accuracy_icon = "✓" if is_correct else "✗"
+        accuracy_text = "CORRECT" if is_correct else "INCORRECT"
+        st.markdown(f"""
+        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">ACCURACY</div>
+            <div style="color: {accuracy_color}; font-size: 1.5rem; font-weight: bold;">{accuracy_icon} {accuracy_text}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Key Findings and Recommended Actions
+    col_findings, col_actions = st.columns(2)
+    
+    with col_findings:
+        st.markdown("""
+        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: 100%;">
+            <h4 style="margin: 0 0 1rem 0; color: #1e40af;">🔍 Key Findings</h4>
+        """, unsafe_allow_html=True)
+        
+        key_findings = executive_summary.get("key_findings", ["Analysis completed"])
+        for finding in key_findings:
+            st.markdown(f"• {finding}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    with col_actions:
+        st.markdown("""
+        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: 100%;">
+            <h4 style="margin: 0 0 1rem 0; color: #1e40af;">💡 Recommended Actions</h4>
+        """, unsafe_allow_html=True)
+        
+        recommended_actions = executive_summary.get("recommended_actions", ["Review detailed report"])
+        for action in recommended_actions:
+            st.markdown(f"• {action}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Visualization Section
+    if analysis_mode == "functional":
+        st.markdown("""
+        <div style="background: #f8fafc; padding: 1.5rem; border-radius: 10px; border-left: 5px solid #8b5cf6; margin-bottom: 1rem;">
+            <h3 style="margin: 0; color: #6b21a8;">🎨 Brain Activation Visualization</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
         try:
             viz_path = final_state.get("visualization_paths", [])[0]
-            st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}")
+            st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}", use_container_width=True)
         except Exception as e:
-            st.error(f"Cannot display image. Path is missing or invalid: {e}")
-
-        predicted_label = final_state.get("classification_result", "N/A")
-        st.subheader("Prediction Verification")
-        col1, col2 = st.columns(2)
-        col1.metric("Ground Truth", report_ground_truth)
-        col2.metric("Model Prediction", predicted_label)
-        if report_ground_truth == predicted_label:
-            st.success("✅ Prediction is Correct")
+            st.error(f"Cannot display visualization: {e}")
+    
+    # Detailed Report (Collapsible)
+    with st.expander("📄 View Detailed Clinical Report", expanded=False):
+        if analysis_mode == "structural":
+            render_structural_results(final_state, report_ground_truth)
         else:
-            st.error("❌ Prediction is Incorrect")
+            reports = final_state.get("generated_reports", {})
+            report_en = reports.get("en", "No English report was generated.")
+            report_zh = reports.get("zh", "沒有生成中文報告。")
+            
+            tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
+            with tab_en:
+                st.markdown("### Clinical Report (English)")
+                st.markdown(report_en, unsafe_allow_html=True)
+            with tab_zh:
+                st.markdown("### 臨床分析報告 (繁體中文)")
+                st.markdown(report_zh, unsafe_allow_html=True)
 
-    # ---### 整合最終版互動式檢視器 ###---
+    # Interactive MRI Viewer
     is_expanded_default = st.session_state.get("viewer_expanded", False)
-    with st.expander(
-        "Explore Original fMRI Scan (Interactive Slicer)", expanded=is_expanded_default
-    ):
+    with st.expander("🔬 Interactive MRI Viewer", expanded=is_expanded_default):
+        st.markdown("""
+        <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+            <p style="color: #64748b; margin: 0; font-size: 0.875rem;">
+                Explore the original MRI scan with interactive 3D visualization. 
+                Use the controls to navigate through different brain slices.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         nii_path = st.session_state.get("nii_path")
         if nii_path and Path(nii_path).exists():
-            # 載入 NIfTI 檔案（支援 3D 和 4D）
+            # Load NIfTI file (supports 3D and 4D)
             img, num_time_points = load_nifti(nii_path)
 
             if img and num_time_points > 0:
-                # 根據影像維度決定是否顯示時間軸滑桿
+                # Determine whether to show time axis slider based on image dimensions
                 if num_time_points > 1:
-                    # 4D 影像：顯示時間軸滑桿
+                    # 4D image: show time axis slider
                     selected_time_point_display = st.slider(
                         "Time Point (Volume)",
                         min_value=1,
@@ -489,16 +715,16 @@ if st.session_state.get("run_complete", False):
                         value=1,
                         help=f"This scan has {num_time_points} volumes.",
                     )
-                    # 轉換為 0-based 索引
+                    # Convert to 0-based index
                     selected_time_point_index = selected_time_point_display - 1
-                    # 提取指定時間點的 3D 影像
+                    # Extract 3D image at specified time point
                     img_3d_at_t = nimg.index_img(img, selected_time_point_index)
                 else:
-                    # 3D 影像：直接使用
+                    # 3D image: use directly
                     img_3d_at_t = img
                     selected_time_point_display = None
 
-                # 根據影像類型設定標題
+                # Set title based on image type
                 if selected_time_point_display:
                     title = f"Volume at T={selected_time_point_display}"
                 else:
@@ -518,22 +744,49 @@ if st.session_state.get("run_complete", False):
 
                 components.html(viewer.html, height=600, scrolling=False)
         else:
-            st.warning("Could not find the original NIfTI file for this viewer.")
-
-    # 中英文報告分頁 - 只在功能性 MRI 模式下顯示
-    if analysis_mode == "functional":
-        reports = final_state.get("generated_reports", {})
-        report_en = reports.get("en", "No English report was generated.")
-        report_zh = reports.get("zh", "沒有生成中文報告。")
-
-        tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
-        with tab_en:
-            st.subheader("Clinical Report (English)")
-            st.markdown(report_en, unsafe_allow_html=True)
-        with tab_zh:
-            st.subheader("臨床分析報告 (繁體中文)")
-            st.markdown(report_zh, unsafe_allow_html=True)
+            st.warning("⚠️ Could not find the original NIfTI file for this viewer.")
 else:
-    st.info(
-        "Please select a subject and model, then click 'Start Analysis' in the sidebar to view results."
-    )
+    # Welcome Screen
+    st.markdown("""
+    <div style="text-align: center; padding: 4rem 2rem;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">🧠</div>
+        <h2 style="color: #1e40af; margin-bottom: 1rem;">Welcome to CDDA Clinical Dashboard</h2>
+        <p style="color: #64748b; font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem auto;">
+            Select a subject and model from the sidebar, then click <strong>"Start Analysis"</strong> 
+            to generate AI-powered diagnostic insights with complete reasoning transparency.
+        </p>
+        <div style="background: #f8fafc; padding: 2rem; border-radius: 10px; max-width: 800px; margin: 0 auto;">
+            <h3 style="color: #1e40af; margin-bottom: 1rem;">Key Features</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; text-align: left;">
+                <div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
+                    <strong style="color: #1e293b;">Adaptive Decision-Making</strong>
+                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                        Dynamic pathway selection based on uncertainty
+                    </p>
+                </div>
+                <div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
+                    <strong style="color: #1e293b;">Counterfactual Analysis</strong>
+                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                        Causal reasoning for diagnostic drivers
+                    </p>
+                </div>
+                <div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📊</div>
+                    <strong style="color: #1e293b;">Executive Summary</strong>
+                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                        AI-generated structured overview
+                    </p>
+                </div>
+                <div>
+                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔗</div>
+                    <strong style="color: #1e293b;">Knowledge Integration</strong>
+                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
+                        Clinical context from knowledge graph
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)

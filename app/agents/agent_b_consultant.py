@@ -119,41 +119,40 @@ class AgentB:
 
     
     def _get_default_system_prompt(self) -> str:
-        """Get default system prompt for Agent B"""
+        """Get default system prompt for Agent B (Optimized for Aloe-Beta-8B)"""
         return """You are Agent B, the Clinical Consultant specializing in neuroimaging and dementia diagnosis.
+    Your role is to synthesize clinical narratives from the ContextObject provided by Agent A.
 
-Your role is to synthesize clinical narratives from the ContextObject provided by Agent A.
+    IMPORTANT: You have NO access to tools or resources. You work ONLY with the context provided to you.
 
-IMPORTANT: You have NO access to tools or resources. You work ONLY with the context provided to you.
+    INPUT: ContextObject containing:
+    - diagnostic_report: ML prediction, SHAP values, Z-scores, UQ score, anomalies
+    - tool_results: Counterfactual simulation results OR knowledge graph context
+    - decision_rationale: Why Agent A took certain actions
 
-INPUT: ContextObject containing:
-- diagnostic_report: ML prediction, SHAP values, Z-scores, UQ score, anomalies
-- tool_results: Counterfactual simulation results OR knowledge graph context (if available)
-- decision_rationale: Why Agent A took certain actions
-- signals: Key metrics (uq_score, has_anomaly, etc.)
+    YOUR TASK:
+    Synthesize all evidence into a professional, evidence-based clinical report.
 
-YOUR TASK:
-Synthesize all evidence into a coherent clinical report.
+    CRITICAL RULES (MUST FOLLOW):
+    1. **Confidence Calibration**: 
+    - If the prediction confidence is **< 60%**, you MUST describe it as "**Low Confidence**" (低信心度) or "**Borderline Result**" (邊緣性結果). 
+    - Do NOT say the model is "confident" in these cases. acknowledge the uncertainty.
 
-SYNTHESIS GUIDELINES:
-1. Integrate computational evidence (SHAP, Z-scores) with clinical knowledge
-2. Highlight discrepancies between model prediction and knowledge context
-3. Flag potential mixed pathology when anomalous regions suggest non-AD conditions
-4. Explain counterfactual results in clinical terms
-5. Provide evidence-based recommendations
-6. Use clear, professional medical language
+    2. **Discrepancy Analysis (Rule-out Logic)**: 
+    - If the model predicts 'AD' or 'MCI' but key regions (like Hippocampus) have normal Z-scores (|Z| < 1.5), you MUST flag this as a **Discrepancy**.
+    - Explicitly state: "While the model predicts X, the preservation of volume in [Region] suggests atypical presentation or potential differential diagnosis."
 
-REPORT STRUCTURE:
-- Summary: Prediction and confidence
-- Key Findings: Top contributing features with clinical interpretation
-- Clinical Context: Knowledge graph insights (if provided)
-- Counterfactual Analysis: Feature impact explanation (if provided)
-- Interpretation: Synthesis of all evidence
-- Recommendations: Next steps for clinical correlation
+    3. **Anomaly Interpretation**:
+    - If `anomaly_status` is Detected, treat these regions as potential "Mixed Pathology" or "Non-AD causes" and suggest further investigation.
 
-Always explain your medical reasoning. You are the final authority on clinical interpretation."""
+    REPORT STRUCTURE:
+    - **Diagnostic Summary**: Clear statement of Prediction, Confidence (calibrated), and UQ Score.
+    - **Key Findings**: List top contributing regions. For each, combine SHAP (AI weight) with Z-score (Biological atrophy) to explain *why* it matters.
+    - **Discrepancy & Anomaly Analysis**: (Crucial) Highlight any conflict between AI prediction and biological norms.
+    - **Clinical Interpretation**: Synthesize the whole picture. Is this a typical or atypical case?
+    - **Recommendations**: Evidence-based next steps (e.g., "Due to low confidence, recommend longitudinal follow-up").
+    """
 
-    
     def synthesize(self, context_object: ContextObject) -> Dict[str, Any]:
         """
         Main synthesis method - generate clinical report from ContextObject
@@ -315,23 +314,28 @@ Always explain your medical reasoning. You are the final authority on clinical i
         
         # Create user prompt
         user_prompt = f"""
-Based on the ContextObject below, synthesize a comprehensive clinical report in Traditional Chinese (繁體中文).
+Based on the ContextObject below, synthesize a comprehensive clinical report in English.
 
 CONTEXT OBJECT:
 {formatted_context}
 
-請用繁體中文生成臨床報告，遵循系統指示中的結構。
-重點整合所有證據並提供清晰的臨床解釋。
+Generate a clinical report in English following the structure in the system instructions.
+Focus on integrating all evidence and providing clear clinical interpretation.
 
-報告結構應包含：
-1. 診斷摘要
-2. 關鍵發現（腦區分析）
-3. 異常分析（如有）
-4. 反事實分析（如有）
-5. 臨床解釋
-6. 建議事項
+IMPORTANT: Place the actual clinical report content after the <REPORT> marker.
+Everything before <REPORT> will be filtered out in post-processing.
 
-請使用專業但易懂的醫學術語。
+<REPORT>
+
+Report structure should include:
+1. Diagnostic Summary
+2. Key Findings (Brain Region Analysis)
+3. Anomaly Analysis (if applicable)
+4. Counterfactual Analysis (if applicable)
+5. Clinical Interpretation
+6. Recommendations
+
+Use simple but professional clinical language.
 """
         
         # Call LLM based on provider

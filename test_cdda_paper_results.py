@@ -270,23 +270,7 @@ def generate_paper_results():
         [30, 20, 40]
     )
     
-    # LaTeX 版本
-    fmt.latex_table_start("Diagnostic Performance Metrics", "tab:diagnostic_performance")
-    print("\\begin{tabular}{lll}")
-    print("\\hline")
-    print("Metric & Value & Interpretation \\\\")
-    print("\\hline")
-    print(f"Ground Truth & {diagnosis_map.get(ground_truth, ground_truth)} & Clinical diagnosis \\\\")
-    print(f"AI Prediction & {diagnosis_map.get(result.prediction, result.prediction)} & "
-          f"{'Correct' if ground_truth == result.prediction else 'Incorrect'} \\\\")
-    print(f"Confidence Score & {result.confidence:.4f} & "
-          f"{'High' if result.confidence > 0.8 else 'Medium' if result.confidence > 0.6 else 'Low'} \\\\")
-    print(f"Uncertainty Score & {result.uq_score:.4f} & "
-          f"{'High' if result.uq_score > 0.8 else 'Medium' if result.uq_score > 0.5 else 'Low'} \\\\")
-    print(f"Decision Mode & {result.agent_decision} & Adaptive \\\\")
-    print("\\hline")
-    print("\\end{tabular}")
-    fmt.latex_table_end()
+
 
     
     # 4.2 特徵重要性分析
@@ -323,34 +307,7 @@ def generate_paper_results():
                 [6, 35, 12, 10, 35]
             )
         
-        # LaTeX 版本
-        print("\n% LaTeX Table for Feature Importance")
-        fmt.latex_table_start("Top 10 Diagnostic Drivers (SHAP + Z-score)", "tab:feature_importance")
-        print("\\begin{tabular}{clrrp{4cm}}")
-        print("\\hline")
-        print("Rank & Brain Region & SHAP & Z-score & Significance \\\\")
-        print("\\hline")
-        
-        for feat in top_features:
-            rank = safe_get_feature_attr(feat, 'rank', 0)
-            roi_name = safe_get_feature_attr(feat, 'roi_name', 'Unknown').replace('_', '\\_')
-            shap_value = safe_get_feature_attr(feat, 'shap_value', 0)
-            z_score = safe_get_feature_attr(feat, 'z_score', 0)
-            
-            if abs(z_score) > 2.5:
-                significance = "Anomalous"
-            elif z_score < -1.5:
-                significance = "Atrophy"
-            elif z_score > 1.5:
-                significance = "Preserved"
-            else:
-                significance = "Normal"
-            
-            print(f"{rank} & {roi_name} & {shap_value:+.4f} & {z_score:+.2f} & {significance} \\\\")
-        
-        print("\\hline")
-        print("\\end{tabular}")
-        fmt.latex_table_end()
+
         
         # 統計分析
         print("\nStatistical Summary of Features:")
@@ -556,63 +513,92 @@ def generate_paper_results():
     fmt.section("4.6 Reasoning Chain Analysis", level=2)
     
     if result.reasoning_chain:
+        total_steps = len(result.reasoning_chain)
         print("\nReasoning Chain Statistics:")
-        fmt.metric("Total Reasoning Steps", len(result.reasoning_chain))
+        fmt.metric("Total Log Entries", total_steps)
         
-        # 分析各階段
-        agent_a_steps = [s for s in result.reasoning_chain if 'AGENT A' in s]
-        agent_b_steps = [s for s in result.reasoning_chain if 'AGENT B' in s]
-        mcp_steps = [s for s in result.reasoning_chain if 'MCP' in s]
-        handoff_steps = [s for s in result.reasoning_chain if 'HANDOFF' in s]
+        # --- 定義分類邏輯 ---
+        def classify_step(step):
+            s = step.strip()
+            if not s or s.startswith('=') or s.startswith('-'):
+                return "Formatting"
+            if '[Agent A]' in s or 'AGENT A' in s or 'Orchestrating' in s:
+                return "Agent A"
+            if '[Agent B]' in s or 'AGENT B' in s or 'Synthesizing' in s:
+                return "Agent B"
+            if 'MCP' in s or 'read_resource' in s or 'call_tool' in s:
+                return "MCP"
+            if 'HANDOFF' in s:
+                return "Handoff"
+            return "System/Logic" # 捕捉所有剩餘的推理描述 (如 Decision, Context validated)
+
+        # --- 執行分類統計 ---
+        counts = {
+            "Agent A": 0,
+            "Agent B": 0,
+            "MCP": 0,
+            "Handoff": 0,
+            "System/Logic": 0,
+            "Formatting": 0
+        }
         
-        fmt.metric("Agent A Steps", len(agent_a_steps))
-        fmt.metric("Agent B Steps", len(agent_b_steps))
-        fmt.metric("MCP Actions", len(mcp_steps))
-        fmt.metric("Handoff Events", len(handoff_steps))
+        for step in result.reasoning_chain:
+            category = classify_step(step)
+            counts[category] += 1
+            
+        # --- 顯示統計數據 ---
+        # 這裡只顯示有意義的步驟 (排除格式化線條)
+        effective_steps = total_steps - counts["Formatting"]
         
-        print("\nReasoning Chain Breakdown:")
+        fmt.metric("Effective Reasoning Steps", effective_steps, f"(Excluding {counts['Formatting']} formatting lines)")
+        print("-" * 40)
+        fmt.metric("Agent A (Orchestrator)", counts["Agent A"])
+        fmt.metric("Agent B (Consultant)", counts["Agent B"])
+        fmt.metric("MCP / Tools", counts["MCP"])
+        fmt.metric("Handoff Events", counts["Handoff"])
+        fmt.metric("System Logic / Rationale", counts["System/Logic"])
+        
+        # --- 顯示佔比表格 ---
+        print("\nReasoning Chain Breakdown (Effective Steps):")
         fmt.table_header(
-            ["Phase", "Steps", "Percentage"],
+            ["Component", "Count", "Percentage"],
             [30, 10, 15]
         )
         
-        total = len(result.reasoning_chain)
-        fmt.table_row(
-            ["Agent A (Orchestration)", str(len(agent_a_steps)), f"{len(agent_a_steps)/total*100:.1f}%"],
-            [30, 10, 15]
-        )
-        fmt.table_row(
-            ["Agent B (Synthesis)", str(len(agent_b_steps)), f"{len(agent_b_steps)/total*100:.1f}%"],
-            [30, 10, 15]
-        )
-        fmt.table_row(
-            ["MCP Protocol", str(len(mcp_steps)), f"{len(mcp_steps)/total*100:.1f}%"],
-            [30, 10, 15]
-        )
+        # 計算百分比 (分母為有效步驟)
+        if effective_steps > 0:
+            for cat in ["Agent A", "Agent B", "MCP", "Handoff", "System/Logic"]:
+                count = counts[cat]
+                pct = (count / effective_steps) * 100
+                fmt.table_row(
+                    [cat, str(count), f"{pct:.1f}%"],
+                    [30, 10, 15]
+                )
         
-        # 顯示關鍵推理步驟
+        # --- 顯示關鍵推理步驟 (不變) ---
         print("\nKey Reasoning Steps (Sample):")
         key_steps = [s for s in result.reasoning_chain if any(keyword in s for keyword in 
-                     ['Decision', 'Trigger', 'Simulation', 'Anomaly', 'Context'])]
+                      ['Decision', 'Trigger', 'Simulation', 'Anomaly', 'Context', 'rationale'])]
         for i, step in enumerate(key_steps[:10], 1):
-            print(f"  {i}. {step[:100]}{'...' if len(step) > 100 else ''}")
+            # 清理掉多餘的時間戳記以便閱讀
+            clean_step = step.split(']')[-1].strip() if ']' in step else step.strip()
+            print(f"  {i}. {clean_step[:100]}{'...' if len(clean_step) > 100 else ''}")
         
-        # 顯示完整推理鏈（可選）
+        # --- 顯示完整推理鏈 (不變) ---
         print("\n" + "="*100)
         print("COMPLETE REASONING CHAIN (Full Transparency)")
         print("="*100)
         for i, step in enumerate(result.reasoning_chain, 1):
-            if step.startswith("="*80):
+            if step.startswith("="*80) or step.startswith("="*100):
                 print(f"\n{'='*100}")
-                print(step.replace("="*80, "").strip())
+                print(step.strip('=').strip())
                 print("="*100)
             elif step.startswith("-"*80):
                 print(f"\n{'-'*100}")
-                print(step.replace("-"*80, "").strip())
+                print(step.strip('-').strip())
                 print("-"*100)
             else:
                 print(f"{i:4d}. {step}")
-    
     # 4.7 性能指標
     fmt.section("4.7 Performance Metrics", level=2)
     
