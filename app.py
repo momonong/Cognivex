@@ -1,792 +1,725 @@
-# app/main.py (Professional Dashboard Version)
-import os
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+CDDA Clinical Dashboard - Streamlit Application
+Based on test_cdda_paper_results.py logic
+"""
+
 import streamlit as st
 import glob
+import time
 from pathlib import Path
-import streamlit.components.v1 as components
-import json
+from datetime import datetime
+import sys
+import threading
+import queue
+import io
 
-# --- Visualization ---
-from nilearn import plotting
-from nilearn import image as nimg
+# Add project root to path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-# --- LangGraph App ---
-from app.graph.workflow import app
-
-# --- CDDA Agent for Executive Summary ---
 from app.agents.cdda_agent import CDDAAgent
 
-# --- Structural MRI UI Components ---
-from app.ui.structural_mri_components import (
-    render_analysis_mode_selector,
-    render_structural_results
-)
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def safe_get_feature_attr(feature, attr_name, default=None):
+    """Safely get attribute from Feature object or dict"""
+    if isinstance(feature, dict):
+        return feature.get(attr_name, default)
+    else:
+        return getattr(feature, attr_name, default)
 
 
-# ---### 變更點 2: 更新快取函式以處理 4D 數據 ###---
-@st.cache_resource(show_spinner="正在載入並處理 NIfTI 檔案...")
-def load_nifti(path: str):
-    """
-    載入 NIfTI 檔案並回傳 nilearn 影像物件和時間點總數。
-    支援 3D (結構性 MRI) 和 4D (功能性 MRI) 影像。
-    """
-    try:
-        img = nimg.load_img(path)
-        # 檢查維度
-        if len(img.shape) == 4:
-            # 4D 影像（功能性 MRI）
-            num_time_points = img.shape[3]
-            return img, num_time_points
-        elif len(img.shape) == 3:
-            # 3D 影像（結構性 MRI）
-            # 返回影像本身，時間點為 1
-            return img, 1
-        else:
-            st.error(f"不支援的影像維度: {img.shape}")
-            return None, 0
-    except Exception as e:
-        st.error(f"載入 NIfTI 檔案失敗: {path}. 錯誤: {e}")
-        return None, 0
+def scan_subjects():
+    """Scan and validate MRI_processed dataset"""
+    subject_labels = {}
+    data_folders = glob.glob("data/MRI_processed/*/sub-*")
+    
+    for folder_path in data_folders:
+        parts = folder_path.replace('\\', '/').split('/')
+        if len(parts) >= 3:
+            subject_id = parts[-1]
+            label = parts[-2]
+            nii_files = list(Path(folder_path).glob("*.nii.gz"))
+            if len(nii_files) >= 3:
+                subject_labels[subject_id] = label
+    
+    return subject_labels
 
 
-# --- STREAMLIT FRONTEND ---
+# ============================================================================
+# Streamlit App
+# ============================================================================
 
 st.set_page_config(
     page_title="CDDA Clinical Dashboard",
-    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Professional Header
-st.markdown("""
-<div style="background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
-    <h1 style="color: white; margin: 0; font-size: 2.5rem;">🧠 CDDA Clinical Dashboard</h1>
-    <p style="color: #e0e7ff; margin: 0.5rem 0 0 0; font-size: 1.1rem;">
-        Cognitive Discrepancy-Driven Agent for Alzheimer's Disease Diagnosis
-    </p>
-</div>
-""", unsafe_allow_html=True)
+st.title("CDDA Clinical Dashboard")
+st.markdown("Cognitive Discrepancy-Driven Agent for Alzheimer's Disease Diagnosis")
 
-# --- SIDEBAR CONTROLS ---
+# ============================================================================
+# Sidebar Configuration
+# ============================================================================
+
+st.sidebar.header("Configuration")
+
 # Initialize analysis state
-if "analysis_running" not in st.session_state:
+if 'analysis_running' not in st.session_state:
     st.session_state.analysis_running = False
 
-st.sidebar.markdown("""
-<div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 1rem;">
-    <h3 style="margin: 0; color: #1e40af;">⚙️ Analysis Configuration</h3>
-</div>
-""", unsafe_allow_html=True)
-
-# 分析模式選擇
-analysis_mode = render_analysis_mode_selector()
-if "analysis_mode" not in st.session_state:
-    st.session_state.analysis_mode = analysis_mode
-else:
-    st.session_state.analysis_mode = analysis_mode
-
-
-# 受試者選擇 - 分析時禁用但保持在原位
-# 根據分析模式使用不同的資料路徑
-subject_labels = {}
-
-if st.session_state.analysis_mode == "structural":
-    # 結構性 MRI: 使用 data/sMRI（子資料夾結構）
-    smri_folders = glob.glob("data/sMRI/*/sub-*")
-    for folder_path in smri_folders:
-        parts = folder_path.split(os.sep)
-        if len(parts) >= 3:
-            subject_id = parts[-1]  # sub-0005
-            label = parts[-2]  # AD or NC
-            # 統一格式為 sub_XXXX
-            subject_id_normalized = subject_id.replace("-", "_")
-            subject_labels[subject_id_normalized] = label
-else:
-    # 功能性 MRI: 使用 data/fMRI（子資料夾結構）
-    fmri_folders = glob.glob("data/fMRI/*/sub-*")
-    for folder_path in fmri_folders:
-        parts = folder_path.split(os.sep)
-        if len(parts) >= 3:
-            subject_id = parts[-1]
-            label = parts[-2]
-            # 處理 CN -> NC 的標籤轉換
-            if label == "CN":
-                label = "NC"
-            subject_labels[subject_id] = label
-
+# Scan subjects
+subject_labels = scan_subjects()
 subject_list = sorted(subject_labels.keys())
+
 if not subject_list:
-    mode_name = "Structural MRI (sMRI)" if st.session_state.analysis_mode == "structural" else "Functional MRI (fMRI)"
-    data_path = "data/sMRI/" if st.session_state.analysis_mode == "structural" else "data/fMRI/"
-    st.sidebar.error(
-        f"⚠️ No {mode_name} subject data found.\n"
-        f"Please ensure data exists in {data_path} directory."
-    )
+    st.error("No valid subjects found in data/MRI_processed/")
     st.stop()
 
-# Maintain current selection (if exists)
-current_subject = st.session_state.get("selected_subject")
-if current_subject and current_subject in subject_list:
-    default_index = subject_list.index(current_subject)
-else:
-    default_index = 0
+# Check if subject changed - clear results if so
+current_subject = st.session_state.get('current_subject', None)
+is_running = st.session_state.analysis_running
 
-is_running = st.session_state.get("analysis_running", False)
+# Subject selection (disabled during analysis)
+selected_subject = st.sidebar.selectbox(
+    "Select Subject",
+    subject_list,
+    help="Choose a subject for CDDA analysis",
+    disabled=is_running
+)
 
-st.sidebar.markdown("#### 👤 Subject Selection")
-if is_running:
-    # Analysis running: show current selection but disabled
-    selected_subject = st.sidebar.selectbox(
-        "Subject ID",
-        [current_subject or "N/A"],
-        disabled=True,
-        help="Subject selection is locked during analysis.",
-        label_visibility="collapsed"
-    )
-else:
-    # Normal state: normal selection
-    selected_subject = st.sidebar.selectbox(
-        "Subject ID",
-        subject_list,
-        index=default_index,
-        help="Choose a subject for analysis.",
-        label_visibility="collapsed"
-    )
-ground_truth_label = subject_labels.get(selected_subject, "N/A")
-st.sidebar.markdown(f"""
-<div style="background: #f1f5f9; padding: 0.5rem; border-radius: 4px; margin-top: 0.5rem;">
-    <span style="color: #64748b; font-size: 0.875rem;">Ground Truth:</span>
-    <span style="color: #1e293b; font-weight: bold; margin-left: 0.5rem;">{ground_truth_label}</span>
-</div>
-""", unsafe_allow_html=True)
+# Clear results if subject changed
+if current_subject and current_subject != selected_subject and not is_running:
+    # Clear all analysis results
+    for key in ['analysis_result', 'ground_truth', 'init_time', 'analysis_time', 'analysis_logs']:
+        if key in st.session_state:
+            del st.session_state[key]
 
+st.session_state.current_subject = selected_subject
 
-# Model Selection - Different options based on analysis mode
-st.sidebar.markdown("#### 🤖 Model Selection")
-
-if st.session_state.analysis_mode == "structural":
-    # Structural MRI - Machine Learning Models
-    models = {"Random Forest": "random_forest"}
-    
-    current_model = st.session_state.get("selected_model_display")
-    model_list = list(models.keys())
-    if current_model and current_model in model_list:
-        default_model_index = model_list.index(current_model)
-    else:
-        default_model_index = 0
-    
-    if is_running:
-        selected_model_display = st.sidebar.selectbox(
-            "ML Model",
-            [current_model or "N/A"],
-            disabled=True,
-            help="Model selection is locked during analysis.",
-            label_visibility="collapsed"
-        )
-    else:
-        selected_model_display = st.sidebar.selectbox(
-            "ML Model",
-            model_list,
-            index=default_model_index,
-            help="Choose the machine learning model for structural MRI classification.",
-            label_visibility="collapsed"
-        )
-    selected_model_key = models[selected_model_display]
-    model_path = None
-    
-    # Model information
-    model_info = {
-        "random_forest": {
-            "type": "Random Forest Classifier",
-            "description": "Ensemble learning with ROI-based features from AAL atlas",
-            "best_for": "Interpretable structural MRI analysis",
-        }
-    }
-    if selected_model_key in model_info:
-        info = model_info[selected_model_key]
-        st.sidebar.markdown(f"""
-        <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem; font-size: 0.875rem;">
-            <div style="color: #64748b; margin-bottom: 0.25rem;">Model Type</div>
-            <div style="color: #1e293b; font-weight: 500;">{info['type']}</div>
-            <div style="color: #64748b; margin-top: 0.5rem; margin-bottom: 0.25rem;">Best For</div>
-            <div style="color: #1e293b;">{info['best_for']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-else:
-    # Functional MRI - Deep Learning Models
-    models = {"ShuffleNet": "shufflenet", "CapsNet": "capsnet", "MCADNNet": "mcadnnet"}
-
-    current_model = st.session_state.get("selected_model_display")
-    model_list = list(models.keys())
-    if current_model and current_model in model_list:
-        default_model_index = model_list.index(current_model)
-    else:
-        default_model_index = 0
-
-    if is_running:
-        selected_model_display = st.sidebar.selectbox(
-            "Neural Network Model",
-            [current_model or "N/A"],
-            disabled=True,
-            help="Model selection is locked during analysis.",
-            label_visibility="collapsed"
-        )
-    else:
-        selected_model_display = st.sidebar.selectbox(
-            "Neural Network Model",
-            model_list,
-            index=default_model_index,
-            help="Choose the neural network model for fMRI classification.",
-            label_visibility="collapsed"
-        )
-    selected_model_key = models[selected_model_display]
-
-    # Model information
-    model_info = {
-        "shufflenet": {
-            "type": "2D ShuffleNet + ECA Attention",
-            "description": "High-accuracy 2D CNN with attention mechanism",
-            "best_for": "High-accuracy AD/NC classification (80%+)",
-        },
-        "capsnet": {
-            "type": "3D Capsule Network",
-            "description": "Advanced capsule layers for spatial relationships",
-            "best_for": "Complex 3D fMRI patterns",
-        },
-        "mcadnnet": {
-            "type": "2D Convolutional Neural Network",
-            "description": "Traditional CNN for 2D slice analysis",
-            "best_for": "Computational efficiency",
-        },
-    }
-    if selected_model_key in model_info:
-        info = model_info[selected_model_key]
-        st.sidebar.markdown(f"""
-        <div style="background: #f8fafc; padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem; font-size: 0.875rem;">
-            <div style="color: #64748b; margin-bottom: 0.25rem;">Model Type</div>
-            <div style="color: #1e293b; font-weight: 500;">{info['type']}</div>
-            <div style="color: #64748b; margin-top: 0.5rem; margin-bottom: 0.25rem;">Best For</div>
-            <div style="color: #1e293b;">{info['best_for']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# 檢查是否有參數變更，如果有則重置分析狀態
-prev_subject = st.session_state.get('selected_subject')
-prev_model = st.session_state.get('selected_model_key')
-
-if (prev_subject and prev_subject != selected_subject) or (prev_model and prev_model != selected_model_key):
-    # 參數有變更，重置完成狀態以允許重新分析
-    st.session_state.run_complete = False
-    # 清除舊的結果
-    if 'final_state' in st.session_state:
-        del st.session_state['final_state']
-    if 'nii_path' in st.session_state:
-        del st.session_state['nii_path']
-
-# 儲存當前選擇到 session state
-st.session_state.selected_subject = selected_subject
-st.session_state.selected_model_display = selected_model_display
-st.session_state.selected_model_key = selected_model_key
-st.session_state.ground_truth_label = ground_truth_label
-
-# Action Buttons
-st.sidebar.markdown("<br>", unsafe_allow_html=True)
-if is_running:
-    # Analysis running: disabled main button + Force Stop
-    st.sidebar.button(
-        "🔄 Analysis Running...",
-        type="primary",
-        use_container_width=True,
-        disabled=True,
-        help="Analysis in progress...",
-    )
-    # Force Stop button
-    if st.sidebar.button(
-        "⏹️ Force Stop Analysis",
-        type="secondary",
-        use_container_width=True,
-    ):
-        st.session_state.analysis_running = False
-        st.session_state.run_complete = False
-        st.sidebar.warning("⚠️ Analysis has been stopped.")
-        st.rerun()
-    start_button = False
-else:
-    # Normal state: normal start button
-    start_button = st.sidebar.button(
-        "▶️ Start Analysis",
-        type="primary",
-        use_container_width=True,
-        help=f"Start analysis for {selected_subject} using {selected_model_display}",
-    )
+ground_truth = subject_labels.get(selected_subject, "N/A")
+st.sidebar.markdown(f"**Ground Truth:** {ground_truth}")
 
 st.sidebar.markdown("---")
 
-# ADNI Acknowledgement
-st.sidebar.markdown("""
-<div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-top: 1rem;">
-    <div style="font-size: 0.75rem; color: #64748b; line-height: 1.5;">
-        <strong style="color: #475569;">Data Source:</strong><br>
-        Alzheimer's Disease Neuroimaging Initiative (ADNI)<br>
-        <a href="http://adni.loni.usc.edu" target="_blank" style="color: #3b82f6;">adni.loni.usc.edu</a>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# Model configuration
+st.sidebar.subheader("Model Configuration")
 
-# System Information
-st.sidebar.markdown("""
-<div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-top: 0.5rem;">
-    <div style="font-size: 0.75rem; color: #64748b;">
-        <strong style="color: #475569;">CDDA Framework v1.0</strong><br>
-        Dual-LLM A2A Architecture<br>
-        Phi-4-mini + Llama3.1-Aloe-Beta-8B
-    </div>
-</div>
-""", unsafe_allow_html=True)
+orchestrator_path = st.sidebar.text_input(
+    "Orchestrator Model Path",
+    value="D:/hf_models/Phi-4-mini-instruct",
+    help="Path to Phi-4-mini model",
+    disabled=is_running
+)
 
+consultant_path = st.sidebar.text_input(
+    "Consultant Model Path",
+    value="D:/hf_models/Llama3.1-Aloe-Beta-8B",
+    help="Path to Llama3.1-Aloe-Beta-8B model",
+    disabled=is_running
+)
 
-# --- 分析邏輯 ---
-# --- 分析邏輯 ---
-if start_button:
-    # 重置所有分析狀態，尤其是 run_complete
+use_llm = st.sidebar.checkbox(
+    "Enable LLM Mode",
+    value=True,
+    help="Use LLM for agent reasoning (disable for rule-based fallback)",
+    disabled=is_running
+)
+
+use_4bit = st.sidebar.checkbox(
+    "Use 4-bit Quantization",
+    value=True,
+    help="Enable 4-bit quantization to reduce VRAM usage",
+    disabled=is_running
+)
+
+st.sidebar.markdown("---")
+
+# Start/Stop analysis buttons
+if is_running:
+    # Show stop button during analysis
+    if st.sidebar.button(
+        "Force Stop Analysis",
+        type="secondary",
+        use_container_width=True
+    ):
+        st.session_state.analysis_running = False
+        st.warning("Analysis stopped by user")
+        st.rerun()
+    
+    start_analysis = False
+else:
+    # Show start button when not running
+    start_analysis = st.sidebar.button(
+        "Start Analysis",
+        type="primary",
+        use_container_width=True
+    )
+
+st.sidebar.markdown("---")
+st.sidebar.caption("CDDA Framework v1.0")
+st.sidebar.caption("Dual-LLM A2A Architecture")
+
+# ============================================================================
+# Main Content
+# ============================================================================
+
+if start_analysis:
+    # Set analysis running state
     st.session_state.analysis_running = True
-    st.session_state.run_complete = False  # 重置完成狀態
-    st.session_state.viewer_expanded = True
     
-    # 清除之前的結果狀態（防止干擾）
-    if 'final_state' in st.session_state:
-        del st.session_state['final_state']
-    if 'nii_path' in st.session_state:
-        del st.session_state['nii_path']
+    # Clear previous results
+    for key in ['analysis_result', 'ground_truth', 'init_time', 'analysis_time', 'analysis_logs']:
+        if key in st.session_state:
+            del st.session_state[key]
     
-    # 強制重新載入頁面以更新側邊欄狀態
     st.rerun()
 
-# 檢查是否有正在進行的分析
-if st.session_state.get("analysis_running", False) and not st.session_state.get(
-    "run_complete", False
-):
-    # 進度條和狀態更新
+# Analysis execution (when running)
+if st.session_state.analysis_running and 'analysis_result' not in st.session_state:
+    st.markdown("## Analysis Execution")
+    
     progress_bar = st.progress(0)
+    
+    # System Information
+    with st.expander("System Configuration", expanded=True):
+        st.markdown(f"""
+        **System:** Cognitive Discrepancy-Driven Agent (CDDA)  
+        **Architecture:** Dual-LLM A2A Pattern  
+        **Agent A (Orchestrator):** Phi-4-mini  
+        **Agent B (Consultant):** Llama3.1-Aloe-Beta-8B  
+        **Subject:** {selected_subject}  
+        **Ground Truth:** {ground_truth}  
+        **LLM Mode:** {'Enabled' if use_llm else 'Disabled (Rule-based)'}  
+        **Quantization:** {'4-bit' if use_4bit else '8-bit'}
+        """)
+    
+    # Initialize CDDA Agent
+    st.markdown("### 1. Initializing CDDA Agent")
+    
     status_text = st.empty()
-
-    with st.spinner("Analyzing brain patterns... This may take a few minutes."):
-        try:
-            # 從 session state 取得設定值
-            selected_subject = st.session_state.selected_subject
-            selected_model_key = st.session_state.selected_model_key
-            ground_truth_label = st.session_state.ground_truth_label
-
-            # 進度階段更新
-            import time
-
-            status_text.text("Preparing analysis...")
-            progress_bar.progress(10)
-
-            # 根據分析模式設定模型路徑
-            if st.session_state.analysis_mode == "structural":
-                model_path = None  # 使用 config 中的預設路徑
-            else:
-                model_paths_map = {
-                    "shufflenet": "model/shufflenet/fold_3_best_model.pth",
-                    "capsnet": "model/capsnet/best_capsnet_rnn.pth",
-                    "mcadnnet": "model/macadnnet/._best_overall_model.pth",
-                }
-                model_path = model_paths_map.get(selected_model_key)
-                if not model_path:
-                    raise FileNotFoundError(
-                        f"找不到模型 '{selected_model_key}' 的路徑設定。"
-                    )
-
-            status_text.text("Loading data files...")
-            progress_bar.progress(20)
-
-            # 根據分析模式搜尋不同的檔案
-            if st.session_state.analysis_mode == "structural":
-                # 結構性 MRI: 從 data/sMRI 搜尋 T1 檔案
-                label = ground_truth_label
-                # 將 sub_XXXX 轉換為 sub-XXXX（資料夾格式）
-                subject_folder = selected_subject.replace("_", "-")
-                nii_search_pattern = f"data/sMRI/{label}/{subject_folder}/*_T1.nii.gz"
-                nii_file_list = glob.glob(nii_search_pattern)
-                
-                if not nii_file_list:
-                    raise FileNotFoundError(
-                        f"找不到受試者 '{selected_subject}' 的 T1 檔案。\n"
-                        f"搜尋路徑: {nii_search_pattern}\n"
-                        f"請確認檔案存在於 data/sMRI/{label}/{subject_folder}/ 目錄下"
-                    )
-                
-                nii_path = nii_file_list[0]
-                st.info(f"Files found:\n- T1 MRI: {nii_path}")
-            else:
-                # 功能性 MRI: 從 data/fMRI 搜尋檔案
-                nii_search_pattern = f"data/fMRI/*/{selected_subject}/*.nii.gz"
-                nii_file_list = glob.glob(nii_search_pattern)
-                if not nii_file_list:
-                    raise FileNotFoundError(
-                        f"找不到受試者 '{selected_subject}' 的 .nii.gz 檔案。\n"
-                        f"搜尋路徑: {nii_search_pattern}"
-                    )
-                nii_path = nii_file_list[0]
-                st.info(f"Files found:\n- NIfTI: {nii_path}\n- Model: {model_path}")
-
-            status_text.text("Starting brain analysis workflow...")
-            progress_bar.progress(30)
-
-            initial_state = {
-                "subject_id": selected_subject,
-                "fmri_scan_path": nii_path,
-                "model_path": model_path,
-                "model_name": selected_model_key,
-                "analysis_mode": st.session_state.analysis_mode,  # 新增分析模式
-                "trace_log": [],
-                "error_log": []
-            }
-
-            status_text.text("Running AI analysis pipeline...")
-            progress_bar.progress(50)
-
-            final_state = app.invoke(initial_state)
-
-            status_text.text("Finalizing results...")
-            progress_bar.progress(90)
-
-            if final_state:
-                status_text.text("Analysis completed successfully!")
-                progress_bar.progress(100)
-
-                st.session_state["nii_path"] = nii_path
-                st.session_state["final_state"] = final_state
-                st.session_state["ground_truth_label"] = ground_truth_label
-                st.session_state["run_complete"] = True
-                # 分析完成，恢復正常狀態
-                st.session_state.analysis_running = False
-
-                time.sleep(1)  # 稍微等待讓用戶看到完成狀態
-                st.success("Analysis completed successfully!")
-                st.rerun()
-            else:
-                status_text.text("Analysis completed with issues")
-                progress_bar.progress(100)
-
-                st.error("Analysis finished but the agent returned no content.")
-                st.session_state["run_complete"] = False
-                st.session_state.analysis_running = False
-
-        except Exception as e:
-            # 錯誤時的進度更新
-            status_text.text("Analysis failed")
-            progress_bar.progress(0)
-
-            st.error("Please try again later.")
-            st.error(f"Critical error occurred during analysis: {e}")
-            st.session_state["run_complete"] = False
-            # 發生錯誤時也要恢復正常狀態
-            st.session_state.analysis_running = False
-
-# --- RESULTS DISPLAY ---
-if st.session_state.get("run_complete", False):
-    final_state = st.session_state["final_state"]
-    report_ground_truth = st.session_state.get("ground_truth_label", "N/A")
-    analyzed_subject = final_state.get(
-        "subject_id", st.session_state.get("selected_subject", "Unknown")
-    )
     
-    analysis_mode = final_state.get("analysis_mode", "functional")
+    status_text.text("Initializing CDDA Agent...")
+    progress_bar.progress(5)
     
-    # Generate Executive Summary
-    if "executive_summary" not in st.session_state:
-        predicted_label = final_state.get("classification_result", "N/A")
+    init_start = time.time()
+    
+    try:
+        agent = CDDAAgent(
+            orchestrator_model="phi-4-mini",
+            orchestrator_model_path=orchestrator_path,
+            consultant_model="llama3.1-aloe-beta-8b",
+            consultant_model_path=consultant_path,
+            use_llm=use_llm,
+            use_4bit=use_4bit,
+            verbose=False
+        )
+        init_time = time.time() - init_start
         
-        # Simple rule-based summary (no LLM required)
-        # This avoids complex dependencies and provides immediate results
+        status_text.text(f"Agent initialized successfully ({init_time:.2f}s)")
+        progress_bar.progress(10)
         
-        # Determine risk level based on prediction match
-        is_correct = report_ground_truth == predicted_label
-        if is_correct:
-            risk_level = "Low"
-            headline = f"Confirmed {predicted_label} diagnosis with model agreement"
-        else:
-            risk_level = "High"
-            headline = f"Predicted {predicted_label} (Ground Truth: {report_ground_truth}) - Discrepancy detected"
+        st.success(f"CDDA Agent initialized in {init_time:.2f}s")
         
-        # Generate key findings
-        key_findings = [
-            f"AI Model Prediction: {predicted_label}",
-            f"Clinical Ground Truth: {report_ground_truth}",
-            f"Prediction Accuracy: {'Correct ✓' if is_correct else 'Incorrect ✗'}"
+    except Exception as e:
+        st.error(f"Initialization failed: {e}")
+        st.session_state.analysis_running = False
+        st.stop()
+    
+    # Run Analysis
+    st.markdown("### 2. Running CDDA Analysis")
+    
+    status_text.text(f"Running analysis for {selected_subject}...")
+    progress_bar.progress(10)
+    
+    st.markdown("""
+    **Pipeline Stages:**
+    1. Agent A: Orchestration (MCP resource reading, tool invocation)
+    2. Agent B: Clinical synthesis (report generation)
+    3. Post-processing: Executive summary generation
+    """)
+    
+    analysis_start = time.time()
+    
+    # Simplified progress log for clinicians
+    log_container = st.expander("Analysis Progress", expanded=True)
+    log_placeholder = log_container.empty()
+    
+    # Simplified progress messages
+    progress_messages = []
+    
+    def update_progress(message):
+        progress_messages.append(f"[{datetime.now().strftime('%H:%M:%S')}] {message}")
+        log_placeholder.markdown('\n\n'.join(progress_messages))
+    
+    try:
+        # Run analysis with progress updates
+        result_container = {}
+        error_container = {}
+        
+        def run_analysis_thread():
+            try:
+                result_container['result'] = agent.run_analysis(selected_subject)
+            except Exception as e:
+                error_container['error'] = e
+        
+        # Start analysis
+        update_progress("✓ Starting diagnostic analysis...")
+        analysis_thread = threading.Thread(target=run_analysis_thread)
+        analysis_thread.start()
+        
+        # Detailed progress updates with progress bar sync
+        progress_steps = [
+            (2, 15, "✓ Loading patient MRI data..."),
+            (3, 20, "✓ Preprocessing brain images..."),
+            (4, 25, "✓ Extracting brain region features..."),
+            (5, 30, "✓ Normalizing feature values..."),
+            (6, 35, "✓ Running machine learning model..."),
+            (7, 40, "✓ Generating predictions..."),
+            (8, 45, "✓ Calculating feature importance (SHAP)..."),
+            (9, 50, "✓ Computing SHAP values for top features..."),
+            (10, 55, "✓ Evaluating prediction uncertainty..."),
+            (11, 60, "✓ Detecting statistical anomalies..."),
+            (12, 65, "✓ Agent A: Analyzing diagnostic signals..."),
+            (13, 70, "✓ Agent A: Evaluating uncertainty threshold..."),
+            (15, 75, "✓ Agent A: Making adaptive decisions..."),
+            (16, 80, "✓ Agent A: Compiling diagnostic context..."),
+            (18, 85, "✓ Agent B: Receiving context object..."),
+            (19, 90, "✓ Agent B: Generating clinical report..."),
+            (20, 95, "✓ Post-processing: Creating executive summary..."),
+            (21, 100, "✓ Finalizing analysis results...")
         ]
         
-        # Add analysis mode specific findings
-        if analysis_mode == "structural":
-            key_findings.append("Analysis Type: Structural MRI (sMRI) with Random Forest")
-        else:
-            model_name = st.session_state.get("selected_model_display", "Unknown")
-            key_findings.append(f"Analysis Type: Functional MRI (fMRI) with {model_name}")
+        start_time = time.time()
+        step_idx = 0
         
-        # Generate recommended actions
-        if is_correct:
-            recommended_actions = [
-                "Model prediction aligns with clinical diagnosis",
-                "Review detailed report for feature analysis",
-                "Standard clinical follow-up appropriate"
-            ]
-        else:
-            recommended_actions = [
-                "⚠️ Prediction discrepancy requires clinical review",
-                "Examine detailed report for potential explanations",
-                "Consider additional diagnostic tests or imaging",
-                "Consult with clinical team for final diagnosis"
-            ]
+        while analysis_thread.is_alive():
+            elapsed = time.time() - start_time
+            
+            # Update progress based on elapsed time
+            if step_idx < len(progress_steps) and elapsed >= progress_steps[step_idx][0]:
+                _, progress_pct, message = progress_steps[step_idx]
+                update_progress(message)
+                progress_bar.progress(progress_pct)
+                step_idx += 1
+            
+            time.sleep(0.3)  # More frequent updates
         
-        st.session_state.executive_summary = {
-            "headline": headline,
-            "key_findings": key_findings,
-            "recommended_actions": recommended_actions,
-            "risk_level": risk_level
-        }
+        # Wait for thread to complete
+        analysis_thread.join()
+        
+        # Check for errors
+        if 'error' in error_container:
+            raise error_container['error']
+        
+        result = result_container.get('result')
+        
+        if not result:
+            raise Exception("Analysis completed but no result returned")
+        
+        analysis_time = time.time() - analysis_start
+        
+        # Final progress update
+        update_progress(f"✓ Analysis completed successfully! (Total time: {analysis_time:.1f}s)")
+        
+        status_text.text(f"Analysis completed successfully ({analysis_time:.2f}s)")
+        progress_bar.progress(100)
+        
+        st.success(f"Analysis completed in {analysis_time:.2f}s")
+        
+        # Store result in session state
+        st.session_state.analysis_result = result
+        st.session_state.ground_truth = ground_truth
+        st.session_state.init_time = init_time
+        st.session_state.analysis_time = analysis_time
+        st.session_state.analysis_running = False
+        
+        # Free up Agent A memory (only Agent B needed for chat)
+        try:
+            if hasattr(agent, 'agent_a'):
+                # Clear Agent A's LLM to free GPU memory
+                if hasattr(agent.agent_a, 'llm_provider'):
+                    agent.agent_a.llm_provider = None
+                if hasattr(agent.agent_a, 'model'):
+                    agent.agent_a.model = None
+                
+                # Force garbage collection
+                import gc
+                import torch
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                
+                if st.session_state.get('verbose', False):
+                    st.info("Agent A memory released. GPU memory freed for chatbot.")
+        except Exception as e:
+            # Silent fail - memory cleanup is optional
+            pass
+        
+        # Rerun to show results
+        st.rerun()
+        
+    except Exception as e:
+        update_progress(f"✗ Error: {str(e)}")
+        st.error(f"Analysis failed: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        st.session_state.analysis_running = False
+        st.stop()
+
+# ============================================================================
+# Display Results
+# ============================================================================
+
+if 'analysis_result' in st.session_state:
+    result = st.session_state.analysis_result
+    ground_truth = st.session_state.ground_truth
+    init_time = st.session_state.init_time
+    analysis_time = st.session_state.analysis_time
     
-    executive_summary = st.session_state.get("executive_summary", {})
-    
-    # Professional Dashboard Header
     st.markdown("---")
-    st.markdown("""
-    <div style="background: #f8fafc; padding: 1.5rem; border-radius: 10px; border-left: 5px solid #3b82f6; margin-bottom: 2rem;">
-        <h2 style="margin: 0; color: #1e40af;">📊 Clinical Executive Summary</h2>
-        <p style="margin: 0.5rem 0 0 0; color: #64748b;">AI-Generated Diagnostic Overview</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Clinical Dashboard")
     
-    # Risk Level Badge
-    risk_level = executive_summary.get("risk_level", "Medium")
-    risk_colors = {
-        "High": ("#dc2626", "#fef2f2", "⚠️"),
-        "Medium": ("#f59e0b", "#fffbeb", "⚡"),
-        "Low": ("#10b981", "#f0fdf4", "✅")
+    # Integrated Dashboard: Executive Summary + Diagnostic Results
+    diagnosis_map = {
+        'AD': 'AD',
+        'MCI': 'MCI',
+        'NC': 'NC'
     }
-    risk_color, risk_bg, risk_icon = risk_colors.get(risk_level, ("#6b7280", "#f9fafb", "ℹ️"))
     
-    # Headline with Risk Badge
-    headline = executive_summary.get("headline", "Analysis completed")
-    st.markdown(f"""
-    <div style="background: {risk_bg}; padding: 1.5rem; border-radius: 8px; border: 2px solid {risk_color}; margin-bottom: 1.5rem;">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-            <span style="font-size: 2rem;">{risk_icon}</span>
-            <div style="flex: 1;">
-                <div style="background: {risk_color}; color: white; padding: 0.25rem 0.75rem; border-radius: 4px; display: inline-block; font-size: 0.75rem; font-weight: bold; margin-bottom: 0.5rem;">
-                    RISK LEVEL: {risk_level.upper()}
-                </div>
-                <h3 style="margin: 0; color: {risk_color}; font-size: 1.5rem;">{headline}</h3>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Get risk level from executive summary
+    risk_level = "Medium"
+    if 'executive_summary' in result.metadata:
+        risk_level = result.metadata['executive_summary'].get('risk_level', 'Medium')
     
-    # Key Metrics Row
+    # Top row: Key metrics with colored indicators
     col1, col2, col3, col4 = st.columns(4)
     
-    predicted_label = final_state.get("classification_result", "N/A")
-    is_correct = report_ground_truth == predicted_label
-    
     with col1:
-        st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">SUBJECT ID</div>
-            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{analyzed_subject}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric("Prediction", diagnosis_map.get(result.prediction, result.prediction))
+        # No indicator for prediction
     
     with col2:
-        st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">GROUND TRUTH</div>
-            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{report_ground_truth}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric("Confidence", f"{result.confidence:.3f}")
+        # Confidence indicator
+        if result.confidence > 0.8:
+            st.markdown('<p style="color: green; font-size: 0.8em; margin-top: -10px;">High</p>', unsafe_allow_html=True)
+        elif result.confidence > 0.6:
+            st.markdown('<p style="color: orange; font-size: 0.8em; margin-top: -10px;">Medium</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color: red; font-size: 0.8em; margin-top: -10px;">Low</p>', unsafe_allow_html=True)
     
     with col3:
-        st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">AI PREDICTION</div>
-            <div style="color: #1e293b; font-size: 1.5rem; font-weight: bold;">{predicted_label}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.metric("Uncertainty", f"{result.uq_score:.3f}")
+        # Uncertainty indicator (inverse: low is good)
+        if result.uq_score < 0.5:
+            st.markdown('<p style="color: green; font-size: 0.8em; margin-top: -10px;">Low</p>', unsafe_allow_html=True)
+        elif result.uq_score < 0.8:
+            st.markdown('<p style="color: orange; font-size: 0.8em; margin-top: -10px;">Medium</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color: red; font-size: 0.8em; margin-top: -10px;">High</p>', unsafe_allow_html=True)
     
     with col4:
-        accuracy_color = "#10b981" if is_correct else "#dc2626"
-        accuracy_icon = "✓" if is_correct else "✗"
-        accuracy_text = "CORRECT" if is_correct else "INCORRECT"
+        st.metric("Risk Level", risk_level)
+        # Risk level indicator
+        if risk_level == "High":
+            st.markdown('<p style="color: red; font-size: 0.8em; margin-top: -10px;">High Risk</p>', unsafe_allow_html=True)
+        elif risk_level == "Medium":
+            st.markdown('<p style="color: orange; font-size: 0.8em; margin-top: -10px;">Medium Risk</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color: green; font-size: 0.8em; margin-top: -10px;">Low Risk</p>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Executive Summary Section
+    if 'executive_summary' in result.metadata:
+        summary = result.metadata['executive_summary']
+        
+        # Headline
+        st.markdown(f"### {summary.get('headline', 'Analysis Complete')}")
+        
+        st.markdown("")
+        
+        # Key Findings and Recommended Actions (side by side)
+        col_findings, col_actions = st.columns(2)
+        
+        with col_findings:
+            st.markdown("**Key Findings:**")
+            for finding in summary.get('key_findings', []):
+                st.markdown(f"- {finding}")
+        
+        with col_actions:
+            st.markdown("**Recommended Actions:**")
+            for action in summary.get('recommended_actions', []):
+                st.markdown(f"- {action}")
+    
+    # Decision Mode (smaller text, below dashboard)
+    st.markdown(f'<p style="color: gray; font-size: 0.9em; margin-top: 1em;">Decision Mode: {result.agent_decision}</p>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Feature Importance Analysis
+    if result.context_object and result.context_object.diagnostic_report:
+        st.markdown("### Feature Importance Analysis (SHAP + Z-score)")
+        
+        top_features = result.context_object.diagnostic_report.top_features[:10]
+        
+        if top_features:
+            # Create table data
+            table_data = []
+            for feat in top_features:
+                rank = safe_get_feature_attr(feat, 'rank', 0)
+                roi_name = safe_get_feature_attr(feat, 'roi_name', 'Unknown')
+                shap_value = safe_get_feature_attr(feat, 'shap_value', 0)
+                z_score = safe_get_feature_attr(feat, 'z_score', 0)
+                
+                # Clinical significance
+                if abs(z_score) > 2.5:
+                    significance = "Anomalous (|Z| > 2.5)"
+                elif z_score < -1.5:
+                    significance = "Atrophy pattern"
+                elif z_score > 1.5:
+                    significance = "Preserved volume"
+                else:
+                    significance = "Normal range"
+                
+                table_data.append({
+                    "Rank": rank,
+                    "Brain Region": roi_name,
+                    "SHAP Value": f"{shap_value:+.4f}",
+                    "Z-score": f"{z_score:+.2f}",
+                    "Clinical Significance": significance
+                })
+            
+            st.table(table_data)
+    
+    # Clinical Report - Agent Interaction Summary
+    with st.expander("Clinical Report - Agent Interaction Summary", expanded=False):
+        if hasattr(result, 'clinical_report') and result.clinical_report:
+            report = result.clinical_report
+            
+            # Extract content after <REPORT> marker
+            if '<REPORT>' in report:
+                # Get the LAST segment after splitting by <REPORT>
+                # (in case <REPORT> appears multiple times)
+                report_content = report.split('<REPORT>')[-1].strip()
+            else:
+                # Fallback: use original filtering logic
+                lines = report.split('\n')
+                filtered_lines = []
+                
+                for line in lines:
+                    line_lower = line.lower().strip()
+                    
+                    # Skip system prompt keywords
+                    if any(keyword in line_lower for keyword in [
+                        'your role is to', 'important: you have no access',
+                        'input: contextobject', 'your task:', 'synthesis guidelines:',
+                        'report structure:', 'diagnostic_report:', 'tool_results:',
+                        'decision_rationale:', 'signals:'
+                    ]):
+                        continue
+                    
+                    # Skip Chinese text
+                    if any('\u4e00' <= char <= '\u9fff' for char in line):
+                        continue
+                    
+                    # Add valid lines
+                    if line.strip():
+                        filtered_lines.append(line)
+                
+                report_content = '\n'.join(filtered_lines)
+            
+            # Display report
+            if report_content:
+                st.markdown(report_content)
+            else:
+                st.info("Clinical report is being processed...")
+        else:
+            st.info("No clinical report available")
+        
+        # Add agent interaction summary
+        st.markdown("---")
+        st.markdown("**Agent Interaction Summary:**")
         st.markdown(f"""
-        <div style="background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <div style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">ACCURACY</div>
-            <div style="color: {accuracy_color}; font-size: 1.5rem; font-weight: bold;">{accuracy_icon} {accuracy_text}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        - **Agent A (Orchestrator):** Analyzed diagnostic data, evaluated uncertainty (UQ: {result.uq_score:.3f})
+        - **Decision:** {result.agent_decision}
+        - **Agent B (Consultant):** Generated clinical synthesis based on provided context
+        - **Recommendation:** Review detailed findings and consider clinical correlation
+        """)
     
-    st.markdown("<br>", unsafe_allow_html=True)
+
     
-    # Key Findings and Recommended Actions
-    col_findings, col_actions = st.columns(2)
+    # Performance Metrics
+    st.markdown("### Performance Metrics")
     
-    with col_findings:
-        st.markdown("""
-        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: 100%;">
-            <h4 style="margin: 0 0 1rem 0; color: #1e40af;">🔍 Key Findings</h4>
-        """, unsafe_allow_html=True)
+    total_time = init_time + analysis_time
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Initialization Time", f"{init_time:.2f}s")
+    
+    with col2:
+        st.metric("Analysis Time", f"{analysis_time:.2f}s")
+    
+    with col3:
+        st.metric("Total Time", f"{total_time:.2f}s")
+    
+    throughput = 3600 / analysis_time if analysis_time > 0 else 0
+    st.markdown(f"**Throughput:** {throughput:.2f} subjects/hour")
+    
+    st.markdown("---")
+    
+    # Chatbot - Ask Agent B
+    st.markdown("### Ask Chatbot (Clinical Consultant)")
+    st.markdown("Ask questions about this analysis. Chatbot will answer based on the diagnostic context.")
+    # Clear chat button
+    if st.button("Clear Chat History"):
+        st.session_state.chat_history = []
+        st.rerun()
+    
+    # Initialize chat history
+    if 'chat_history' not in st.session_state:
+        st.session_state.chat_history = []
+    
+    # Display chat history using st.chat_message
+    for role, message in st.session_state.chat_history:
+        with st.chat_message(role):
+            st.markdown(message)
+    
+    # Chat input (supports Enter key)
+    user_question = st.chat_input("Ask a question (press Enter to send)...")
+    
+    if user_question:
+        # Add user question to history
+        st.session_state.chat_history.append(("user", user_question))
         
-        key_findings = executive_summary.get("key_findings", ["Analysis completed"])
-        for finding in key_findings:
-            st.markdown(f"• {finding}")
+        # Prepare context for Agent B
+        context_summary = f"""
+DIAGNOSTIC CONTEXT:
+- Subject: {result.subject_id}
+- Prediction: {result.prediction}
+- Confidence: {result.confidence:.3f}
+- Uncertainty: {result.uq_score:.3f}
+- Decision Mode: {result.agent_decision}
+
+CLINICAL REPORT SUMMARY:
+{result.clinical_report[:500] if hasattr(result, 'clinical_report') else 'N/A'}...
+
+EXECUTIVE SUMMARY:
+"""
         
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    with col_actions:
-        st.markdown("""
-        <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); height: 100%;">
-            <h4 style="margin: 0 0 1rem 0; color: #1e40af;">💡 Recommended Actions</h4>
-        """, unsafe_allow_html=True)
+        if 'executive_summary' in result.metadata:
+            summary = result.metadata['executive_summary']
+            context_summary += f"""
+- Headline: {summary.get('headline', 'N/A')}
+- Risk Level: {summary.get('risk_level', 'N/A')}
+- Key Findings: {', '.join(summary.get('key_findings', [])[:3])}
+"""
         
-        recommended_actions = executive_summary.get("recommended_actions", ["Review detailed report"])
-        for action in recommended_actions:
-            st.markdown(f"• {action}")
+        # Create prompt for Agent B
+        chat_prompt = f"""
+{context_summary}
+
+PHYSICIAN QUESTION:
+{user_question}
+
+Please provide a clear, concise answer based on the diagnostic context above. 
+Focus on clinical interpretation and practical recommendations.
+"""
         
-        st.markdown("</div>", unsafe_allow_html=True)
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Visualization Section
-    if analysis_mode == "functional":
-        st.markdown("""
-        <div style="background: #f8fafc; padding: 1.5rem; border-radius: 10px; border-left: 5px solid #8b5cf6; margin-bottom: 1rem;">
-            <h3 style="margin: 0; color: #6b21a8;">🎨 Brain Activation Visualization</h3>
-        </div>
-        """, unsafe_allow_html=True)
+        # Display user message immediately
+        with st.chat_message("user"):
+            st.markdown(user_question)
         
         try:
-            viz_path = final_state.get("visualization_paths", [])[0]
-            st.image(viz_path, caption=f"Activation map for subject {analyzed_subject}", use_container_width=True)
-        except Exception as e:
-            st.error(f"Cannot display visualization: {e}")
-    
-    # Detailed Report (Collapsible)
-    with st.expander("📄 View Detailed Clinical Report", expanded=False):
-        if analysis_mode == "structural":
-            render_structural_results(final_state, report_ground_truth)
-        else:
-            reports = final_state.get("generated_reports", {})
-            report_en = reports.get("en", "No English report was generated.")
-            report_zh = reports.get("zh", "沒有生成中文報告。")
+            # Import HuggingFace provider at the top level
+            from app.services.llm_providers import huggingface as hf_provider
             
-            tab_en, tab_zh = st.tabs(["English Report", "中文報告"])
-            with tab_en:
-                st.markdown("### Clinical Report (English)")
-                st.markdown(report_en, unsafe_allow_html=True)
-            with tab_zh:
-                st.markdown("### 臨床分析報告 (繁體中文)")
-                st.markdown(report_zh, unsafe_allow_html=True)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    # Get Agent B from session state or create new one
+                    if 'agent_b_chat' not in st.session_state:
+                        # Import Agent B
+                        from app.agents.agent_b_consultant import AgentB, AgentBConfig
+                        
+                        config = AgentBConfig(
+                            model="llama3.1-aloe-beta-8b",
+                            model_path=consultant_path,
+                            provider="huggingface",
+                            temperature=0.3,
+                            use_llm=True,
+                            load_in_8bit=not use_4bit,
+                            verbose=False
+                        )
+                        
+                        agent_b = AgentB(config=config)
+                        
+                        # Manually initialize LLM provider if not already done
+                        if not hasattr(agent_b, 'llm_provider') or agent_b.llm_provider is None:
+                            agent_b.llm_provider = hf_provider
+                        
+                        st.session_state.agent_b_chat = agent_b
+                    
+                    agent_b = st.session_state.agent_b_chat
+                    
+                    # Get response from Agent B using HuggingFace provider directly
+                    try:
+                        response = hf_provider.handle_text(
+                            prompt=chat_prompt,
+                            model_path=consultant_path,
+                            system_instruction="You are a clinical consultant AI. Provide clear, concise, evidence-based answers to physician questions about diagnostic cases. Keep responses focused and actionable.",
+                            load_in_8bit=not use_4bit
+                        )
+                        
+                        # Filter out <REPORT> marker if present
+                        if '<REPORT>' in response:
+                            response = response.split('<REPORT>')[-1].strip()
+                        
+                    except Exception as llm_error:
+                        response = f"I apologize, but I encountered an issue accessing the language model: {str(llm_error)}\n\nPlease ensure:\n1. The model path is correct: {consultant_path}\n2. The model files are downloaded\n3. Sufficient GPU memory is available"
+                    
+                    # Display response
+                    st.markdown(response)
+                
+                # Add to history
+                st.session_state.chat_history.append(("assistant", response))
+                
+        except Exception as e:
+            with st.chat_message("assistant"):
+                error_msg = f"I encountered an error: {str(e)}\n\nDebug info:\n- Model path: {consultant_path}\n- Use 4-bit: {use_4bit}"
+                st.markdown(error_msg)
+                st.session_state.chat_history.append(("assistant", error_msg))
 
-    # Interactive MRI Viewer
-    is_expanded_default = st.session_state.get("viewer_expanded", False)
-    with st.expander("🔬 Interactive MRI Viewer", expanded=is_expanded_default):
-        st.markdown("""
-        <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
-            <p style="color: #64748b; margin: 0; font-size: 0.875rem;">
-                Explore the original MRI scan with interactive 3D visualization. 
-                Use the controls to navigate through different brain slices.
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        nii_path = st.session_state.get("nii_path")
-        if nii_path and Path(nii_path).exists():
-            # Load NIfTI file (supports 3D and 4D)
-            img, num_time_points = load_nifti(nii_path)
-
-            if img and num_time_points > 0:
-                # Determine whether to show time axis slider based on image dimensions
-                if num_time_points > 1:
-                    # 4D image: show time axis slider
-                    selected_time_point_display = st.slider(
-                        "Time Point (Volume)",
-                        min_value=1,
-                        max_value=num_time_points,
-                        value=1,
-                        help=f"This scan has {num_time_points} volumes.",
-                    )
-                    # Convert to 0-based index
-                    selected_time_point_index = selected_time_point_display - 1
-                    # Extract 3D image at specified time point
-                    img_3d_at_t = nimg.index_img(img, selected_time_point_index)
-                else:
-                    # 3D image: use directly
-                    img_3d_at_t = img
-                    selected_time_point_display = None
-
-                # Set title based on image type
-                if selected_time_point_display:
-                    title = f"Volume at T={selected_time_point_display}"
-                else:
-                    title = "Structural MRI (T1-weighted)"
-
-                viewer = plotting.view_img(
-                    img_3d_at_t,
-                    bg_img=None,
-                    cmap="gray",
-                    threshold=None,
-                    title=title,
-                    resampling_interpolation="nearest",
-                    colorbar=False,
-                    annotate=True,
-                    black_bg=True,
-                )
-
-                components.html(viewer.html, height=600, scrolling=False)
-        else:
-            st.warning("⚠️ Could not find the original NIfTI file for this viewer.")
 else:
-    # Welcome Screen
+    # Welcome message
+    st.info("Select a subject and click 'Start Analysis' in the sidebar to begin.")
+    
     st.markdown("""
-    <div style="text-align: center; padding: 4rem 2rem;">
-        <div style="font-size: 4rem; margin-bottom: 1rem;">🧠</div>
-        <h2 style="color: #1e40af; margin-bottom: 1rem;">Welcome to CDDA Clinical Dashboard</h2>
-        <p style="color: #64748b; font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem auto;">
-            Select a subject and model from the sidebar, then click <strong>"Start Analysis"</strong> 
-            to generate AI-powered diagnostic insights with complete reasoning transparency.
-        </p>
-        <div style="background: #f8fafc; padding: 2rem; border-radius: 10px; max-width: 800px; margin: 0 auto;">
-            <h3 style="color: #1e40af; margin-bottom: 1rem;">Key Features</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; text-align: left;">
-                <div>
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🎯</div>
-                    <strong style="color: #1e293b;">Adaptive Decision-Making</strong>
-                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
-                        Dynamic pathway selection based on uncertainty
-                    </p>
-                </div>
-                <div>
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
-                    <strong style="color: #1e293b;">Counterfactual Analysis</strong>
-                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
-                        Causal reasoning for diagnostic drivers
-                    </p>
-                </div>
-                <div>
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📊</div>
-                    <strong style="color: #1e293b;">Executive Summary</strong>
-                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
-                        AI-generated structured overview
-                    </p>
-                </div>
-                <div>
-                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔗</div>
-                    <strong style="color: #1e293b;">Knowledge Integration</strong>
-                    <p style="color: #64748b; font-size: 0.875rem; margin: 0.25rem 0 0 0;">
-                        Clinical context from knowledge graph
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    ### About CDDA Framework
+    
+    The Cognitive Discrepancy-Driven Agent (CDDA) is a dual-LLM framework for explainable 
+    Alzheimer's disease diagnosis. It combines:
+    
+    - **Adaptive Decision-Making**: Dynamic pathway selection based on uncertainty
+    - **Counterfactual Analysis**: Causal reasoning for diagnostic drivers
+    - **Knowledge Integration**: Clinical context from knowledge graph
+    - **Complete Transparency**: Full reasoning chain from both agents
+    
+    **Architecture:**
+    - Agent A (Orchestrator): Phi-4-mini - MCP client, resource reader, tool invoker
+    - Agent B (Consultant): Llama3.1-Aloe-Beta-8B - Clinical synthesizer
+    
+    **Key Features:**
+    - Uncertainty Quantification (UQ)
+    - Anomaly Detection (Z-score)
+    - SHAP Feature Importance
+    - Executive Summary Generation
+    """)
