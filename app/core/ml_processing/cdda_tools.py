@@ -21,7 +21,7 @@ import sys
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from scripts.cnn_rf.end_to_end_inference import EndToEndPredictor
+from app.core.cnn_rf.end_to_end_inference import EndToEndPredictor
 
 
 class CDDAToolKit:
@@ -370,6 +370,7 @@ class CDDAToolKit:
         self,
         subject_id: str,
         features_to_mask: List[str],
+        model_name: str = None,  # [修正 1] 新增參數
         verbose: bool = True
     ) -> Dict:
         """
@@ -405,16 +406,31 @@ class CDDAToolKit:
             print("CDDA Tool 2: simulate_counterfactual()")
             print("="*80)
             print(f"Subject: {subject_id}")
+            print(f"Model: {model_name}")  # [Log] 確認收到參數
             print(f"Features to mask: {features_to_mask}")
         
+        from scripts.cnn_rf.end_to_end_inference import EndToEndPredictor
+        from app.agents.cnn_rf_inference import get_model_path_for_subject
+        from scripts.cnn_rf.config import DEFAULT_MODEL
+        
+        # 決定模型路徑
+        target_model_name = model_name if model_name else DEFAULT_MODEL
+        model_path = get_model_path_for_subject(subject_id, target_model_name)
+        
+        # 初始化專用 Predictor (確保用到 LOOCV 模型)
+        predictor = EndToEndPredictor(
+            model_path=str(model_path),
+            data_root=str(self.data_root)
+        )
+        
+        if verbose:
+            print(f"[Info] Loaded LOOCV model: {model_path.name}")
+            
         # Step 1: Get original prediction
         if verbose:
             print(f"\n[Step 1/3] Getting original prediction...")
         
-        original_results = self.predictor.predict_subject(
-            subject_id,
-            verbose=False
-        )
+        original_results = predictor.predict_subject(subject_id, verbose=False)
         
         original_prediction = original_results['predicted_label']
         original_confidence = original_results['confidence']

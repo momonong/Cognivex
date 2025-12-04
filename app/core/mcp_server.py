@@ -188,32 +188,40 @@ class DiagnosticMCPServer:
     
     def call_tool(self, name: str, arguments: Dict) -> Dict:
         """
-        Execute a tool by name
-        
-        Supported tools:
-        - simulate_counterfactual
-        
-        Args:
-            name: Tool name
-            arguments: Tool arguments as dictionary
-        
-        Returns:
-            Tool execution results or error dict
+        Execute a tool by name (Updated to support Inference Tool)
         """
         if self.verbose:
             print(f"[MCP] call_tool: {name}")
             print(f"[MCP] arguments: {arguments}")
         
         try:
+            # Tool 1: Counterfactual Simulation
             if name == "simulate_counterfactual":
                 return self._execute_counterfactual(arguments)
+            
+            # [修正] Tool 2: CNN-RF Inference (支援 LOOCV 模型參數)
+            elif name == "run_cnn_rf_inference":
+                # Lazy import to avoid circular dependencies
+                from app.agents.cnn_rf_inference import run_cnn_rf_inference
+                
+                # 直接將 arguments 當作 state 傳入
+                # arguments 包含: subject_id, model_name, data_root
+                return run_cnn_rf_inference(arguments)
+            
             else:
                 return {
-                    "error": f"Unknown tool: {name}. Available tools: simulate_counterfactual",
+                    "error": f"Unknown tool: {name}. Available: simulate_counterfactual, run_cnn_rf_inference",
                     "tool": name,
                     "timestamp": datetime.now().isoformat()
                 }
+                
         except Exception as e:
+            # Error handling
+            if self.verbose:
+                print(f"[MCP] Tool execution failed: {e}")
+                import traceback
+                traceback.print_exc()
+                
             return {
                 "error": str(e),
                 "tool": name,
@@ -387,19 +395,13 @@ class DiagnosticMCPServer:
     
     def _execute_counterfactual(self, arguments: Dict) -> Dict:
         """
-        Execute counterfactual simulation tool
+        Execute counterfactual simulation tool (Updated for LOOCV)
         
         Args:
             arguments: Tool arguments with keys:
                 - subject_id: str
                 - features_to_mask: List[str]
-        
-        Returns:
-            Counterfactual simulation results
-        
-        Raises:
-            KeyError: If required arguments are missing
-            ValueError: If arguments are invalid
+                - model_name: str (Optional but recommended for LOOCV)
         """
         # Validate required arguments
         if "subject_id" not in arguments:
@@ -409,6 +411,8 @@ class DiagnosticMCPServer:
         
         subject_id = arguments["subject_id"]
         features_to_mask = arguments["features_to_mask"]
+        # [修正 1] 提取 model_name (使用 get 以保持向後相容，預設為 None)
+        model_name = arguments.get("model_name")
         
         # Validate argument types
         if not isinstance(subject_id, str):
@@ -418,11 +422,16 @@ class DiagnosticMCPServer:
         if not all(isinstance(f, str) for f in features_to_mask):
             raise ValueError("All features_to_mask items must be strings")
         
+        # [修正 2] 驗證 model_name 型別
+        if model_name is not None and not isinstance(model_name, str):
+            raise ValueError(f"model_name must be string, got {type(model_name)}")
+        
         try:
             # Execute counterfactual simulation via toolkit
             results = self.toolkit.simulate_counterfactual(
                 subject_id=subject_id,
                 features_to_mask=features_to_mask,
+                model_name=model_name,  # [修正 3] 將參數傳遞給 Toolkit
                 verbose=self.verbose
             )
             
@@ -431,6 +440,7 @@ class DiagnosticMCPServer:
                 "tool": "simulate_counterfactual",
                 "status": "success",
                 "subject_id": results.get("subject_id"),
+                "model_used": model_name, # [Log] 記錄實際使用的模型
                 "original_prediction": results.get("original_prediction"),
                 "original_confidence": results.get("original_confidence"),
                 "new_prediction": results.get("new_prediction"),

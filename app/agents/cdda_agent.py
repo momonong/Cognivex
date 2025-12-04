@@ -160,7 +160,7 @@ class CDDAAgent:
             z_score_threshold=z_score_threshold,
             use_llm=use_llm,
             load_in_8bit=not use_4bit,  # Use 8-bit only if not using 4-bit
-            verbose=False  # Reduce noise
+            verbose=verbose  # Use same verbose setting as CDDAAgent
         )
         
         self.agent_a = AgentA(
@@ -185,7 +185,7 @@ class CDDAAgent:
             temperature=0.3,
             use_llm=use_llm,
             load_in_8bit=not use_4bit,  # Use 8-bit only if not using 4-bit
-            verbose=False  # Reduce noise
+            verbose=verbose  # Use same verbose setting as CDDAAgent
         )
         
         self.agent_b = AgentB(config=agent_b_config)
@@ -643,7 +643,7 @@ Output ONLY the JSON object, nothing else:"""
         
         return ' '.join(summaries)
     
-    def run_analysis(self, subject_id: str) -> AgentResult:
+    def run_analysis(self, subject_id: str, model_name: str = "NC_MCI_AD") -> AgentResult:
         """
         Main CDDA Agent Analysis (A2A Pattern)
         
@@ -674,14 +674,35 @@ Output ONLY the JSON object, nothing else:"""
             print(f"\n[PHASE 1] Agent A - Orchestration")
             print("-" * 80)
         
-        # Agent A orchestrates: reads resources, invokes tools, compiles context
-        context_object = self.agent_a.orchestrate(subject_id)
+        # [修正 1] 將 model_name 傳遞給 orchestrate
+        # Agent A 需要把這個 config 寫入 Graph State，這樣 Tool 才會知道要用哪個 fallback
+        context_object = self.agent_a.orchestrate(subject_id, model_name=model_name)
         
+        # [修正 2] 確保 Tool 的 Trace Log (包含模型檔名) 被強制保留
+        # 有時候 LLM 會忽略這些底層細節，我們手動把它加到 reasoning 的最前面
+        # 這樣 comprehensive_statistics.py 就能抓到 "using rf_model_..."
+        
+        tool_traces = []
+        if hasattr(context_object, 'trace_log') and context_object.trace_log:
+            tool_traces = context_object.trace_log
+        elif hasattr(context_object, 'mcp_actions'):
+             # 嘗試從 Action 結果中尋找 Log
+             for action in context_object.mcp_actions:
+                 # MCPAction 是 dataclass，使用屬性訪問而不是 .get()
+                 if hasattr(action, 'result') and action.result and isinstance(action.result, dict):
+                     if 'trace_log' in action.result:
+                         tool_traces.extend(action.result['trace_log'])
+
+        # 將 Tool Log 注入到 Agent A 的 reasoning 中 (作為 System Observation)
+        if tool_traces:
+            if self.verbose:
+                print(f"   [System] Injected {len(tool_traces)} tool logs into reasoning chain")
+            # 加在最前面，模擬系統觀察
+            context_object.agent_a_reasoning = tool_traces + context_object.agent_a_reasoning
+
         if self.verbose:
             print(f"\n[HANDOFF] Agent A → Agent B")
             print(f"   Context compiled: {len(context_object.agent_a_reasoning)} reasoning steps")
-            print(f"   MCP actions: {len(context_object.mcp_actions)}")
-            print(f"   Decision: {context_object.decision_rationale}")
         
         # ====================================================================
         # PHASE 2: Agent B Synthesis
@@ -697,51 +718,30 @@ Output ONLY the JSON object, nothing else:"""
         clinical_report = synthesis_result['clinical_report']
         agent_b_reasoning = synthesis_result['reasoning_chain']
         
-        if self.verbose:
-            print(f"\n[SYNTHESIS] Agent B completed")
-            print(f"   Report length: {len(clinical_report)} characters")
-            print(f"   Reasoning steps: {len(agent_b_reasoning)}")
-        
         # ====================================================================
-        # PHASE 3: Reasoning Chain Aggregation (Subtask 5.2)
+        # PHASE 3: Reasoning Chain Aggregation
         # ====================================================================
         
-        if self.verbose:
-            print(f"\n[PHASE 3] Aggregating Reasoning Chains")
-            print("-" * 80)
-        
-        # Combine reasoning chains from both agents (Requirement 8.3, 8.4)
+        # Combine reasoning chains
         combined_reasoning = self._aggregate_reasoning_chains(
             context_object=context_object,
             agent_b_reasoning=agent_b_reasoning
         )
         
-        if self.verbose:
-            print(f"   Total reasoning steps: {len(combined_reasoning)}")
-        
         # ====================================================================
-        # PHASE 4: Post-Processing Summarization (Agent A)
+        # PHASE 4: Post-Processing Summarization
         # ====================================================================
         
-        if self.verbose:
-            print(f"\n[PHASE 4] Post-Processing Summarization")
-            print("-" * 80)
-        
-        # Generate executive summary using Agent A (Phi-4)
+        # Generate executive summary
         executive_summary = self.generate_executive_summary(
             clinical_report=clinical_report,
             context_object=context_object
         )
         
-        if self.verbose:
-            print(f"   Executive summary generated")
-            print(f"   Headline: {executive_summary.get('headline', 'N/A')}")
-        
         # ====================================================================
         # PHASE 5: Build Final Result
         # ====================================================================
         
-        # Determine agent decision type
         agent_decision = self._determine_agent_decision(context_object)
         
         # Build AgentResult
@@ -760,7 +760,8 @@ Output ONLY the JSON object, nothing else:"""
                 'agent_b_steps': len(agent_b_reasoning),
                 'mcp_actions': len(context_object.mcp_actions),
                 'use_llm': self.use_llm,
-                'executive_summary': executive_summary  # Add executive summary to metadata
+                'model_used': model_name, # 記錄設定的模型
+                'executive_summary': executive_summary
             }
         )
         

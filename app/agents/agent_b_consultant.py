@@ -170,6 +170,8 @@ class AgentB:
         """
         if self.config.verbose:
             print(f"\n[AGENT B] Synthesizing report for {context_object.subject_id}")
+            print(f"[AGENT B] Config: use_llm={self.config.use_llm}, provider={self.config.provider}")
+            print(f"[AGENT B] Model: {self.config.model}, Path: {self.config.model_path}")
         
         # Reset reasoning chain
         self.reasoning_chain = []
@@ -182,8 +184,12 @@ class AgentB:
         
         # Choose synthesis strategy
         if self.config.use_llm:
+            if self.config.verbose:
+                print(f"[AGENT B] Attempting LLM-based synthesis...")
             clinical_report = self._synthesize_with_llm(context_object)
         else:
+            if self.config.verbose:
+                print(f"[AGENT B] Using template-based synthesis (use_llm=False)")
             clinical_report = self._synthesize_with_template(context_object)
         
         # Return result
@@ -207,23 +213,37 @@ class AgentB:
         """
         if self.config.verbose:
             print(f"[AGENT B] Using LLM-based synthesis ({self.config.model})")
+            print(f"[AGENT B] Starting LLM call at {datetime.now().strftime('%H:%M:%S')}")
+        
+        import time
+        start_time = time.time()
         
         try:
             # Format ContextObject for LLM consumption
             formatted_context = self._format_context_for_llm(context_object)
             
+            if self.config.verbose:
+                print(f"[AGENT B] Context formatted, calling LLM...")
+            
             # Call LLM (with retry and error handling)
             clinical_report = self._call_llm(formatted_context)
             
-            self._log_reasoning("LLM synthesis completed successfully")
+            elapsed = time.time() - start_time
+            if self.config.verbose:
+                print(f"[AGENT B] LLM call completed in {elapsed:.2f}s")
+            
+            self._log_reasoning(f"LLM synthesis completed successfully in {elapsed:.2f}s")
             
             return clinical_report
             
         except (LLMRetryExhausted, Exception) as e:
+            elapsed = time.time() - start_time
             # Log the error
             if self.config.verbose:
-                print(f"[AGENT B] LLM synthesis failed: {type(e).__name__}: {e}")
+                print(f"[AGENT B] LLM synthesis failed after {elapsed:.2f}s: {type(e).__name__}: {e}")
                 print("[AGENT B] Falling back to template-based synthesis")
+                import traceback
+                traceback.print_exc()
             
             # Log error with context
             log_llm_error(
@@ -231,7 +251,8 @@ class AgentB:
                 {
                     'agent': 'Agent B',
                     'subject_id': context_object.subject_id,
-                    'fallback': 'template-based synthesis'
+                    'fallback': 'template-based synthesis',
+                    'elapsed_time': elapsed
                 }
             )
             
@@ -313,29 +334,27 @@ class AgentB:
             print(f"[AGENT B] Provider: {self.config.provider}")
         
         # Create user prompt
+        # 修改 app/agents/agent_b_consultant.py
+
         user_prompt = f"""
-Based on the ContextObject below, synthesize a comprehensive clinical report in English.
+Based on the ContextObject below, generate a **concise, structured** clinical report.
 
 CONTEXT OBJECT:
 {formatted_context}
 
-Generate a clinical report in English following the structure in the system instructions.
-Focus on integrating all evidence and providing clear clinical interpretation.
+# ======================================================
+# CRITICAL INSTRUCTION
+# ======================================================
+- **DO NOT** write long paragraphs.
+- **DO** use bullet points.
+- **DO** round numerical values to 3 decimal places.
+- **INTERPRETATION LOGIC**:
+  - The model is Binary (NC/AD). It assumes everyone is NC or AD.
+  - If Confidence is **Low (< 0.7)** or Uncertainty is **High**, this indicates the subject does not fit the typical NC or AD profile.
+  - You must interpret this ambiguity as a **signal for potential MCI (Mild Cognitive Impairment)** or atypical progression, requiring differential diagnosis.
 
-IMPORTANT: Place the actual clinical report content after the <REPORT> marker.
-Everything before <REPORT> will be filtered out in post-processing.
-
+Output the report in Markdown format after the <REPORT> marker.
 <REPORT>
-
-Report structure should include:
-1. Diagnostic Summary
-2. Key Findings (Brain Region Analysis)
-3. Anomaly Analysis (if applicable)
-4. Counterfactual Analysis (if applicable)
-5. Clinical Interpretation
-6. Recommendations
-
-Use simple but professional clinical language.
 """
         
         # Call LLM based on provider

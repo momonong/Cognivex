@@ -1,18 +1,13 @@
 """
-CNN-RF Inference Agent
+CNN-RF Inference Agent (LOOCV-Aware Version)
 
-This agent performs ML-based inference on structural MRI scans
-using the CNN-RF Random Forest model trained on AAL3 ROI features.
-
-Features:
-- End-to-end inference from raw MRI images
-- Multi-modal support (GM, FA, MD)
-- AAL3 atlas-based ROI extraction
-- Feature importance analysis
-- Brain region visualization
+This agent performs ML-based inference on structural MRI scans.
+It dynamically loads subject-specific LOOCV models to ensure 
+strict separation between training and testing data.
 """
 
 import numpy as np
+import os
 from typing import Dict, Optional
 from pathlib import Path
 from app.graph.state import AgentState
@@ -20,41 +15,55 @@ from app.graph.state import AgentState
 # Import end-to-end predictor
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from scripts.cnn_rf.end_to_end_inference import EndToEndPredictor
-from scripts.cnn_rf.config import MODELS, DEFAULT_MODEL
+from app.core.cnn_rf.end_to_end_inference import EndToEndPredictor
+from app.core.cnn_rf.config import MODELS, DEFAULT_MODEL
 
+# [設定] LOOCV 模型存放的資料夾
+LOOCV_MODEL_DIR = Path("model/loocv_models_binary_opt")
+# [設定] 通用二分類模型路徑 (給 MCI/OOD 使用)
+GENERAL_MODEL_PATH = Path("model/cnn_rf/rf_model_NC_vs_AD.joblib")
+
+def get_model_path_for_subject(subject_id: str, default_model_name: str) -> Path:
+    """
+    Helper function to resolve the correct model path.
+    
+    Strategy:
+    1. NC/AD Subjects: Use specific LOOCV binary model (Strict Separation).
+    2. MCI Subjects: Use General Binary Model (OOD/Uncertainty Testing).
+    """
+    # 1. 嘗試尋找 LOOCV 專屬模型 (針對 NC/AD)
+    specific_model_name = f"rf_model_{subject_id}.joblib"
+    specific_model_path = LOOCV_MODEL_DIR / specific_model_name
+    
+    if specific_model_path.exists():
+        print(f"   [INFO] Strategy: LOOCV Binary (Target Subject: {subject_id})")
+        print(f"   [PATH] {specific_model_path}")
+        return specific_model_path
+    
+    # 2. 如果找不到 (代表他是 MCI，或是資料集外的新病人)
+    # [修正 2] 強制使用通用二分類模型，觀察 Agent 的不確定性反應
+    if GENERAL_MODEL_PATH.exists():
+        print(f"   [WARN] LOOCV model not found for {subject_id} (likely MCI/OOD).")
+        print(f"   [INFO] Strategy: General Binary Model (OOD Testing)")
+        return GENERAL_MODEL_PATH
+        
+    # 3. 如果連通用模型都沒有，才退回到 Config 設定 (最後防線)
+    print(f"   [WARN] General model not found. Falling back to config: {default_model_name}")
+    model_config = MODELS.get(default_model_name)
+    if not model_config:
+        raise ValueError(f"Unknown model config: {default_model_name}")
+    return model_config['path']
 
 def run_cnn_rf_inference(state: AgentState) -> dict:
     """
-    Execute end-to-end CNN-RF inference from raw MRI images
+    Execute end-to-end CNN-RF inference with LOOCV support.
+    Returns a complete diagnostic report compatible with DiagnosticReport.from_toolkit_report()
     
-    This agent:
-    1. Locates subject's MRI images in data/MRI_processed
-    2. Extracts ROI features from raw images (GM, FA, MD)
-    3. Loads CNN-RF Random Forest model
-    4. Performs prediction with confidence scores
-    5. Analyzes feature importances
-    
-    Args:
-        state: AgentState containing:
-            - subject_id: Subject identifier (e.g., 'sub-0005')
-            - model_name: Optional model name ('NC_vs_AD' or 'NC_MCI_AD')
-            - data_root: Optional data root directory (default: 'data/MRI_processed')
-    
-    Returns:
-        Updated state dict with:
-        - classification_result: Predicted class (NC, MCI, or AD)
-        - prediction_confidence: Confidence score (0-1)
-        - prediction_probabilities: Dict of class probabilities
-        - true_label: Ground truth label from directory structure
-        - correct_prediction: Boolean indicating if prediction matches ground truth
-        - roi_features: Dict of extracted ROI feature values
-        - subject_directory: Path to subject's MRI data
-        - trace_log: Updated with processing steps
-        - error_log: Updated if errors occur
+    This function now uses CDDAToolKit to generate a complete diagnostic report
+    including UQ scoring and anomaly detection.
     """
     print("\n" + "="*80)
-    print("AGENT: CNN-RF End-to-End Inference")
+    print("AGENT: CNN-RF End-to-End Inference (LOOCV-Enabled)")
     print("="*80)
     
     subject_id = state.get('subject_id', 'unknown')
@@ -62,144 +71,46 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
     data_root = state.get('data_root', 'data/MRI_processed')
     
     print(f"\n[Subject] {subject_id}")
-    print(f"[Model] {model_name}")
+    print(f"[Model Config] {model_name}")
     print(f"[Data Root] {data_root}")
     
     try:
-        # Step 1: Initialize end-to-end predictor
-        print(f"\n[1/3] Initializing end-to-end predictor...")
-        try:
-            model_config = MODELS.get(model_name)
-            if not model_config:
-                raise ValueError(f"Unknown model: {model_name}")
-            
-            model_path = model_config['path']
-            if not model_path.exists():
-                raise FileNotFoundError(f"Model not found: {model_path}")
-            
-            predictor = EndToEndPredictor(
-                model_path=str(model_path),
-                data_root=data_root
-            )
-            print(f"   [OK] Predictor initialized")
-            print(f"   [OK] Model: {model_path.name}")
-            print(f"   [OK] Classes: {predictor.classes}")
-            
-        except Exception as e:
-            error_msg = f"Predictor initialization failed: {e}"
-            print(f"   ❌ {error_msg}")
-            return {
-                "error_log": state.get("error_log", []) + [error_msg],
-                "classification_result": "ERROR: Predictor unavailable"
-            }
+        # Determine the correct model path (LOOCV-specific or global fallback)
+        model_path = get_model_path_for_subject(subject_id, model_name)
         
-        # Step 2: Perform end-to-end prediction
-        print(f"\n[2/3] Performing end-to-end prediction from raw MRI images...")
-        try:
-            results = predictor.predict_subject(subject_id, verbose=True)
-            
-            prediction = results['predicted_label']
-            confidence = results['confidence']
-            probabilities = results['probabilities']
-            true_label = results['true_label']
-            correct = results['correct']
-            roi_features = results['features']
-            subject_dir = results['subject_dir']
-            
-            print(f"\n   [Prediction Results]")
-            print(f"      Classification: {prediction}")
-            print(f"      Confidence: {confidence:.1%}")
-            print(f"      Ground Truth: {true_label}")
-            print(f"      Status: {'CORRECT' if correct else 'INCORRECT'}")
-            print(f"      Probabilities:")
-            for cls, prob in probabilities.items():
-                print(f"         {cls}: {prob:.1%}")
-            
-        except Exception as e:
-            error_msg = f"End-to-end prediction failed: {e}"
-            print(f"   ❌ {error_msg}")
-            import traceback
-            traceback.print_exc()
-            return {
-                "error_log": state.get("error_log", []) + [error_msg],
-                "classification_result": "ERROR: Prediction failed"
-            }
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model file missing: {model_path}")
         
-        # Step 3: Extract SHAP features (local explainability)
-        print(f"\n[3/3] Analyzing local feature importance (SHAP)...")
-        try:
-            shap_features = results.get('shap_features', [])
-            
-            if shap_features:
-                print(f"   [OK] SHAP analysis complete")
-                print(f"\n   [Top 5 Features for This Subject (SHAP)]")
-                for i, feat in enumerate(shap_features[:5], 1):
-                    direction_symbol = "→" if feat['direction'] == 'towards AD' else "←"
-                    print(f"      {i}. {feat['name']}")
-                    print(f"         SHAP: {feat['shap_value']:+.4f} {direction_symbol} {feat['direction']}")
-                
-                # Create feature importances dict for compatibility
-                feature_importances_dict = {
-                    feat['name']: feat['abs_shap_value'] 
-                    for feat in shap_features
-                }
-            else:
-                print(f"   [WARN] SHAP not available, using global feature importances")
-                # Fallback to global importances
-                if hasattr(predictor.model, 'named_steps'):
-                    rf_model = predictor.model.named_steps['model']
-                    feature_importances = rf_model.feature_importances_
-                    top_indices = np.argsort(feature_importances)[-5:][::-1]
-                    
-                    print(f"\n   [Top 5 Important Features (Global)]")
-                    for i, idx in enumerate(top_indices, 1):
-                        print(f"      {i}. Feature {idx}: {feature_importances[idx]:.4f}")
-                    
-                    feature_importances_dict = {
-                        int(idx): float(feature_importances[idx]) 
-                        for idx in top_indices
-                    }
-                else:
-                    feature_importances_dict = {}
-            
-        except Exception as e:
-            error_msg = f"Feature importance extraction failed: {e}"
-            print(f"   [WARN] {error_msg}")
-            feature_importances_dict = {}
-            shap_features = []
+        # Initialize CDDAToolKit with the correct model
+        from app.core.ml_processing.cdda_tools import CDDAToolKit
         
-        # Step 4: Prepare return state
-        trace_msg = (
-            f"End-to-end CNN-RF inference complete for {subject_id}: "
-            f"{prediction} (confidence: {confidence:.1%}, ground truth: {true_label})"
+        print(f"\n[1/2] Initializing CDDAToolKit with LOOCV model...")
+        toolkit = CDDAToolKit(
+            model_path=str(model_path),
+            data_root=data_root
         )
         
-        print(f"\n[SUCCESS] {trace_msg}")
+        # Get complete diagnostic report (includes UQ, anomaly detection, etc.)
+        print(f"\n[2/2] Generating complete diagnostic report...")
+        report = toolkit.get_diagnostic_report(subject_id, verbose=True)
+        
+        # Add trace log for model verification
+        trace_msg = (
+            f"Inference complete for {subject_id} using {model_path.name}: "
+            f"{report['prediction_result']} ({report['confidence']:.1%})"
+        )
+        
+        report['trace_log'] = state.get("trace_log", []) + [trace_msg]
+        report['model_name'] = model_path.name
+        
+        print(f"\n[SUCCESS] Complete diagnostic report generated")
         print("="*80 + "\n")
         
-        return {
-            "classification_result": prediction,
-            "prediction_confidence": float(confidence),
-            "prediction_probabilities": probabilities,
-            "true_label": true_label,
-            "correct_prediction": correct,
-            "roi_features": roi_features,
-            "feature_importances": feature_importances_dict,
-            "shap_features": shap_features,
-            "subject_directory": subject_dir,
-            "model_name": model_name,
-            "trace_log": state.get("trace_log", []) + [trace_msg]
-        }
+        return report
         
     except Exception as e:
-        # Catch-all for unexpected errors
-        error_msg = f"Unexpected error in CNN-RF inference: {type(e).__name__}: {e}"
+        error_msg = f"Unexpected error: {str(e)}"
         print(f"[ERROR] {error_msg}")
-        print("="*80 + "\n")
-        
-        import traceback
-        traceback.print_exc()
-        
         return {
             "error_log": state.get("error_log", []) + [error_msg],
             "classification_result": "ERROR"
@@ -208,64 +119,51 @@ def run_cnn_rf_inference(state: AgentState) -> dict:
 
 def run_cnn_rf_inference_with_visualization(state: AgentState) -> dict:
     """
-    Extended version that also generates brain region visualization
-    
-    This version includes all features of run_cnn_rf_inference plus:
-    - Generates 3D brain map of important regions
-    - Saves visualization to output directory
-    
-    Args:
-        state: AgentState (same as run_cnn_rf_inference)
-    
-    Returns:
-        Updated state dict (same as run_cnn_rf_inference) plus:
-        - brain_map_path: Path to generated brain visualization
+    Extended version that also generates brain region visualization.
+    Ensures visualization uses the SAME LOOCV model as the inference.
     """
-    # First run standard inference
+    # 1. Run standard inference
     result = run_cnn_rf_inference(state)
     
-    # If inference failed, return early
     if "ERROR" in result.get("classification_result", ""):
         return result
     
-    # Generate brain visualization
     subject_id = state.get('subject_id', 'unknown')
+    model_name = state.get('model_name', DEFAULT_MODEL)
     
     try:
         print(f"\n[VISUALIZATION] Generating brain map...")
         
         from scripts.cnn_rf.inference import CNNRF_Predictor
-        from scripts.cnn_rf.config import MODELS, DEFAULT_MODEL
         
-        model_name = state.get('model_name', DEFAULT_MODEL)
-        model_config = MODELS[model_name]
+        # [!! 修改點 !!] Visualization 也要用同樣的邏輯取模型
+        # 否則畫出來的 Feature Importance 會跟預測用的模型不一致
+        model_path = get_model_path_for_subject(subject_id, model_name)
         
-        predictor = CNNRF_Predictor(model_path=str(model_config['path']))
+        predictor = CNNRF_Predictor(model_path=str(model_path))
         
-        # Get top important ROIs from feature importances
+        # Get top important ROIs
         feature_importances = result.get('feature_importances', {})
         if feature_importances:
             important_rois = predictor.extract_important_rois(top_n=10)
             
             output_path = f"output/cnn_rf/{subject_id}_brain_map.nii.gz"
+            # Ensure output directory exists
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
             brain_map_path = predictor.create_brain_map(
                 important_rois=important_rois,
                 output_path=output_path
             )
             
             print(f"   [OK] Brain map saved: {brain_map_path}")
-            
             result['brain_map_path'] = brain_map_path
-            result['trace_log'] = result.get('trace_log', []) + [
-                f"Brain visualization generated: {brain_map_path}"
-            ]
         else:
             print("   [WARN] No feature importances available for visualization")
         
     except Exception as e:
         error_msg = f"Brain visualization failed: {e}"
         print(f"   [WARN] {error_msg}")
-        # Non-critical error, don't fail the whole inference
         result['error_log'] = result.get('error_log', []) + [error_msg]
     
     return result

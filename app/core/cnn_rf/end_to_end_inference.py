@@ -41,7 +41,7 @@ class EndToEndPredictor:
     
     def __init__(
         self,
-        model_path="model/cnn_rf/rf_model_NC_vs_AD_GM_only.joblib",
+        model_path="model/cnn_rf/rf_model_NC_vs_AD.joblib",
         atlas_path="data/aal3/AAL3v1_1mm.nii.gz",
         atlas_labels_path="data/aal3/AAL3v1.json",
         data_root="data/MRI_processed"

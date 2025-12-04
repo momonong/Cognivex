@@ -218,7 +218,7 @@ if st.session_state.analysis_running and 'analysis_result' not in st.session_sta
             consultant_model_path=consultant_path,
             use_llm=use_llm,
             use_4bit=use_4bit,
-            verbose=False
+            verbose=True  # Enable verbose output to see Agent A and Agent B activity
         )
         init_time = time.time() - init_start
         
