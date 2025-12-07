@@ -429,7 +429,12 @@ class EndToEndPredictor:
             predicted_class = self.classes[prediction_idx]
         else:
             # Classes are numeric, map to names
-            class_names = ['AD', 'NC'] if len(self.classes) == 2 else ['AD', 'MCI', 'NC']
+            # 注意：二分類模型訓練時使用 custom_mapping = {'NC': 0, 'AD': 1}
+            # 所以 0=NC, 1=AD（不是 0=AD, 1=NC！）
+            if len(self.classes) == 2:
+                class_names = ['NC', 'AD']  # 正確的順序！
+            else:
+                class_names = ['AD', 'MCI', 'NC']  # 三分類按字母順序
             predicted_class = class_names[prediction_idx]
         
         confidence = probabilities[prediction_idx]
@@ -442,7 +447,11 @@ class EndToEndPredictor:
             if isinstance(self.classes[0], str):
                 class_names = self.classes
             else:
-                class_names = ['AD', 'NC'] if len(self.classes) == 2 else ['AD', 'MCI', 'NC']
+                # 正確的對應：二分類 0=NC, 1=AD
+                if len(self.classes) == 2:
+                    class_names = ['NC', 'AD']
+                else:
+                    class_names = ['AD', 'MCI', 'NC']
             
             for cls, prob in zip(class_names, probabilities):
                 print(f"  {cls}: {prob:.1%}")

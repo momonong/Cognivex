@@ -67,7 +67,7 @@ class DiagnosticMCPServer:
             if self.verbose:
                 print("[MCP] Initializing CDDAToolKit...")
             self.toolkit = CDDAToolKit(
-                model_path="model/cnn_rf/rf_model_NC_MCI_AD.joblib",
+                model_path="model/cnn_rf/rf_model_NC_vs_AD.joblib",  # 改用二分類模型（無 MCI data leakage）
                 data_root="data/MRI_processed"
             )
         else:

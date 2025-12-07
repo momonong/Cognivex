@@ -81,7 +81,7 @@ class CDDAAgent:
         orchestrator_model_path: Optional[str] = "D:/hf_models/Phi-4-mini-instruct",
         consultant_model: str = "llama3.1-aloe-beta-8b",
         consultant_model_path: Optional[str] = "D:/hf_models/Llama3.1-Aloe-Beta-8B",
-        model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
+        model_path: str = "model/cnn_rf/rf_model_NC_vs_AD.joblib",  # 改用二分類模型（無 MCI data leakage）
         data_root: str = "data/MRI_processed",
         uq_threshold: float = 0.8,
         z_score_threshold: float = 2.5,

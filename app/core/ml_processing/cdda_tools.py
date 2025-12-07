@@ -35,7 +35,7 @@ class CDDAToolKit:
     
     def __init__(
         self,
-        model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
+        model_path: str = "model/cnn_rf/rf_model_NC_vs_AD.joblib",  # 改用二分類模型（無 MCI data leakage）
         data_root: str = "data/MRI_processed",
         uq_threshold: float = 0.8,
         z_score_threshold: float = 2.5
@@ -54,8 +54,10 @@ class CDDAToolKit:
         self.uq_threshold = uq_threshold
         self.z_score_threshold = z_score_threshold
         
-        # Define class mapping for 3-class model
-        self.classes = {0: 'NC', 1: 'MCI', 2: 'AD'}
+        # Define class mapping for binary model
+        # 注意：LOOCV 二分類模型使用 custom mapping: NC=0, AD=1
+        # 通用二分類模型 (rf_model_NC_vs_AD.joblib) 也使用相同編碼
+        self.classes = {0: 'NC', 1: 'AD'}
         
         # Initialize end-to-end predictor (Layer 1)
         print(f"\n[CDDA] Initializing Tool Kit...")

@@ -147,7 +147,7 @@ if is_running:
     if st.sidebar.button(
         "Force Stop Analysis",
         type="secondary",
-        use_container_width=True
+        width='stretch'
     ):
         st.session_state.analysis_running = False
         st.warning("Analysis stopped by user")
@@ -159,7 +159,7 @@ else:
     start_analysis = st.sidebar.button(
         "Start Analysis",
         type="primary",
-        use_container_width=True
+        width='stretch'
     )
 
 st.sidebar.markdown("---")
@@ -498,6 +498,14 @@ if 'analysis_result' in st.session_state:
                 })
             
             st.table(table_data)
+    
+    st.markdown("---")
+    
+    # Brain Region Visualization
+    from app.ui.brain_visualization import render_brain_visualization
+    render_brain_visualization(selected_subject)
+    
+    st.markdown("---")
     
     # Clinical Report - Agent Interaction Summary
     with st.expander("Clinical Report - Agent Interaction Summary", expanded=False):

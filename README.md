@@ -1,1293 +1,517 @@
-# CDDA Framework - Cognitive Discrepancy-Driven Agent
+# CDDA Framework - Cognitive Discrepancy-Driven Agent for Alzheimer's Disease Diagnosis
 
-**認知差異驅動代理框架：基於雙 LLM A2A 架構的可解釋阿茲海默症診斷系統**
+## 系統概述 (System Overview)
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
+CDDA (Cognitive Discrepancy-Driven Agent) 是一個基於雙 LLM 架構的阿茲海默症診斷系統，結合了深度學習、機器學習和知識圖譜技術，提供可解釋的診斷決策支持。
 
----
+### 核心特性 (Core Features)
 
-## 📋 目錄
+- **雙 LLM Agent-to-Agent (A2A) 架構**: 分離編排邏輯與臨床推理
+- **自適應決策機制**: 基於不確定性量化 (UQ) 的動態路徑選擇
+- **反事實分析 (Counterfactual Analysis)**: 因果推理驗證診斷驅動因素
+- **知識圖譜整合**: 臨床知識與異常檢測的語義增強
+- **完整可追溯性**: 雙 Agent 推理鏈的完整記錄
+- **LOOCV 模型支持**: 嚴格的訓練/測試分離保證
 
-- [系統概述](#系統概述)
-- [核心架構](#核心架構)
-- [技術棧](#技術棧)
-- [Pipeline 詳解](#pipeline-詳解)
-- [Workflow 流程](#workflow-流程)
-- [安裝與配置](#安裝與配置)
-- [使用指南](#使用指南)
-- [API 文檔](#api-文檔)
-- [開發指南](#開發指南)
+### 技術棧 (Technology Stack)
 
----
-
-## 🎯 系統概述
-
-CDDA (Cognitive Discrepancy-Driven Agent) 是一個創新的醫療 AI 診斷系統，專門用於阿茲海默症 (Alzheimer's Disease, AD) 的早期檢測與診斷。系統採用**雙 LLM Agent-to-Agent (A2A) 架構**，結合機器學習、可解釋 AI (XAI)、知識圖譜和反事實推理，提供完全透明且可解釋的診斷決策。
-
-### 核心特色
-
-1. **雙 LLM A2A 架構**
-   - **Agent A (Orchestrator)**: Phi-4-mini - 負責資源讀取、工具調用、決策編排
-   - **Agent B (Consultant)**: Llama3.1-Aloe-Beta-8B - 負責臨床報告合成、醫學推理
-
-2. **自適應決策機制**
-   - 基於不確定性量化 (UQ) 動態選擇診斷路徑
-   - 高不確定性 → 觸發反事實模擬 (Counterfactual Simulation)
-   - 統計異常 → 觸發知識圖譜查詢 (Knowledge Graph Lookup)
-
-3. **完全可解釋性**
-   - SHAP 特徵重要性分析
-   - Z-score 統計異常檢測
-   - 反事實推理 (What-if Analysis)
-   - 完整推理鏈記錄 (Reasoning Chain)
-
-4. **MCP 協議整合**
-   - Model Context Protocol (MCP) 標準化資源與工具訪問
-   - 清晰的 Agent 職責分離
-   - 結構化的 Agent 間通訊
-
+- **深度學習**: PyTorch, 3D CNN
+- **機器學習**: Random Forest, SHAP (可解釋性)
+- **LLM 框架**: HuggingFace Transformers, Ollama
+- **知識圖譜**: Neo4j, GraphRAG
+- **Web 框架**: Streamlit
+- **工作流編排**: LangGraph
+- **醫學影像**: NiBabel, Nilearn, ANTs
 
 ---
 
-## 🏗️ 核心架構
+## 系統架構 (System Architecture)
 
-CDDA 系統採用分層架構設計，從底層機器學習到頂層 Agent 編排，共分為 5 個層次：
+### 整體架構圖 (Overall Architecture)
 
-```mermaid
-graph TB
-    subgraph "Layer 5: Application Layer"
-        UI[Streamlit Dashboard<br/>app.py]
-    end
-    
-    subgraph "Layer 4: Agent Layer (A2A Pattern)"
-        CDDA[CDDA Agent<br/>cdda_agent.py]
-        AgentA[Agent A: Orchestrator<br/>Phi-4-mini]
-        AgentB[Agent B: Consultant<br/>Llama3.1-Aloe-Beta-8B]
-    end
-    
-    subgraph "Layer 3: Context Layer (MCP Protocol)"
-        MCP[MCP Server<br/>mcp_server.py]
-        Resources[Resources<br/>診斷報告/知識上下文]
-        Tools[Tools<br/>反事實模擬]
-    end
-    
-    subgraph "Layer 2: Knowledge Layer"
-        GraphRAG[GraphRAG<br/>graph_rag.py]
-        Neo4j[(Neo4j<br/>Knowledge Graph)]
-    end
-    
-    subgraph "Layer 1: ML Processing Layer"
-        Toolkit[CDDA ToolKit<br/>cdda_tools.py]
-        Predictor[CNN-RF Predictor]
-        SHAP[SHAP Explainer]
-        UQ[Uncertainty Quantification]
-        Anomaly[Anomaly Detector]
-    end
-    
-    subgraph "Layer 0: Data Layer"
-        MRI[(MRI Data<br/>sMRI/fMRI)]
-        Features[(Feature Store<br/>ROI Features)]
-    end
-    
-    UI --> CDDA
-    CDDA --> AgentA
-    CDDA --> AgentB
-    AgentA --> MCP
-    MCP --> Resources
-    MCP --> Tools
-    MCP --> GraphRAG
-    MCP --> Toolkit
-    GraphRAG --> Neo4j
-    Toolkit --> Predictor
-    Toolkit --> SHAP
-    Toolkit --> UQ
-    Toolkit --> Anomaly
-    Predictor --> Features
-    Features --> MRI
-    
-    style CDDA fill:#ff6b6b
-    style AgentA fill:#4ecdc4
-    style AgentB fill:#45b7d1
-    style MCP fill:#96ceb4
-    style GraphRAG fill:#ffeaa7
-    style Toolkit fill:#dfe6e9
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CDDA Framework                           │
+│                   (4-Layer Architecture)                        │
+└─────────────────────────────────────────────────────────────────┘
+
+         ┌──────────────────────────────────────────────┐
+         │  Layer 4: Knowledge Integration (GraphRAG)   │
+         │  - Neo4j Knowledge Graph                     │
+         │  - Clinical Context Retrieval                │
+         └──────────────────────────────────────────────┘
+                            ▲
+                            │
+         ┌──────────────────────────────────────────────┐
+         │  Layer 3: Cognitive/Orchestration (A2A)      │
+         │  ┌────────────────┐  ┌──────────────────┐    │
+         │  │  Agent A       │  │  Agent B         │    │
+         │  │  (Orchestrator)│→ │  (Consultant)    │    │
+         │  │  Phi-4-mini    │  │  Llama3.1-Aloe   │    │
+         │  └────────────────┘  └──────────────────┘    │
+         │         MCP Client         Synthesizer       │
+         └──────────────────────────────────────────────┘
+                            ▲
+                            │
+         ┌──────────────────────────────────────────────┐
+         │  Layer 2: Trust/Calibration                  │
+         │  - Uncertainty Quantification (UQ)           │
+         │  - Z-Score Anomaly Detection                 │
+         │  - Confidence Calibration                    │
+         └──────────────────────────────────────────────┘
+                            ▲
+                            │
+         ┌──────────────────────────────────────────────┐
+         │  Layer 1: Tool Kit (ML/DL Models)            │
+         │  - CNN-RF Pipeline (LOOCV)                   │
+         │  - SHAP Explainability                       │
+         │  - ROI Feature Extraction                    │
+         └──────────────────────────────────────────────┘
+                            ▲
+                            │
+         ┌──────────────────────────────────────────────┐
+         │  Layer 0: Data Processing                    │
+         │  - MRI Preprocessing (ANTs)                  │
+         │  - AAL3 Atlas Registration                   │
+         │  - Feature Standardization                   │
+         └──────────────────────────────────────────────┘
 ```
 
-### 層次說明
+### 核心組件說明 (Core Components)
 
-#### Layer 5: Application Layer (應用層)
-- **app.py**: Streamlit Web 應用
-  - 提供臨床儀表板界面
-  - 受試者選擇與配置
-  - 實時分析進度顯示
-  - 互動式聊天機器人 (Agent B)
+#### 1. Agent A - Orchestrator (編排者)
+- **模型**: Phi-4-mini (Microsoft)
+- **角色**: MCP 客戶端，負責資源讀取和工具調用
+- **功能**:
+  - 讀取診斷報告 (`diagnosis://{subject_id}/report`)
+  - 評估信號 (UQ Score, Anomaly Status)
+  - 決策工具調用 (Counterfactual Simulation, Knowledge Retrieval)
+  - 編譯 ContextObject 交接給 Agent B
+- **決策邏輯**:
+  ```
+  IF UQ > 0.8 OR Confidence < 0.7:
+      → 觸發反事實模擬 (驗證 OOD/MCI 案例)
+  IF Anomaly Detected:
+      → 查詢知識圖譜 (混合病理檢測)
+  ```
 
-#### Layer 4: Agent Layer (代理層)
-- **cdda_agent.py**: CDDA 主代理
-  - 協調 Agent A 和 Agent B
-  - 管理 A2A 交接流程
-  - 聚合推理鏈
-  - 生成執行摘要
+#### 2. Agent B - Consultant (臨床顧問)
+- **模型**: Llama3.1-Aloe-Beta-8B (醫學專用)
+- **角色**: 臨床合成專家，無直接工具訪問權限
+- **功能**:
+  - 接收 ContextObject (來自 Agent A)
+  - 合成臨床敘述
+  - 生成診斷報告
+  - 解釋反事實結果和異常
+- **關鍵規則**:
+  - 信心校準: Confidence < 60% → 標記為 "Low Confidence"
+  - 差異分析: 預測 AD 但海馬體 Z-score 正常 → 標記為 "Discrepancy"
+  - 異常解釋: 檢測到異常 → 建議混合病理調查
 
-- **agent_a_orchestrator.py**: Agent A (編排者)
-  - MCP 客戶端
-  - 讀取診斷資源
-  - 調用工具 (反事實模擬)
-  - 編譯 ContextObject
-  - 使用 Phi-4-mini 進行決策
+#### 3. MCP Server (Model Context Protocol)
+- **資源 (Resources)** - 只讀數據:
+  - `diagnosis://{subject_id}/report`: 完整診斷報告
+  - `diagnosis://{subject_id}/features`: 原始特徵值
+  - `knowledge://{region_name}/context`: 臨床知識上下文
 
-- **agent_b_consultant.py**: Agent B (顧問)
-  - 臨床報告合成
-  - 醫學推理
-  - 異常感知分析
-  - 反事實解釋
-  - 使用 Llama3.1-Aloe-Beta-8B 生成報告
+- **工具 (Tools)** - 可執行操作:
+  - `simulate_counterfactual`: What-if 分析
+  - `run_cnn_rf_inference`: CNN-RF 推論 (支持 LOOCV)
 
+#### 4. CDDAToolKit (Layer 1+2)
+- **Tool 1**: `get_diagnostic_report(subject_id, model_name)`
+  - 執行 CNN-RF 預測
+  - 計算 SHAP 特徵重要性
+  - 計算 UQ Score (基於熵和信心邊界)
+  - 執行 Z-Score 異常檢測
+  - 返回完整診斷報告
 
-#### Layer 3: Context Layer (上下文層)
-- **mcp_server.py**: MCP 協議伺服器
-  - 實現 Model Context Protocol
-  - 提供資源訪問 (Resources)
-    - `diagnosis://{subject_id}/report` - 診斷報告
-    - `diagnosis://{subject_id}/features` - 原始特徵
-    - `knowledge://{region_name}/context` - 臨床知識
-  - 提供工具調用 (Tools)
-    - `simulate_counterfactual` - 反事實模擬
-  - URI 路由與驗證
-  - 錯誤處理與回退機制
+- **Tool 2**: `simulate_counterfactual(subject_id, features_to_mask, model_name)`
+  - 遮蔽指定腦區特徵 (設為群體平均值)
+  - 重新預測
+  - 計算信心變化 (Confidence Delta)
+  - 生成因果解釋
 
-#### Layer 2: Knowledge Layer (知識層)
-- **graph_rag.py**: GraphRAG 知識檢索
-  - Neo4j 知識圖譜查詢
-  - 腦區臨床上下文檢索
-  - 疾病關聯分析
-  - 本地知識庫回退 (Fallback)
-
-#### Layer 1: ML Processing Layer (機器學習處理層)
-- **cdda_tools.py**: CDDA 工具包
-  - **CNN-RF Predictor**: 3 類分類 (AD/MCI/NC)
-  - **SHAP Explainer**: 特徵重要性分析
-  - **Uncertainty Quantification**: 預測不確定性量化
-  - **Anomaly Detector**: Z-score 統計異常檢測
-  - **Counterfactual Simulator**: 反事實推理引擎
-
-#### Layer 0: Data Layer (數據層)
-- **MRI Data**: 結構性 MRI (sMRI) 和功能性 MRI (fMRI)
-- **Feature Store**: 預處理的 ROI 特徵 (灰質體積、白質體積等)
-
----
-
-## 🛠️ 技術棧
-
-### 核心框架
-- **Python 3.8+**: 主要開發語言
-- **Streamlit 1.28+**: Web 應用框架
-- **PyTorch 2.0+**: 深度學習框架
-- **Transformers 4.35+**: LLM 模型加載
-
-### 機器學習
-- **scikit-learn**: 隨機森林分類器
-- **SHAP**: 可解釋 AI
-- **NumPy/Pandas**: 數據處理
-- **NiBabel**: MRI 數據讀取
-
-### LLM 模型
-- **Phi-4-mini-instruct**: Agent A 編排模型 (4-bit 量化)
-- **Llama3.1-Aloe-Beta-8B**: Agent B 醫學推理模型 (4-bit 量化)
-- **BitsAndBytes**: 模型量化庫
-
-### 知識圖譜
-- **Neo4j**: 圖數據庫
-- **py2neo**: Python Neo4j 驅動
-
-### 其他工具
-- **Joblib**: 模型序列化
-- **Pathlib**: 路徑管理
-- **JSON**: 數據交換格式
+#### 5. GraphRAG (Knowledge Integration)
+- **數據源**: Neo4j 知識圖譜
+- **節點類型**:
+  - Brain Regions (腦區)
+  - Diseases (疾病)
+  - Symptoms (症狀)
+  - Biomarkers (生物標記)
+- **查詢功能**:
+  - `query_region(region_name)`: 查詢單個腦區
+  - `query_multiple_regions(regions)`: 批量查詢
+  - `generate_context_summary(contexts)`: 生成摘要
+- **Fallback 機制**: Neo4j 不可用時使用本地知識庫
 
 ---
 
-## 🔄 Pipeline 詳解
+## 工作流程 (Workflow)
 
-CDDA 系統的診斷 Pipeline 分為 5 個主要階段：
+### 完整診斷流程 (Complete Diagnostic Pipeline)
 
-```mermaid
-graph LR
-    A[1. 初始化] --> B[2. Agent A<br/>編排]
-    B --> C[3. Agent B<br/>合成]
-    C --> D[4. 推理鏈<br/>聚合]
-    D --> E[5. 後處理<br/>摘要]
-    
-    style A fill:#e3f2fd
-    style B fill:#b3e5fc
-    style C fill:#81d4fa
-    style D fill:#4fc3f7
-    style E fill:#29b6f6
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 1: Data Preprocessing (Layer 0)                           │
+└─────────────────────────────────────────────────────────────────┘
+    1. Load MRI Images (GM, FA, MD)
+    2. Register to AAL3 Atlas
+    3. Extract ROI Features (170 regions)
+    4. Standardize Features (Z-score normalization)
+       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 2: ML Inference (Layer 1)                                 │
+└─────────────────────────────────────────────────────────────────┘
+    5. Load LOOCV Model (subject-specific)
+       - NC/AD subjects → rf_model_{subject_id}.joblib
+       - MCI subjects → rf_model_NC_vs_AD.joblib (General)
+    6. CNN-RF Prediction
+       - Binary Classification: NC vs AD
+       - Probability Distribution
+    7. SHAP Explainability
+       - Calculate SHAP values (local importance)
+       - Rank top features
+       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 3: Trust Calibration (Layer 2)                            │
+└─────────────────────────────────────────────────────────────────┘
+    8. Uncertainty Quantification (UQ)
+       - Entropy-based uncertainty
+       - Confidence margin
+       - UQ Score = 0.6 * entropy + 0.4 * margin_uncertainty
+    9. Z-Score Anomaly Detection
+       - Compare to population statistics
+       - Flag regions with |Z| > 2.5
+       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 4: Agent A Orchestration (Layer 3)                        │
+└─────────────────────────────────────────────────────────────────┘
+    10. Read Diagnostic Report (MCP Resource)
+    11. Evaluate Signals
+        - UQ Score > 0.8? → High Uncertainty
+        - Confidence < 0.7? → Potential MCI/OOD
+        - Anomaly Detected? → Mixed Pathology
+    12. Adaptive Decision Making
+        - Standard Case: Direct to synthesis
+        - High UQ: Trigger counterfactual simulation
+        - Anomaly: Query knowledge graph
+    13. Compile ContextObject
+        - Diagnostic Report
+        - Tool Results (if any)
+        - Decision Rationale
+        - Signals Summary
+       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 5: Agent B Synthesis (Layer 3)                            │
+└─────────────────────────────────────────────────────────────────┘
+    14. Receive ContextObject (Handoff from Agent A)
+    15. Clinical Synthesis
+        - Diagnostic Summary
+        - Key Findings (Top ROIs + SHAP + Z-score)
+        - Anomaly Analysis (if applicable)
+        - Counterfactual Explanation (if triggered)
+        - Clinical Interpretation
+        - Recommendations
+    16. Generate Clinical Report (Markdown format)
+       ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Phase 6: Post-Processing                                        │
+└─────────────────────────────────────────────────────────────────┘
+    17. Aggregate Reasoning Chains (Agent A + Agent B)
+    18. Generate Executive Summary (for dashboard)
+    19. Create Brain Visualization (nilearn)
+    20. Return AgentResult
 ```
 
-### 階段 1: 系統初始化
+### 決策路徑 (Decision Pathways)
 
-**目標**: 加載所有必要的模型和資源
+#### 路徑 A: 標準案例 (Standard Case)
+```
+Confidence > 0.8 AND UQ < 0.5 AND No Anomaly
+→ Agent A: Read Report Only
+→ Agent B: Standard Synthesis
+→ Output: Confident Diagnosis
+```
 
-**流程**:
-1. 初始化 CDDA ToolKit
-   - 加載 CNN-RF 模型 (`rf_model_NC_MCI_AD.joblib`)
-   - 初始化 SHAP Explainer
-   - 設置 UQ 和異常檢測閾值
+#### 路徑 B: 高不確定性 (High Uncertainty / Potential MCI)
+```
+UQ > 0.8 OR Confidence < 0.7
+→ Agent A: Read Report + Trigger Counterfactual Simulation
+→ Mask Top 3 Features → Re-predict
+→ Calculate Confidence Delta
+→ Agent B: Synthesis with Counterfactual Explanation
+→ Output: "Suspected MCI" or "Borderline Case"
+```
 
-2. 初始化 GraphRAG
-   - 連接 Neo4j 數據庫 (如果可用)
-   - 加載本地知識庫 (回退機制)
+#### 路徑 C: 異常檢測 (Anomaly Detection / Mixed Pathology)
+```
+|Z-score| > 2.5 in Multiple Regions
+→ Agent A: Read Report + Query Knowledge Graph
+→ Retrieve Clinical Context for Anomalous Regions
+→ Agent B: Synthesis with Anomaly Analysis
+→ Output: "Potential Mixed Pathology" + Differential Diagnosis
+```
 
-3. 初始化 MCP Server
-   - 註冊資源端點
-   - 註冊工具端點
-   - 設置 URI 路由
+---
 
-4. 初始化 Agent A (Orchestrator)
-   - 加載 Phi-4-mini 模型 (4-bit 量化)
-   - 加載系統提示詞
-   - 設置決策閾值
+## 數據模型 (Data Models)
 
-5. 初始化 Agent B (Consultant)
-   - 加載 Llama3.1-Aloe-Beta-8B 模型 (4-bit 量化)
-   - 加載系統提示詞
-   - 設置生成參數
-
-**關鍵代碼**:
+### DiagnosticReport (診斷報告)
 ```python
-agent = CDDAAgent(
-    orchestrator_model="phi-4-mini",
-    orchestrator_model_path="D:/hf_models/Phi-4-mini-instruct",
-    consultant_model="llama3.1-aloe-beta-8b",
-    consultant_model_path="D:/hf_models/Llama3.1-Aloe-Beta-8B",
-    use_llm=True,
-    use_4bit=True,  # 4-bit 量化節省 VRAM
-    verbose=True
-)
-```
-
-
-### 階段 2: Agent A 編排 (Orchestration)
-
-**目標**: 讀取資源、評估信號、調用工具、編譯上下文
-
-**流程圖**:
-```mermaid
-graph TD
-    Start[開始編排] --> ReadReport[讀取診斷報告<br/>MCP: diagnosis://subject/report]
-    ReadReport --> EvalSignals[評估信號<br/>UQ Score & Anomaly Status]
-    
-    EvalSignals --> DecisionPoint{決策邏輯}
-    
-    DecisionPoint -->|UQ > 0.8| HighUQ[高不確定性路徑]
-    DecisionPoint -->|Anomaly Detected| Anomaly[異常檢測路徑]
-    DecisionPoint -->|Standard| Standard[標準路徑]
-    
-    HighUQ --> CallCF[調用反事實工具<br/>MCP: simulate_counterfactual]
-    CallCF --> CompileContext
-    
-    Anomaly --> ReadKG[讀取知識上下文<br/>MCP: knowledge://region/context]
-    ReadKG --> CompileContext
-    
-    Standard --> CompileContext[編譯 ContextObject]
-    
-    CompileContext --> Validate[驗證 ContextObject]
-    Validate --> Handoff[交接給 Agent B]
-    
-    style HighUQ fill:#ff6b6b
-    style Anomaly fill:#feca57
-    style Standard fill:#48dbfb
-    style CompileContext fill:#1dd1a1
-```
-
-**詳細步驟**:
-
-1. **讀取診斷報告** (MCP Resource)
-   ```python
-   # Agent A 通過 MCP 讀取資源
-   uri = f"diagnosis://{subject_id}/report"
-   report = mcp_server.read_resource(uri)
-   
-   # 返回的報告包含:
-   # - prediction_result: "AD" / "MCI" / "NC"
-   # - confidence: 0.0 ~ 1.0
-   # - uq_score: 不確定性分數
-   # - top_features: SHAP 排序的前 N 個特徵
-   # - anomaly_status: 異常檢測結果
-   ```
-
-2. **評估診斷信號**
-   ```python
-   uq_score = diagnostic_report.uq_score
-   has_anomaly = diagnostic_report.anomaly_status.has_anomaly
-   anomalous_regions = diagnostic_report.anomaly_status.anomalous_regions
-   ```
-
-3. **決策邏輯** (LLM 或規則)
-   
-   **LLM 模式** (Phi-4-mini):
-   ```python
-   # 構建提示詞
-   prompt = f"""
-   Based on diagnostic data:
-   - Prediction: {prediction}
-   - Confidence: {confidence}
-   - UQ Score: {uq_score}
-   - Anomalies: {anomalous_regions}
-   
-   Decide which MCP actions to take.
-   Respond with JSON: {{"actions": [...], "decision_rationale": "..."}}
-   """
-   
-   # LLM 決策
-   response = llm.generate(prompt)
-   actions = parse_json(response)
-   ```
-   
-   **規則模式** (回退機制):
-   ```python
-   if uq_score > 0.8:
-       # 觸發反事實模擬
-       actions.append({
-           "type": "call_tool",
-           "name": "simulate_counterfactual",
-           "args": {
-               "subject_id": subject_id,
-               "features_to_mask": top_3_features
-           }
-       })
-   
-   if has_anomaly:
-       # 觸發知識圖譜查詢
-       for region in anomalous_regions:
-           actions.append({
-               "type": "read_resource",
-               "uri": f"knowledge://{region}/context"
-           })
-   ```
-
-4. **執行 MCP 動作**
-   
-   **反事實模擬** (高不確定性):
-   ```python
-   # 調用 MCP 工具
-   cf_result = mcp_server.call_tool(
-       "simulate_counterfactual",
-       {
-           "subject_id": subject_id,
-           "features_to_mask": ["Hippocampus_L", "Hippocampus_R", "Entorhinal_L"]
-       }
-   )
-   
-   # 返回結果:
-   # - original_prediction: "AD"
-   # - original_confidence: 0.85
-   # - new_prediction: "NC"
-   # - new_confidence: 0.45
-   # - confidence_delta: -0.40 (顯著下降 → 這些特徵是關鍵驅動因素)
-   ```
-   
-   **知識圖譜查詢** (異常檢測):
-   ```python
-   # 讀取 MCP 資源
-   knowledge = mcp_server.read_resource(
-       f"knowledge://Hippocampus_L/context"
-   )
-   
-   # 返回結果:
-   # - full_name: "Left Hippocampus"
-   # - function: "Memory formation and consolidation"
-   # - clinical_significance: "Early atrophy is hallmark of AD"
-   # - related_conditions: ["Alzheimer's Disease", "MCI", "TLE"]
-   # - is_ad_hotspot: True
-   ```
-
-5. **編譯 ContextObject**
-   ```python
-   context_object = ContextObject(
-       subject_id=subject_id,
-       diagnostic_report=diagnostic_report,
-       tool_results={
-           "counterfactual": cf_result,  # 如果有
-           "knowledge_context": knowledge  # 如果有
-       },
-       decision_rationale="High UQ detected. Simulated counterfactual.",
-       signals={
-           "uq_score": uq_score,
-           "has_anomaly": has_anomaly,
-           "prediction": prediction,
-           "confidence": confidence
-       },
-       agent_a_reasoning=reasoning_chain,  # 完整推理步驟
-       mcp_actions=mcp_actions  # 所有 MCP 操作記錄
-   )
-   ```
-
-6. **驗證與交接**
-   ```python
-   # 驗證 ContextObject 完整性
-   if not context_object.validate():
-       raise ValueError("ContextObject validation failed")
-   
-   # 交接給 Agent B
-   return context_object
-   ```
-
-
-### 階段 3: Agent B 臨床合成 (Clinical Synthesis)
-
-**目標**: 從 ContextObject 生成專業臨床報告
-
-**流程圖**:
-```mermaid
-graph TD
-    Start[接收 ContextObject] --> Parse[解析上下文]
-    Parse --> Format[格式化為 LLM 提示詞]
-    
-    Format --> LLMMode{LLM 模式?}
-    
-    LLMMode -->|是| CallLLM[調用 Llama3.1-Aloe-Beta-8B]
-    LLMMode -->|否| Template[使用模板生成]
-    
-    CallLLM --> CheckError{LLM 成功?}
-    CheckError -->|失敗| Template
-    CheckError -->|成功| GenerateReport[生成臨床報告]
-    
-    Template --> GenerateReport
-    
-    GenerateReport --> Sections[報告章節]
-    
-    Sections --> Summary[診斷摘要]
-    Sections --> KeyFindings[關鍵發現]
-    Sections --> AnomalyAnalysis[異常分析]
-    Sections --> CFAnalysis[反事實分析]
-    Sections --> Interpretation[臨床解釋]
-    Sections --> Recommendations[建議]
-    
-    Summary --> Combine[組合報告]
-    KeyFindings --> Combine
-    AnomalyAnalysis --> Combine
-    CFAnalysis --> Combine
-    Interpretation --> Combine
-    Recommendations --> Combine
-    
-    Combine --> Return[返回報告 + 推理鏈]
-    
-    style CallLLM fill:#45b7d1
-    style Template fill:#feca57
-    style GenerateReport fill:#1dd1a1
-```
-
-**詳細步驟**:
-
-1. **接收並解析 ContextObject**
-   ```python
-   def synthesize(self, context_object: ContextObject) -> Dict:
-       # 提取關鍵信息
-       report = context_object.diagnostic_report
-       signals = context_object.signals
-       tool_results = context_object.tool_results or {}
-       
-       # 記錄推理步驟
-       self._log_reasoning(f"Received ContextObject for {context_object.subject_id}")
-       self._log_reasoning(f"Prediction: {report.prediction_result}")
-       self._log_reasoning(f"Confidence: {report.confidence:.1%}")
-       self._log_reasoning(f"UQ Score: {report.uq_score:.3f}")
-   ```
-
-2. **格式化為 LLM 提示詞**
-   ```python
-   # 構建結構化上下文
-   context_dict = {
-       'subject_id': context_object.subject_id,
-       'prediction': report.prediction_result,
-       'confidence': report.confidence,
-       'uq_score': report.uq_score,
-       'has_anomaly': signals.get('has_anomaly', False),
-       'anomalous_regions': signals.get('anomalous_regions', []),
-       'top_features': [
-           {
-               'roi_name': f.roi_name,
-               'z_score': f.z_score,
-               'shap_value': f.shap_value,
-               'rank': f.rank
-           }
-           for f in report.top_features[:10]
-       ],
-       'decision_rationale': context_object.decision_rationale
-   }
-   
-   # 添加反事實結果 (如果有)
-   if 'counterfactual' in tool_results:
-       cf = tool_results['counterfactual']
-       context_dict['counterfactual'] = {
-           'original_prediction': cf.get('original_prediction'),
-           'new_prediction': cf.get('new_prediction'),
-           'confidence_delta': cf.get('confidence_delta'),
-           'masked_features': [f.get('roi_name') for f in cf.get('masked_features', [])]
-       }
-   
-   # 添加知識上下文 (如果有)
-   if 'knowledge_context' in tool_results:
-       kc = tool_results['knowledge_context']
-       context_dict['knowledge_context'] = {
-           'query_regions': kc.get('query_regions', []),
-           'summary': kc.get('summary', ''),
-           'contexts': kc.get('contexts', [])
-       }
-   
-   # 轉換為 JSON 字符串
-   formatted_context = json.dumps(context_dict, indent=2)
-   ```
-
-3. **LLM 生成報告** (Llama3.1-Aloe-Beta-8B)
-   ```python
-   user_prompt = f"""
-   Based on the ContextObject below, synthesize a comprehensive clinical report.
-   
-   CONTEXT OBJECT:
-   {formatted_context}
-   
-   Generate a clinical report following this structure:
-   1. Diagnostic Summary
-   2. Key Findings (Brain Region Analysis)
-   3. Anomaly Analysis (if applicable)
-   4. Counterfactual Analysis (if applicable)
-   5. Clinical Interpretation
-   6. Recommendations
-   
-   <REPORT>
-   [Your clinical report here]
-   """
-   
-   # 調用 LLM
-   response = huggingface.handle_text(
-       prompt=user_prompt,
-       model_path=consultant_model_path,
-       system_instruction=system_prompt,
-       temperature=0.3,  # 較高溫度以獲得更有創意的合成
-       max_new_tokens=2048,  # 長報告
-       load_in_8bit=False  # 使用 4-bit 量化
-   )
-   
-   # 提取報告內容 (過濾 <REPORT> 標記之前的內容)
-   clinical_report = response.split('<REPORT>')[-1].strip()
-   ```
-
-4. **模板生成報告** (回退機制)
-   ```python
-   def _synthesize_with_template(self, context_object: ContextObject) -> str:
-       sections = []
-       
-       # 1. 診斷摘要
-       sections.append(f"""
-   DIAGNOSTIC SUMMARY
-   Subject: {report.subject_id}
-   Prediction: {report.prediction_result}
-   Confidence: {report.confidence:.1%}
-   Uncertainty Score: {report.uq_score:.3f}
-   Anomaly Status: {'Detected' if signals.get('has_anomaly') else 'None'}
-       """)
-       
-       # 2. 關鍵發現
-       sections.append("KEY FINDINGS\nTop Contributing Brain Regions:")
-       for i, feature in enumerate(report.top_features[:5], 1):
-           z_desc = "elevated" if feature.z_score > 0 else "reduced"
-           sections.append(
-               f"{i}. {feature.roi_name}: "
-               f"Z-score = {feature.z_score:.2f} ({z_desc}), "
-               f"SHAP = {feature.shap_value:.3f}"
-           )
-       
-       # 3. 異常分析 (如果有)
-       if signals.get('has_anomaly'):
-           sections.append(self._generate_anomaly_section(report, signals, tool_results))
-       
-       # 4. 反事實分析 (如果有)
-       if 'counterfactual' in tool_results:
-           sections.append(self._generate_counterfactual_section(tool_results['counterfactual']))
-       
-       # 5. 臨床解釋
-       sections.append(self._generate_interpretation_section(report, signals, tool_results))
-       
-       # 6. 建議
-       sections.append(self._generate_recommendations_section(report, signals, tool_results))
-       
-       return "\n\n".join(sections)
-   ```
-
-
-5. **異常感知合成** (Anomaly-Aware Synthesis)
-   
-   當檢測到統計異常時，Agent B 會執行特殊的分析流程：
-   
-   ```python
-   def _generate_anomaly_section(self, report, signals, tool_results):
-       lines = ["ANOMALY ANALYSIS"]
-       
-       anomalous_regions = signals.get('anomalous_regions', [])
-       lines.append(f"Detected {len(anomalous_regions)} anomalous regions:")
-       for region in anomalous_regions[:5]:
-           lines.append(f"  - {region}")
-       
-       # 列出疾病關聯 (Requirement 6.3)
-       if 'knowledge_context' in tool_results:
-           disease_associations = self._list_disease_associations(
-               tool_results['knowledge_context']
-           )
-           if disease_associations:
-               lines.append("\nDISEASE ASSOCIATIONS:")
-               for assoc in disease_associations:
-                   lines.append(f"  - {assoc}")
-       
-       # 檢測模型-知識差異 (Requirement 6.1, 6.2)
-       discrepancies = self._detect_model_knowledge_discrepancies(
-           report, 
-           tool_results['knowledge_context']
-       )
-       
-       if discrepancies:
-           lines.append("\nPOTENTIAL MIXED PATHOLOGY INDICATORS:")
-           for disc in discrepancies:
-               lines.append(f"  - {disc}")
-           
-           self._log_reasoning(
-               f"Detected {len(discrepancies)} model-knowledge discrepancies "
-               f"suggesting potential mixed pathology"
-           )
-       
-       # 檢測 SHAP-條件不匹配 (Requirement 6.4)
-       shap_mismatches = self._detect_shap_condition_mismatches(report, tool_results)
-       if shap_mismatches:
-           lines.append("\nSHAP-CONDITION MISMATCHES:")
-           for mismatch in shap_mismatches:
-               lines.append(f"  - {mismatch}")
-       
-       return "\n".join(lines)
-   ```
-
-6. **反事實解釋** (Counterfactual Explanation)
-   
-   當執行反事實模擬時，Agent B 會提供醫學推理：
-   
-   ```python
-   def _generate_counterfactual_section(self, counterfactual):
-       lines = ["COUNTERFACTUAL ANALYSIS"]
-       lines.append("What-if simulation: Testing diagnostic impact of key features\n")
-       
-       original_pred = counterfactual.get('original_prediction')
-       new_pred = counterfactual.get('new_prediction')
-       confidence_delta = counterfactual.get('confidence_delta', 0)
-       masked_features = counterfactual.get('masked_features', [])
-       
-       lines.append(f"Original prediction: {original_pred} ({original_conf:.1%})")
-       lines.append(f"After masking: {new_pred} ({new_conf:.1%})")
-       lines.append(f"Confidence change: {confidence_delta:+.1%}")
-       lines.append(f"\nMasked features: {', '.join([f.get('roi_name') for f in masked_features])}")
-       
-       # 醫學推理 (Requirements 7.2, 7.3, 7.4)
-       lines.append("\nCLINICAL INTERPRETATION:")
-       
-       if abs(confidence_delta) > 0.1:
-           # 顯著變化 → 關鍵驅動因素
-           lines.append(
-               f"The masked features are KEY DIAGNOSTIC DRIVERS. "
-               f"Removing them caused a {abs(confidence_delta):.1%} change in confidence, "
-               f"indicating they are critical to the {original_pred} diagnosis."
-           )
-           
-           # 識別具體驅動因素
-           key_drivers = self._identify_key_drivers(masked_features, confidence_delta)
-           if key_drivers:
-               lines.append("\nDetailed feature impact analysis:")
-               for driver in key_drivers:
-                   lines.append(f"  • {driver}")
-       
-       elif abs(confidence_delta) < 0.05:
-           # 微小變化 → 非主要驅動因素
-           lines.append(
-               f"The masked features are NOT PRIMARY DRIVERS. "
-               f"Removing them caused only a {abs(confidence_delta):.1%} change, "
-               f"suggesting other features are more important."
-           )
-       
-       else:
-           # 中等變化
-           lines.append(
-               f"The masked features have MODERATE IMPACT on the diagnosis. "
-               f"They contribute ({abs(confidence_delta):.1%} change) "
-               f"but are not the sole drivers."
-           )
-       
-       return "\n".join(lines)
-   ```
-
-7. **返回結果**
-   ```python
-   return {
-       'clinical_report': clinical_report,
-       'reasoning_chain': self.reasoning_chain.copy()
-   }
-   ```
-
-
-### 階段 4: 推理鏈聚合 (Reasoning Chain Aggregation)
-
-**目標**: 合併 Agent A 和 Agent B 的完整推理過程
-
-**流程**:
-```python
-def _aggregate_reasoning_chains(
-    self,
-    context_object: ContextObject,
-    agent_b_reasoning: List[str]
-) -> List[str]:
-    combined_reasoning = []
-    
-    # Section 1: Agent A 編排
-    combined_reasoning.append("="*80)
-    combined_reasoning.append("AGENT A - ORCHESTRATION")
-    combined_reasoning.append("="*80)
-    
-    for step in context_object.agent_a_reasoning:
-        combined_reasoning.append(step)
-    
-    # Section 2: MCP 動作 (帶時間戳)
-    if context_object.mcp_actions:
-        combined_reasoning.append("")
-        combined_reasoning.append("-"*80)
-        combined_reasoning.append("MCP ACTIONS")
-        combined_reasoning.append("-"*80)
-        
-        for action in context_object.mcp_actions:
-            action_dict = action.to_dict() if hasattr(action, 'to_dict') else action
-            
-            action_type = action_dict.get('type', 'unknown')
-            target = action_dict.get('target', 'unknown')
-            timestamp = action_dict.get('timestamp', 'N/A')
-            status = action_dict.get('status', 'unknown')
-            
-            action_line = f"[{timestamp}] {action_type}: {target} → {status}"
-            combined_reasoning.append(action_line)
-            
-            # 添加錯誤詳情 (如果失敗)
-            if status == 'error' and 'error' in action_dict:
-                error_msg = action_dict['error'].get('message', 'Unknown error')
-                combined_reasoning.append(f"  ERROR: {error_msg}")
-    
-    # Section 3: 交接
-    combined_reasoning.append("")
-    combined_reasoning.append("-"*80)
-    combined_reasoning.append("HANDOFF: Agent A → Agent B")
-    combined_reasoning.append("-"*80)
-    combined_reasoning.append(f"Decision Rationale: {context_object.decision_rationale}")
-    combined_reasoning.append(f"Context Object validated: {context_object.validate()}")
-    
-    # Section 4: Agent B 合成
-    combined_reasoning.append("")
-    combined_reasoning.append("="*80)
-    combined_reasoning.append("AGENT B - CLINICAL SYNTHESIS")
-    combined_reasoning.append("="*80)
-    
-    for step in agent_b_reasoning:
-        combined_reasoning.append(step)
-    
-    return combined_reasoning
-```
-
-**推理鏈示例**:
-```
-================================================================================
-AGENT A - ORCHESTRATION
-================================================================================
-[2025-11-28T10:30:15] [Agent A] Starting orchestration for sub-0005
-[2025-11-28T10:30:16] [Agent A] Read diagnostic report for sub-0005
-[2025-11-28T10:30:16] [Agent A] Evaluated signals: UQ=0.85, Anomaly=False
-[2025-11-28T10:30:16] [Agent A] High UQ detected (0.85 > 0.8). Triggering counterfactual simulation.
-
---------------------------------------------------------------------------------
-MCP ACTIONS
---------------------------------------------------------------------------------
-[2025-11-28T10:30:16] read_resource: diagnosis://sub-0005/report → success
-[2025-11-28T10:30:17] call_tool: simulate_counterfactual → success
-
---------------------------------------------------------------------------------
-HANDOFF: Agent A → Agent B
---------------------------------------------------------------------------------
-Decision Rationale: High uncertainty (UQ=0.85). Simulated counterfactual.
-Context Object validated: True
-
-================================================================================
-AGENT B - CLINICAL SYNTHESIS
-================================================================================
-[2025-11-28T10:30:18] [Agent B] Received ContextObject for sub-0005
-[2025-11-28T10:30:18] [Agent B] Prediction: AD
-[2025-11-28T10:30:18] [Agent B] Confidence: 85.0%
-[2025-11-28T10:30:18] [Agent B] UQ Score: 0.850
-[2025-11-28T10:30:19] [Agent B] LLM synthesis completed successfully
-```
-
-### 階段 5: 後處理與執行摘要 (Post-Processing & Executive Summary)
-
-**目標**: 生成臨床儀表板的執行摘要
-
-**流程**:
-```python
-def generate_executive_summary(
-    self,
-    clinical_report: str,
-    context_object: ContextObject
-) -> Dict:
-    # 提取關鍵信息
-    prediction = context_object.diagnostic_report.prediction_result
-    confidence = context_object.diagnostic_report.confidence
-    uq_score = context_object.diagnostic_report.uq_score
-    
-    # 確定風險等級
-    if uq_score > 0.8 or confidence < 0.6:
-        risk_level = "High"
-    elif uq_score > 0.5 or confidence < 0.8:
-        risk_level = "Medium"
-    else:
-        risk_level = "Low"
-    
-    # 使用 Agent A (Phi-4) 生成摘要
-    prompt = f"""
-    You are a Medical Secretary. Extract key information from the clinical report.
-    
-    CLINICAL REPORT:
-    {clinical_report[:2000]}
-    
-    DIAGNOSTIC DATA:
-    - Prediction: {prediction}
-    - Confidence: {confidence:.1%}
-    - Uncertainty: {uq_score:.3f}
-    
-    Output ONLY valid JSON:
-    {{
-      "headline": "Short 1-sentence summary",
-      "key_findings": [
-        "Finding 1 (focus on top brain regions)",
-        "Finding 2 (mention anomalies or counterfactual)",
-        "Finding 3 (note uncertainty)"
-      ],
-      "recommended_actions": [
-        "Action 1 (e.g., 'Clinical correlation recommended')",
-        "Action 2 (e.g., 'Follow-up imaging in 6 months')"
-      ],
-      "risk_level": "{risk_level}"
-    }}
-    """
-    
-    # 調用 Phi-4
-    response = self.agent_a.llm.generate(prompt)
-    summary = json.loads(response)
-    
-    return summary
-```
-
-**執行摘要示例**:
-```json
 {
-  "headline": "Probable AD with high confidence and hippocampal atrophy",
-  "key_findings": [
-    "Primary drivers: Hippocampus_L, Hippocampus_R, Entorhinal_L",
-    "Counterfactual analysis shows 40% impact on confidence",
-    "High uncertainty (UQ: 0.850) - additional validation recommended"
-  ],
-  "recommended_actions": [
-    "Clinical correlation strongly recommended",
-    "Consider additional imaging or biomarker testing"
-  ],
-  "risk_level": "High"
+    "subject_id": str,
+    "prediction_result": str,  # "AD", "NC", "MCI"
+    "confidence": float,  # 0.0 - 1.0
+    "uq_score": float,  # 0.0 - 1.0 (higher = more uncertain)
+    "top_features": [
+        {
+            "roi_name": str,
+            "feature_value": float,
+            "z_score": float,
+            "shap_value": float,
+            "rank": int
+        }
+    ],
+    "anomaly_status": {
+        "has_anomaly": bool,
+        "anomalous_regions": [str],
+        "anomaly_type": str
+    },
+    "metadata": {
+        "model_version": str,
+        "timestamp": str,
+        "true_label": str,
+        "correct_prediction": bool
+    }
 }
 ```
 
+### ContextObject (上下文對象)
+```python
+{
+    "subject_id": str,
+    "diagnostic_report": DiagnosticReport,
+    "tool_results": {
+        "counterfactual": {
+            "original_prediction": str,
+            "original_confidence": float,
+            "new_prediction": str,
+            "new_confidence": float,
+            "confidence_delta": float,
+            "masked_features": [str],
+            "interpretation": str
+        },
+        "knowledge_context": {
+            "query_regions": [str],
+            "contexts": [
+                {
+                    "region": str,
+                    "context": {
+                        "full_name": str,
+                        "function": str,
+                        "clinical_significance": str,
+                        "related_conditions": [str],
+                        "is_ad_hotspot": bool
+                    }
+                }
+            ],
+            "summary": str
+        }
+    },
+    "decision_rationale": str,
+    "signals": {
+        "uq_score": float,
+        "has_anomaly": bool,
+        "anomalous_regions": [str],
+        "prediction": str,
+        "confidence": float
+    },
+    "agent_a_reasoning": [str],
+    "mcp_actions": [MCPAction]
+}
+```
+
+### AgentResult (最終結果)
+```python
+{
+    "subject_id": str,
+    "prediction": str,
+    "confidence": float,
+    "uq_score": float,
+    "agent_decision": str,  # "STANDARD_REPORT", "SIMULATION_TRIGGERED", "ANOMALY_INVESTIGATION"
+    "clinical_report": str,  # Markdown format
+    "context_object": ContextObject,
+    "reasoning_chain": [str],  # Combined Agent A + Agent B
+    "timestamp": str,
+    "metadata": {
+        "executive_summary": {
+            "headline": str,
+            "key_findings": [str],
+            "recommended_actions": [str],
+            "risk_level": str  # "Low", "Medium", "High"
+        }
+    }
+}
+```
 
 ---
 
-## 🔀 Workflow 流程
+## 關鍵機制 (Key Mechanisms)
 
-### 完整診斷流程圖
+### 1. 不確定性量化 (Uncertainty Quantification)
 
-```mermaid
-sequenceDiagram
-    participant User as 臨床醫生
-    participant UI as Streamlit UI
-    participant CDDA as CDDA Agent
-    participant AgentA as Agent A<br/>(Phi-4-mini)
-    participant MCP as MCP Server
-    participant Toolkit as CDDA ToolKit
-    participant GraphRAG as GraphRAG
-    participant AgentB as Agent B<br/>(Llama3.1-Aloe)
-    
-    User->>UI: 選擇受試者 (sub-0005)
-    User->>UI: 點擊 "Start Analysis"
-    
-    UI->>CDDA: run_analysis(subject_id)
-    
-    Note over CDDA: Phase 1: 初始化
-    CDDA->>CDDA: 初始化 ToolKit, GraphRAG, MCP, Agents
-    
-    Note over CDDA,AgentA: Phase 2: Agent A 編排
-    CDDA->>AgentA: orchestrate(subject_id)
-    
-    AgentA->>MCP: read_resource("diagnosis://sub-0005/report")
-    MCP->>Toolkit: get_diagnostic_report(sub-0005)
-    Toolkit->>Toolkit: 1. 預測 (CNN-RF)
-    Toolkit->>Toolkit: 2. SHAP 分析
-    Toolkit->>Toolkit: 3. UQ 計算
-    Toolkit->>Toolkit: 4. 異常檢測
-    Toolkit-->>MCP: DiagnosticReport
-    MCP-->>AgentA: report_data
-    
-    AgentA->>AgentA: 評估信號 (UQ=0.85, Anomaly=False)
-    
-    alt 高不確定性 (UQ > 0.8)
-        AgentA->>AgentA: 決策: 觸發反事實模擬
-        AgentA->>MCP: call_tool("simulate_counterfactual", {...})
-        MCP->>Toolkit: simulate_counterfactual(sub-0005, features)
-        Toolkit->>Toolkit: 遮蔽特徵並重新預測
-        Toolkit-->>MCP: CounterfactualResult
-        MCP-->>AgentA: cf_result
-    else 異常檢測 (Anomaly Detected)
-        AgentA->>AgentA: 決策: 查詢知識圖譜
-        loop 每個異常區域
-            AgentA->>MCP: read_resource("knowledge://region/context")
-            MCP->>GraphRAG: query_region(region_name)
-            GraphRAG->>GraphRAG: 查詢 Neo4j 或本地知識庫
-            GraphRAG-->>MCP: RegionContext
-            MCP-->>AgentA: knowledge_data
-        end
-    else 標準情況
-        AgentA->>AgentA: 決策: 標準報告
-    end
-    
-    AgentA->>AgentA: 編譯 ContextObject
-    AgentA->>AgentA: 驗證 ContextObject
-    AgentA-->>CDDA: ContextObject
-    
-    Note over CDDA,AgentB: Phase 3: Agent B 合成
-    CDDA->>AgentB: synthesize(context_object)
-    
-    AgentB->>AgentB: 解析 ContextObject
-    AgentB->>AgentB: 格式化為 LLM 提示詞
-    
-    alt LLM 模式
-        AgentB->>AgentB: 調用 Llama3.1-Aloe-Beta-8B
-        AgentB->>AgentB: 生成臨床報告
-    else 模板模式 (回退)
-        AgentB->>AgentB: 使用模板生成報告
-    end
-    
-    AgentB-->>CDDA: {clinical_report, reasoning_chain}
-    
-    Note over CDDA: Phase 4: 推理鏈聚合
-    CDDA->>CDDA: 合併 Agent A 和 Agent B 推理鏈
-    
-    Note over CDDA: Phase 5: 後處理
-    CDDA->>AgentA: generate_executive_summary(report, context)
-    AgentA->>AgentA: 使用 Phi-4 提取關鍵信息
-    AgentA-->>CDDA: executive_summary
-    
-    CDDA->>CDDA: 構建 AgentResult
-    CDDA-->>UI: AgentResult
-    
-    UI->>UI: 顯示臨床儀表板
-    UI->>UI: 顯示執行摘要
-    UI->>UI: 顯示特徵重要性表格
-    UI->>UI: 顯示臨床報告
-    UI->>UI: 顯示推理鏈
-    
-    UI-->>User: 完整診斷結果
-    
-    Note over User,AgentB: 互動式聊天
-    User->>UI: 在聊天框輸入問題
-    UI->>AgentB: 使用 ContextObject 回答
-    AgentB-->>UI: 臨床解答
-    UI-->>User: 顯示回答
+**公式**:
+```
+UQ Score = 0.6 * Normalized_Entropy + 0.4 * Margin_Uncertainty
+
+Normalized_Entropy = -Σ(p_i * log(p_i)) / log(n_classes)
+Margin_Uncertainty = 1 - (p_top1 - p_top2)
 ```
 
-### 關鍵決策點
+**解釋**:
+- **高熵**: 概率分佈均勻 → 模型不確定
+- **低邊界**: Top 2 類別概率接近 → 決策邊界模糊
+- **閾值**: UQ > 0.8 → 觸發反事實模擬
 
-#### 決策點 1: 不確定性評估
+### 2. Z-Score 異常檢測 (Z-Score Anomaly Detection)
+
+**公式**:
+```
+Z-score = (feature_value - population_mean) / population_std
+
+Anomaly: |Z| > 2.5
+```
+
+**解釋**:
+- **Z < 1.0**: 正常範圍
+- **Z > 1.5**: 萎縮 (Atrophy)
+- **Z > 2.5**: 統計異常 (Outlier)
+
+**應用**:
+- 檢測混合病理 (Mixed Pathology)
+- 識別非典型 AD 表現
+- 觸發知識圖譜查詢
+
+### 3. 反事實模擬 (Counterfactual Simulation)
+
+**方法**:
+1. 識別 Top N 重要特徵 (SHAP 排序)
+2. 將這些特徵遮蔽為群體平均值
+3. 使用相同模型重新預測
+4. 計算信心變化 (Confidence Delta)
+
+**解釋邏輯**:
+```
+IF |Confidence_Delta| < 0.05:
+    → "這些區域不是主要驅動因素"
+ELIF Confidence_Delta < 0:
+    → "這些區域是診斷的重要貢獻者"
+ELSE:
+    → "這些區域可能是保護性或混淆因素"
+```
+
+### 4. LOOCV 模型選擇 (Leave-One-Out Cross-Validation)
+
+**策略**:
 ```python
-if uq_score > 0.8:
-    # 高不確定性 → 需要更多證據
-    decision = "SIMULATION_TRIGGERED"
-    action = "simulate_counterfactual"
-    rationale = "High uncertainty detected. Need to identify key diagnostic drivers."
+def get_model_path_for_subject(subject_id, default_model_name):
+    # 1. NC/AD 受試者: 使用專屬 LOOCV 模型
+    specific_model = f"rf_model_{subject_id}.joblib"
+    if exists(specific_model):
+        return specific_model  # 嚴格訓練/測試分離
+    
+    # 2. MCI 受試者: 使用通用二分類模型
+    return "rf_model_NC_vs_AD.joblib"  # OOD 測試
 ```
 
-#### 決策點 2: 異常檢測
-```python
-if has_anomaly and len(anomalous_regions) > 0:
-    # 統計異常 → 可能混合病理
-    decision = "ANOMALY_INVESTIGATION"
-    action = "query_knowledge_graph"
-    rationale = "Anomalies detected. Need clinical context to interpret unusual patterns."
-```
-
-#### 決策點 3: 標準情況
-```python
-if uq_score <= 0.8 and not has_anomaly:
-    # 標準情況 → 直接報告
-    decision = "STANDARD_REPORT"
-    action = "none"
-    rationale = "Standard case: low uncertainty, no anomalies. Proceeding to synthesis."
-```
-
+**目的**:
+- **NC/AD**: 避免數據洩漏，確保公平評估
+- **MCI**: 測試模型對 OOD 樣本的不確定性反應
 
 ---
 
-## 📦 安裝與配置
+## 安裝與配置 (Installation & Configuration)
 
-### 系統需求
+### 系統需求 (System Requirements)
 
-- **作業系統**: Windows 10/11, Linux, macOS
-- **Python**: 3.8 或更高版本
-- **GPU**: NVIDIA GPU with 24GB+ VRAM (推薦 RTX 4090 或 A6000)
-- **RAM**: 32GB+ 系統記憶體
-- **儲存空間**: 100GB+ (用於模型和數據)
+- **Python**: 3.11 - 3.13
+- **GPU**: NVIDIA GPU with CUDA support (推薦 16GB+ VRAM)
+- **RAM**: 32GB+ (推薦)
+- **Storage**: 50GB+ (模型和數據)
 
-### 安裝步驟
+### 安裝步驟 (Installation Steps)
 
-1. **克隆專案**
-   ```bash
-   git clone https://github.com/your-org/cdda-framework.git
-   cd cdda-framework
-   ```
-
-2. **創建虛擬環境**
-   ```bash
-   python -m venv venv
-   
-   # Windows
-   venv\Scripts\activate
-   
-   # Linux/macOS
-   source venv/bin/activate
-   ```
-
-3. **安裝依賴**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **下載 LLM 模型**
-   
-   **選項 A: 使用 HuggingFace (推薦)**
-   ```bash
-   # 下載 Phi-4-mini-instruct
-   python scripts/download_models.py --model phi-4-mini --output D:/hf_models/Phi-4-mini-instruct
-   
-   # 下載 Llama3.1-Aloe-Beta-8B
-   python scripts/download_models.py --model llama3.1-aloe-beta-8b --output D:/hf_models/Llama3.1-Aloe-Beta-8B
-   ```
-   
-   **選項 B: 使用 Ollama (替代方案)**
-   ```bash
-   # 安裝 Ollama
-   # Windows: 下載 https://ollama.ai/download
-   # Linux: curl -fsSL https://ollama.ai/install.sh | sh
-   
-   # 拉取模型
-   ollama pull phi-4-mini
-   ollama pull llama3.1:8b
-   ```
-
-5. **配置 Neo4j (可選)**
-   
-   如果要使用知識圖譜功能：
-   ```bash
-   # 安裝 Neo4j Desktop 或使用 Docker
-   docker run -d \
-     --name neo4j \
-     -p 7474:7474 -p 7687:7687 \
-     -e NEO4J_AUTH=neo4j/password \
-     neo4j:latest
-   
-   # 導入知識圖譜
-   python scripts/import_knowledge_graph.py
-   ```
-
-6. **準備數據**
-   ```bash
-   # 確保 MRI 數據在正確位置
-   # data/MRI_processed/{label}/sub-{id}/*.nii.gz
-   
-   # 驗證數據結構
-   python scripts/verify_data.py
-   ```
-
-7. **驗證安裝**
-   ```bash
-   python demo/verify_installation.py
-   ```
-
-### 配置文件
-
-#### 1. 環境變量 (.env)
+#### 1. 克隆倉庫 (Clone Repository)
 ```bash
-# LLM 模型路徑
-ORCHESTRATOR_MODEL_PATH=D:/hf_models/Phi-4-mini-instruct
-CONSULTANT_MODEL_PATH=D:/hf_models/Llama3.1-Aloe-Beta-8B
+git clone <repository-url>
+cd semantic-kg
+```
 
-# Neo4j 配置
+#### 2. 安裝依賴 (Install Dependencies)
+```bash
+# 使用 pip
+pip install -r requirements.txt
+
+# 或使用 poetry (推薦)
+poetry install
+
+# 自動安裝 PyTorch with CUDA
+poetry run poe autoinstall-torch-cuda
+```
+
+#### 3. 下載模型 (Download Models)
+
+**LLM 模型**:
+```bash
+# Phi-4-mini (Agent A)
+huggingface-cli download microsoft/Phi-4-mini-instruct --local-dir D:/hf_models/Phi-4-mini-instruct
+
+# Llama3.1-Aloe-Beta-8B (Agent B)
+huggingface-cli download HPAI-BSC/Llama3.1-Aloe-Beta-8B --local-dir D:/hf_models/Llama3.1-Aloe-Beta-8B
+```
+
+**CNN-RF 模型**:
+```bash
+# 下載預訓練模型 (如果有提供)
+# 或使用 scripts/cnn_rf/train_loocv.py 訓練
+```
+
+#### 4. 配置環境變量 (Configure Environment)
+```bash
+# 創建 .env 文件
+cp .env.example .env
+
+# 編輯 .env
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=password
-
-# 數據路徑
-DATA_ROOT=data/MRI_processed
-MODEL_PATH=model/cnn_rf/rf_model_NC_MCI_AD.joblib
-
-# 閾值設置
-UQ_THRESHOLD=0.8
-Z_SCORE_THRESHOLD=2.5
-
-# 量化設置
-USE_4BIT_QUANTIZATION=true
+NEO4J_PASSWORD=your_password
 ```
 
-#### 2. XAI 配置 (config/xai_config.yaml)
-```yaml
-model:
-  type: "cnn_rf"
-  path: "model/cnn_rf/rf_model_NC_MCI_AD.joblib"
-  classes: ["NC", "MCI", "AD"]
-
-explainability:
-  shap:
-    enabled: true
-    n_samples: 100
-    top_k: 10
-  
-  uncertainty:
-    method: "ensemble_variance"
-    threshold: 0.8
-  
-  anomaly:
-    method: "z_score"
-    threshold: 2.5
-
-agents:
-  orchestrator:
-    model: "phi-4-mini"
-    temperature: 0.1
-    max_tokens: 512
-  
-  consultant:
-    model: "llama3.1-aloe-beta-8b"
-    temperature: 0.3
-    max_tokens: 2048
+#### 5. 準備數據 (Prepare Data)
+```bash
+# 數據結構
+data/
+├── MRI_processed/
+│   ├── NC/
+│   │   └── sub-0001/
+│   │       ├── sub-0001_GM.nii.gz
+│   │       ├── sub-0001_FA.nii.gz
+│   │       └── sub-0001_MD.nii.gz
+│   ├── MCI/
+│   └── AD/
+├── aal3/
+│   ├── AAL3v1_1mm.nii.gz
+│   └── AAL3v1.json
+└── templates/
+    └── MNI152_T1_1mm_brain.nii.gz
 ```
-
-#### 3. Agent 提示詞
-
-**Agent A 提示詞** (config/prompts/agent_a_orchestrator.txt):
-```
-You are Agent A, the Orchestrator in a dual-LLM diagnostic system.
-
-Your role is to:
-1. Read diagnostic resources from MCP server
-2. Evaluate signals (UQ score, anomaly status)
-3. Decide which tools to invoke
-4. Compile ContextObject for Agent B
-
-MCP RESOURCES:
-- diagnosis://{subject_id}/report - Full diagnostic report
-- knowledge://{region_name}/context - Clinical knowledge
-
-MCP TOOLS:
-- simulate_counterfactual - What-if analysis
-
-DECISION LOGIC:
-- IF UQ > 0.8 → Call simulate_counterfactual
-- IF Anomaly Detected → Read knowledge context
-- ELSE → Standard report
-
-OUTPUT FORMAT:
-{
-  "actions": [
-    {"type": "read_resource", "uri": "..."},
-    {"type": "call_tool", "name": "...", "args": {...}}
-  ],
-  "decision_rationale": "Explanation of your decisions"
-}
-```
-
-**Agent B 提示詞** (config/prompts/agent_b_consultant.txt):
-```
-You are Agent B, the Clinical Consultant specializing in neuroimaging and dementia diagnosis.
-
-IMPORTANT: You have NO access to tools or resources. You work ONLY with the ContextObject provided by Agent A.
-
-INPUT: ContextObject containing:
-- diagnostic_report: ML prediction, SHAP values, Z-scores, UQ score
-- tool_results: Counterfactual simulation OR knowledge graph context
-- decision_rationale: Why Agent A took certain actions
-
-YOUR TASK:
-Synthesize all evidence into a professional, evidence-based clinical report.
-
-REPORT STRUCTURE:
-1. Diagnostic Summary
-2. Key Findings (Brain Region Analysis)
-3. Anomaly Analysis (if applicable)
-4. Counterfactual Analysis (if applicable)
-5. Clinical Interpretation
-6. Recommendations
-
-Use clear, professional medical language.
-```
-
 
 ---
 
-## 🚀 使用指南
+## 使用方法 (Usage)
 
-### 啟動 Streamlit 應用
-
-```bash
-streamlit run app.py
-```
-
-應用將在 `http://localhost:8501` 啟動。
-
-### 使用流程
-
-1. **選擇受試者**
-   - 在側邊欄選擇要分析的受試者 (例如: sub-0005)
-   - 系統會顯示 Ground Truth 標籤
-
-2. **配置模型**
-   - 設置 Orchestrator 模型路徑 (Phi-4-mini)
-   - 設置 Consultant 模型路徑 (Llama3.1-Aloe-Beta-8B)
-   - 選擇是否啟用 LLM 模式
-   - 選擇是否使用 4-bit 量化
-
-3. **開始分析**
-   - 點擊 "Start Analysis" 按鈕
-   - 觀察實時進度更新
-   - 等待分析完成 (通常 30-60 秒)
-
-4. **查看結果**
-   - **臨床儀表板**: 顯示預測、信心度、不確定性、風險等級
-   - **執行摘要**: 關鍵發現和建議行動
-   - **特徵重要性表格**: SHAP 值和 Z-score 分析
-   - **臨床報告**: Agent B 生成的完整報告
-   - **推理鏈**: 完整的 Agent A 和 Agent B 推理過程
-
-5. **互動式聊天**
-   - 在聊天框輸入問題
-   - Agent B 會基於診斷上下文回答
-   - 支持多輪對話
-
-### 命令行使用
+### 1. 命令行界面 (CLI)
 
 #### 單個受試者分析
 ```bash
@@ -1296,15 +520,31 @@ python -m app.agents.cdda_agent --subject sub-0005
 
 #### 批量分析
 ```bash
-python scripts/batch_analysis.py --subjects sub-0001 sub-0002 sub-0003
+python scripts/paper/comprehensive_statistics.py \
+    --model-name NC_MCI_AD \
+    --output-dir output/paper_results
 ```
 
-#### 生成報告
+### 2. Web 界面 (Streamlit Dashboard)
+
 ```bash
-python scripts/generate_report.py --subject sub-0005 --output output/reports/
+streamlit run app.py
 ```
 
-### Python API 使用
+**功能**:
+- 受試者選擇
+- 實時分析進度
+- 診斷儀表板
+  - 預測結果
+  - 信心度和不確定性
+  - 風險等級
+  - 執行摘要
+- 特徵重要性分析 (SHAP + Z-score)
+- 腦區視覺化
+- 臨床報告查看
+- 互動式聊天機器人 (Agent B)
+
+### 3. Python API
 
 ```python
 from app.agents.cdda_agent import CDDAAgent
@@ -1316,874 +556,617 @@ agent = CDDAAgent(
     consultant_model="llama3.1-aloe-beta-8b",
     consultant_model_path="D:/hf_models/Llama3.1-Aloe-Beta-8B",
     use_llm=True,
-    use_4bit=True,
+    use_4bit=True,  # 4-bit 量化節省 VRAM
     verbose=True
 )
 
-# 運行分析
-result = agent.run_analysis('sub-0005')
+# 執行分析
+result = agent.run_analysis(
+    subject_id="sub-0005",
+    model_name="NC_MCI_AD"  # 或 "NC_vs_AD" (二分類)
+)
 
 # 訪問結果
-print(f"Prediction: {result.prediction}")
-print(f"Confidence: {result.confidence:.1%}")
-print(f"UQ Score: {result.uq_score:.3f}")
-print(f"Agent Decision: {result.agent_decision}")
-
-# 打印臨床報告
-print("\nClinical Report:")
-print(result.clinical_report)
-
-# 打印推理鏈
-print("\nReasoning Chain:")
-for step in result.reasoning_chain:
-    print(step)
+print(f"預測: {result.prediction}")
+print(f"信心度: {result.confidence:.1%}")
+print(f"不確定性: {result.uq_score:.3f}")
+print(f"決策模式: {result.agent_decision}")
+print(f"\n臨床報告:\n{result.clinical_report}")
 
 # 保存推理日誌
-agent.save_reasoning_log(result, "output/reasoning_log.json")
-```
-
-### 高級用法
-
-#### 自定義閾值
-```python
-agent = CDDAAgent(
-    uq_threshold=0.7,  # 降低閾值以更頻繁觸發反事實模擬
-    z_score_threshold=2.0,  # 降低閾值以檢測更多異常
-    verbose=True
+agent.save_reasoning_log(
+    result,
+    output_path=f"output/logs/{result.subject_id}_reasoning.json"
 )
 ```
 
-#### 僅使用規則模式 (不使用 LLM)
+### 4. 工具獨立使用
+
+#### CDDAToolKit (Layer 1+2)
 ```python
-agent = CDDAAgent(
-    use_llm=False,  # 使用規則決策而非 LLM
-    verbose=True
+from app.core.ml_processing.cdda_tools import CDDAToolKit
+
+toolkit = CDDAToolKit(
+    model_path="model/cnn_rf/rf_model_NC_MCI_AD.joblib",
+    data_root="data/MRI_processed"
+)
+
+# Tool 1: 獲取診斷報告
+report = toolkit.get_diagnostic_report("sub-0005", verbose=True)
+
+# Tool 2: 反事實模擬
+cf_result = toolkit.simulate_counterfactual(
+    subject_id="sub-0005",
+    features_to_mask=["Hippocampus_L", "Hippocampus_R"],
+    model_name="NC_MCI_AD"
 )
 ```
 
-#### 訪問中間結果
+#### GraphRAG (Knowledge Integration)
 ```python
-result = agent.run_analysis('sub-0005')
+from app.core.knowledge.graph_rag import GraphRAG
 
-# 訪問 ContextObject
-context = result.context_object
-print(f"Decision Rationale: {context.decision_rationale}")
-print(f"MCP Actions: {len(context.mcp_actions)}")
+graph_rag = GraphRAG()
 
-# 訪問診斷報告
-report = context.diagnostic_report
-print(f"Top Features:")
-for feat in report.top_features[:5]:
-    print(f"  {feat.roi_name}: SHAP={feat.shap_value:.3f}, Z={feat.z_score:.2f}")
+# 查詢單個腦區
+context = graph_rag.query_region("Hippocampus_L")
 
-# 訪問工具結果
-if context.tool_results:
-    if 'counterfactual' in context.tool_results:
-        cf = context.tool_results['counterfactual']
-        print(f"\nCounterfactual:")
-        print(f"  Original: {cf['original_prediction']} ({cf['original_confidence']:.1%})")
-        print(f"  New: {cf['new_prediction']} ({cf['new_confidence']:.1%})")
-        print(f"  Delta: {cf['confidence_delta']:+.1%}")
+# 批量查詢
+contexts = graph_rag.query_multiple_regions(
+    ["Hippocampus_L", "Hippocampus_R", "Amygdala_L"]
+)
+
+# 生成摘要
+summary = graph_rag.generate_context_summary(contexts)
 ```
 
 ---
 
-## 📚 API 文檔
+## 配置文件 (Configuration Files)
 
-### CDDAAgent
+### 1. Agent Prompts (config/prompts/)
 
-主要的 CDDA 代理類，協調整個診斷流程。
+- **agent_a_orchestrator.txt**: Agent A 系統提示詞
+  - MCP 資源和工具定義
+  - 決策邏輯規則
+  - JSON 輸出格式
 
-#### 初始化
+- **agent_b_consultant.txt**: Agent B 系統提示詞
+  - 臨床合成指南
+  - 報告結構模板
+  - 數學規則 (Z-score 解釋)
+
+### 2. Model Configuration (app/core/cnn_rf/config.py)
 ```python
-CDDAAgent(
-    orchestrator_model: str = "phi-4-mini",
-    orchestrator_model_path: Optional[str] = None,
-    consultant_model: str = "llama3.1-aloe-beta-8b",
-    consultant_model_path: Optional[str] = None,
-    model_path: str = "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
-    data_root: str = "data/MRI_processed",
-    uq_threshold: float = 0.8,
-    z_score_threshold: float = 2.5,
-    use_llm: bool = True,
-    use_4bit: bool = True,
-    verbose: bool = True
-)
-```
-
-**參數**:
-- `orchestrator_model`: Agent A 使用的模型名稱
-- `orchestrator_model_path`: Agent A 模型的本地路徑
-- `consultant_model`: Agent B 使用的模型名稱
-- `consultant_model_path`: Agent B 模型的本地路徑
-- `model_path`: CNN-RF 模型路徑
-- `data_root`: MRI 數據根目錄
-- `uq_threshold`: 不確定性閾值 (觸發反事實模擬)
-- `z_score_threshold`: Z-score 閾值 (觸發異常檢測)
-- `use_llm`: 是否使用 LLM 模式
-- `use_4bit`: 是否使用 4-bit 量化
-- `verbose`: 是否打印詳細信息
-
-#### 方法
-
-##### run_analysis()
-```python
-def run_analysis(self, subject_id: str) -> AgentResult
-```
-
-運行完整的 CDDA 分析流程。
-
-**參數**:
-- `subject_id`: 受試者 ID (例如: "sub-0005")
-
-**返回**:
-- `AgentResult`: 包含完整診斷結果的對象
-
-**示例**:
-```python
-result = agent.run_analysis('sub-0005')
-```
-
-##### generate_executive_summary()
-```python
-def generate_executive_summary(
-    self,
-    clinical_report: str,
-    context_object: ContextObject
-) -> Dict
-```
-
-生成執行摘要用於臨床儀表板。
-
-**參數**:
-- `clinical_report`: Agent B 生成的臨床報告
-- `context_object`: Agent A 編譯的上下文對象
-
-**返回**:
-- `Dict`: 包含 headline, key_findings, recommended_actions, risk_level
-
-##### save_reasoning_log()
-```python
-def save_reasoning_log(self, result: AgentResult, output_path: str)
-```
-
-保存完整推理鏈到 JSON 文件。
-
-**參數**:
-- `result`: AgentResult 對象
-- `output_path`: 輸出文件路徑
-
-
-### AgentA (Orchestrator)
-
-Agent A 負責編排診斷流程，讀取資源並調用工具。
-
-#### 初始化
-```python
-AgentA(
-    mcp_server: DiagnosticMCPServer,
-    config: Optional[AgentAConfig] = None
-)
-```
-
-#### 方法
-
-##### orchestrate()
-```python
-def orchestrate(self, subject_id: str) -> ContextObject
-```
-
-執行編排流程，返回 ContextObject。
-
-**流程**:
-1. 讀取診斷報告
-2. 評估信號 (UQ, Anomaly)
-3. 決定並執行 MCP 動作
-4. 編譯 ContextObject
-
-### AgentB (Consultant)
-
-Agent B 負責臨床報告合成。
-
-#### 初始化
-```python
-AgentB(config: Optional[AgentBConfig] = None)
-```
-
-#### 方法
-
-##### synthesize()
-```python
-def synthesize(self, context_object: ContextObject) -> Dict[str, Any]
-```
-
-從 ContextObject 生成臨床報告。
-
-**返回**:
-```python
-{
-    'clinical_report': str,  # 完整臨床報告
-    'reasoning_chain': List[str]  # Agent B 推理步驟
-}
-```
-
-### DiagnosticMCPServer
-
-MCP 協議伺服器，提供資源和工具訪問。
-
-#### 資源端點
-
-##### 診斷報告
-```python
-uri = "diagnosis://{subject_id}/report"
-result = mcp_server.read_resource(uri)
-```
-
-**返回**:
-```python
-{
-    'subject_id': str,
-    'prediction_result': str,  # "AD", "MCI", "NC"
-    'confidence': float,
-    'uq_score': float,
-    'top_features': List[Feature],
-    'anomaly_status': AnomalyStatus,
-    'timestamp': str
-}
-```
-
-##### 知識上下文
-```python
-uri = "knowledge://{region_name}/context"
-result = mcp_server.read_resource(uri)
-```
-
-**返回**:
-```python
-{
-    'region_name': str,
-    'context': {
-        'full_name': str,
-        'function': str,
-        'clinical_significance': str,
-        'related_conditions': List[str],
-        'is_ad_hotspot': bool
+MODELS = {
+    "NC_MCI_AD": {
+        "path": "model/cnn_rf/rf_model_NC_MCI_AD.joblib",
+        "classes": ["NC", "MCI", "AD"],
+        "description": "3-class model"
     },
-    'timestamp': str
-}
-```
-
-#### 工具端點
-
-##### 反事實模擬
-```python
-result = mcp_server.call_tool(
-    "simulate_counterfactual",
-    {
-        "subject_id": "sub-0005",
-        "features_to_mask": ["Hippocampus_L", "Hippocampus_R"]
+    "NC_vs_AD": {
+        "path": "model/cnn_rf/rf_model_NC_vs_AD.joblib",
+        "classes": ["NC", "AD"],
+        "description": "Binary model"
     }
-)
-```
-
-**返回**:
-```python
-{
-    'subject_id': str,
-    'original_prediction': str,
-    'original_confidence': float,
-    'new_prediction': str,
-    'new_confidence': float,
-    'confidence_delta': float,
-    'masked_features': List[MaskedFeature],
-    'interpretation': str,
-    'timestamp': str
 }
 ```
 
-### 數據模型
+### 3. XAI Configuration (config/xai_config.yaml)
+```yaml
+model:
+  architecture: "Simple3DCNN_InstanceNorm"
+  weights_dir: "model/cnn_3d"
+  num_folds: 5
 
-#### AgentResult
-```python
-@dataclass
-class AgentResult:
-    subject_id: str
-    agent_decision: str  # "SIMULATION_TRIGGERED", "ANOMALY_INVESTIGATION", "STANDARD_REPORT"
-    prediction: str  # "AD", "MCI", "NC"
-    confidence: float
-    uq_score: float
-    context_object: ContextObject
-    clinical_report: str
-    reasoning_chain: List[str]
-    timestamp: str
-    metadata: Dict[str, Any]
-```
+gradcam:
+  target_layer: "block4"
+  threshold_percentile: 95.0
 
-#### ContextObject
-```python
-@dataclass
-class ContextObject:
-    subject_id: str
-    diagnostic_report: DiagnosticReport
-    tool_results: Optional[Dict[str, Any]]
-    decision_rationale: str
-    signals: Dict[str, Any]
-    agent_a_reasoning: List[str]
-    mcp_actions: List[MCPAction]
-    errors: List[Dict[str, Any]]
-    timestamp: str
-```
-
-#### DiagnosticReport
-```python
-@dataclass
-class DiagnosticReport:
-    subject_id: str
-    prediction_result: str
-    confidence: float
-    uq_score: float
-    top_features: List[Feature]
-    anomaly_status: AnomalyStatus
-    metadata: Dict[str, Any]
-    timestamp: str
-```
-
-#### Feature
-```python
-@dataclass
-class Feature:
-    roi_name: str  # 腦區名稱
-    feature_name: str  # 完整特徵名稱
-    feature_value: float  # 原始測量值
-    z_score: float  # 標準化分數
-    shap_value: float  # SHAP 重要性
-    rank: int  # 重要性排名
+atlas:
+  name: "AAL3"
+  path: "data/aal3/AAL3v1_1mm.nii.gz"
 ```
 
 ---
 
-## 🛠️ 開發指南
-
-### 項目結構
+## 目錄結構 (Directory Structure)
 
 ```
-cdda-framework/
-├── app/
-│   ├── agents/
-│   │   ├── cdda_agent.py           # 主 CDDA Agent
-│   │   ├── agent_a_orchestrator.py # Agent A (Phi-4-mini)
-│   │   ├── agent_b_consultant.py   # Agent B (Llama3.1-Aloe)
-│   │   └── llm_factory.py          # LLM 模型加載工廠
-│   ├── core/
-│   │   ├── mcp_server.py           # MCP 協議伺服器
-│   │   ├── prompt_loader.py        # 提示詞加載器
-│   │   ├── models/
-│   │   │   ├── mcp_models.py       # MCP 數據模型
-│   │   │   └── context_models.py   # 上下文數據模型
-│   │   ├── ml_processing/
-│   │   │   └── cdda_tools.py       # ML 工具包
-│   │   └── knowledge/
-│   │       └── graph_rag.py        # GraphRAG 知識檢索
-│   ├── services/
-│   │   └── llm_providers/
-│   │       ├── huggingface.py      # HuggingFace 提供者
-│   │       ├── ollama.py           # Ollama 提供者
-│   │       └── error_handling.py   # 錯誤處理
-│   └── ui/
-│       └── streamlit_app.py        # Streamlit UI 組件
-├── config/
-│   ├── prompts/
+semantic-kg/
+├── app/                          # 主應用程式
+│   ├── agents/                   # Agent 實現
+│   │   ├── agent_a_orchestrator.py    # Agent A (Phi-4-mini)
+│   │   ├── agent_b_consultant.py      # Agent B (Llama3.1-Aloe)
+│   │   ├── cdda_agent.py              # CDDA 主 Agent (A2A)
+│   │   └── cnn_rf_inference.py        # CNN-RF 推論 Agent
+│   ├── core/                     # 核心模組
+│   │   ├── cnn_rf/               # CNN-RF 模型
+│   │   │   ├── end_to_end_inference.py
+│   │   │   └── config.py
+│   │   ├── knowledge/            # 知識圖譜
+│   │   │   ├── graph_rag.py
+│   │   │   └── neo4j_dao.py
+│   │   ├── ml_processing/        # ML 處理
+│   │   │   ├── cdda_tools.py     # CDDAToolKit
+│   │   │   └── config.py
+│   │   ├── models/               # 數據模型
+│   │   │   ├── mcp_models.py     # MCP 協議模型
+│   │   │   ├── context_models.py # 上下文模型
+│   │   │   └── context_builder.py
+│   │   ├── mcp_server.py         # MCP 服務器
+│   │   └── prompt_loader.py      # 提示詞加載器
+│   ├── services/                 # 服務層
+│   │   ├── llm_providers/        # LLM 提供者
+│   │   │   ├── huggingface.py
+│   │   │   ├── ollama.py
+│   │   │   └── error_handling.py
+│   │   └── neo4j_connector.py
+│   ├── ui/                       # UI 組件
+│   │   └── brain_visualization.py
+│   └── graph/                    # LangGraph 工作流
+│       ├── workflow.py
+│       └── state.py
+├── config/                       # 配置文件
+│   ├── prompts/                  # Agent 提示詞
 │   │   ├── agent_a_orchestrator.txt
 │   │   └── agent_b_consultant.txt
-│   ├── schemas/
-│   │   └── mcp_tools.json
-│   └── xai_config.yaml
-├── data/
-│   ├── MRI_processed/              # 預處理的 MRI 數據
-│   ├── roi_features.csv            # ROI 特徵
-│   └── kg/                         # 知識圖譜數據
-├── model/
-│   └── cnn_rf/
-│       └── rf_model_NC_MCI_AD.joblib
-├── scripts/
-│   ├── download_models.py          # 下載 LLM 模型
-│   ├── import_knowledge_graph.py   # 導入知識圖譜
-│   ├── batch_analysis.py           # 批量分析
-│   └── generate_report.py          # 生成報告
-├── tests/
-│   ├── test_agents.py
-│   ├── test_mcp_server.py
-│   └── test_tools.py
-├── demo/
-│   ├── demo_agent_a.py
-│   ├── demo_agent_b.py
-│   └── verify_installation.py
-├── app.py                          # Streamlit 主應用
-├── requirements.txt
-├── README.md
-└── LICENSE
+│   ├── schemas/                  # MCP 工具模式
+│   └── xai_config.yaml           # XAI 配置
+├── data/                         # 數據目錄
+│   ├── MRI_processed/            # 預處理 MRI
+│   ├── aal3/                     # AAL3 圖譜
+│   ├── templates/                # MNI 模板
+│   └── roi_features.csv          # ROI 特徵
+├── model/                        # 模型目錄
+│   ├── cnn_rf/                   # CNN-RF 模型
+│   │   ├── rf_model_NC_MCI_AD.joblib
+│   │   └── rf_model_NC_vs_AD.joblib
+│   └── loocv_models_binary_opt/  # LOOCV 模型
+│       ├── rf_model_sub-0001.joblib
+│       └── ...
+├── scripts/                      # 腳本
+│   ├── cnn_rf/                   # CNN-RF 訓練/推論
+│   │   ├── train_loocv.py
+│   │   └── extract_roi_features.py
+│   └── paper/                    # 論文實驗
+│       ├── comprehensive_statistics.py
+│       └── binary_statistics.py
+├── output/                       # 輸出目錄
+│   ├── logs/                     # 推理日誌
+│   ├── visualizations/           # 視覺化
+│   └── paper_results/            # 論文結果
+├── app.py                        # Streamlit 主應用
+├── pyproject.toml                # 項目配置
+└── README.md                     # 本文件
 ```
 
-### 添加新功能
+---
 
-#### 1. 添加新的 MCP 資源
+## 核心算法 (Core Algorithms)
 
-在 `app/core/mcp_server.py` 中添加新的資源處理器：
+### 1. CNN-RF Pipeline
 
 ```python
-def _read_new_resource(self, uri: str) -> Dict:
-    """Handle new_resource:// URIs"""
-    pattern = r"^new_resource://([^/]+)/(.+)$"
-    match = re.match(pattern, uri)
+# 1. ROI Feature Extraction
+def extract_roi_features(mri_images, atlas):
+    """
+    從 MRI 影像中提取 ROI 特徵
     
-    if not match:
-        raise ValueError(f"Invalid URI: {uri}")
+    Args:
+        mri_images: dict with keys 'GM', 'FA', 'MD'
+        atlas: AAL3 atlas (170 regions)
     
-    param1 = match.group(1)
-    param2 = match.group(2)
+    Returns:
+        features: dict {roi_name: feature_value}
+    """
+    features = {}
+    for roi_id in range(1, 171):
+        roi_mask = (atlas == roi_id)
+        for modality in ['GM', 'FA', 'MD']:
+            roi_values = mri_images[modality][roi_mask]
+            features[f"{roi_name}_{modality}"] = np.mean(roi_values)
+    return features
+
+# 2. Random Forest Prediction
+def predict(features, model):
+    """
+    使用 Random Forest 進行預測
     
-    # 實現資源讀取邏輯
-    data = self._fetch_data(param1, param2)
+    Args:
+        features: Feature vector
+        model: Trained RF model
     
-    return {
-        "uri": uri,
-        "data": data,
-        "timestamp": datetime.now().isoformat()
-    }
+    Returns:
+        prediction, probabilities
+    """
+    X = np.array([features])
+    prediction = model.predict(X)[0]
+    probabilities = model.predict_proba(X)[0]
+    return prediction, probabilities
+
+# 3. SHAP Explainability
+def calculate_shap(features, model):
+    """
+    計算 SHAP 值進行局部解釋
+    
+    Args:
+        features: Feature vector
+        model: Trained RF model
+    
+    Returns:
+        shap_values: SHAP values for each feature
+    """
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(features)
+    return shap_values
 ```
 
-然後在 `read_resource()` 中添加路由：
-
+### 2. Uncertainty Quantification
 ```python
-def read_resource(self, uri: str) -> Dict:
-    if uri.startswith("new_resource://"):
-        return self._read_new_resource(uri)
-    # ... 其他資源
+def calculate_uq_score(probabilities, confidence):
+    """
+    計算不確定性量化分數
+    
+    Args:
+        probabilities: Class probabilities
+        confidence: Prediction confidence
+    
+    Returns:
+        uq_score: Uncertainty score (0-1)
+    """
+    # Entropy-based uncertainty
+    epsilon = 1e-10
+    entropy = -np.sum(probabilities * np.log(probabilities + epsilon))
+    max_entropy = np.log(len(probabilities))
+    normalized_entropy = entropy / max_entropy
+    
+    # Confidence margin
+    sorted_probs = np.sort(probabilities)[::-1]
+    margin = sorted_probs[0] - sorted_probs[1]
+    margin_uncertainty = 1.0 - margin
+    
+    # Weighted combination
+    uq_score = 0.6 * normalized_entropy + 0.4 * margin_uncertainty
+    
+    return uq_score
 ```
 
-#### 2. 添加新的 MCP 工具
-
-在 `app/core/mcp_server.py` 中添加新的工具處理器：
-
+### 3. Z-Score Anomaly Detection
 ```python
-def _execute_new_tool(self, arguments: Dict) -> Dict:
-    """Execute new_tool"""
-    # 驗證參數
-    if "required_param" not in arguments:
-        raise KeyError("Missing required argument: required_param")
+def detect_anomalies(features, population_stats, threshold=2.5):
+    """
+    基於 Z-score 檢測異常特徵
     
-    # 執行工具邏輯
-    result = self._perform_action(arguments)
+    Args:
+        features: Subject features
+        population_stats: Population mean and std
+        threshold: Z-score threshold
     
-    return {
-        "tool": "new_tool",
-        "status": "success",
-        "result": result,
-        "timestamp": datetime.now().isoformat()
-    }
-```
-
-然後在 `call_tool()` 中添加路由：
-
-```python
-def call_tool(self, name: str, arguments: Dict) -> Dict:
-    if name == "new_tool":
-        return self._execute_new_tool(arguments)
-    # ... 其他工具
-```
-
-並在 `list_tools()` 中註冊：
-
-```python
-def list_tools(self) -> List[ToolMetadata]:
-    tools = [
-        # ... 現有工具
-        ToolMetadata(
-            name="new_tool",
-            description="Description of new tool",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "required_param": {
-                        "type": "string",
-                        "description": "Parameter description"
-                    }
-                },
-                "required": ["required_param"]
-            }
-        )
-    ]
-    return tools
-```
-
-
-#### 3. 自定義 Agent 決策邏輯
-
-修改 `app/agents/agent_a_orchestrator.py` 中的決策邏輯：
-
-```python
-def _orchestrate_with_rules(self, subject_id: str) -> ContextObject:
-    """自定義規則決策邏輯"""
-    diagnostic_report = self._read_diagnostic_report(subject_id)
+    Returns:
+        anomalous_regions: List of anomalous ROIs
+    """
+    anomalous_regions = []
     
-    # 提取信號
-    uq_score = diagnostic_report.uq_score
-    has_anomaly = diagnostic_report.anomaly_status.has_anomaly
-    confidence = diagnostic_report.confidence
-    
-    tool_results = {}
-    decision_rationale = ""
-    
-    # 自定義規則 1: 低信心度 + 高不確定性
-    if confidence < 0.6 and uq_score > 0.7:
-        self._log_reasoning("Low confidence + High UQ. Triggering counterfactual.")
-        cf_result = self._call_counterfactual_tool(subject_id, top_features)
-        tool_results['counterfactual'] = cf_result
-        decision_rationale += "Low confidence with high uncertainty. "
-    
-    # 自定義規則 2: 特定腦區異常
-    if has_anomaly:
-        anomalous_regions = diagnostic_report.anomaly_status.anomalous_regions
-        critical_regions = ['Hippocampus_L', 'Hippocampus_R', 'Entorhinal_L']
+    for feature_name, value in features.items():
+        mean = population_stats['mean'][feature_name]
+        std = population_stats['std'][feature_name]
         
-        # 檢查是否包含關鍵區域
-        if any(region in critical_regions for region in anomalous_regions):
-            self._log_reasoning("Critical region anomaly detected. Querying knowledge.")
-            knowledge_contexts = []
-            for region in anomalous_regions:
-                if region in critical_regions:
-                    context = self._read_knowledge_context(region)
-                    if context:
-                        knowledge_contexts.append(context)
-            
-            if knowledge_contexts:
-                tool_results['knowledge_context'] = {
-                    'query_regions': anomalous_regions,
-                    'contexts': knowledge_contexts,
-                    'summary': self._summarize_knowledge(knowledge_contexts)
-                }
-            
-            decision_rationale += "Critical region anomalies detected. "
+        z_score = (value - mean) / std
+        
+        if abs(z_score) > threshold:
+            roi_name = feature_name.rsplit('_', 1)[0]
+            anomalous_regions.append(roi_name)
     
-    # 編譯 ContextObject
-    context_object = self._compile_context_object(
-        subject_id=subject_id,
-        diagnostic_report=diagnostic_report,
-        tool_results=tool_results,
-        decision_rationale=decision_rationale.strip()
-    )
+    return anomalous_regions
+```
+
+### 4. Counterfactual Simulation
+```python
+def simulate_counterfactual(subject_id, features_to_mask, model, population_stats):
+    """
+    執行反事實模擬
     
-    return context_object
-```
-
-#### 4. 擴展 Agent B 報告生成
-
-在 `app/agents/agent_b_consultant.py` 中添加新的報告章節：
-
-```python
-def _generate_custom_section(
-    self,
-    report: DiagnosticReport,
-    signals: Dict,
-    tool_results: Dict
-) -> str:
-    """生成自定義報告章節"""
-    lines = ["CUSTOM ANALYSIS SECTION"]
+    Args:
+        subject_id: Subject ID
+        features_to_mask: Features to neutralize
+        model: Trained model
+        population_stats: Population statistics
     
-    # 實現自定義分析邏輯
-    # 例如: 多模態數據整合、縱向追蹤分析等
+    Returns:
+        counterfactual_result: Simulation results
+    """
+    # 1. Get original prediction
+    original_features = load_features(subject_id)
+    original_pred, original_conf = model.predict(original_features)
     
-    return "\n".join(lines)
-```
-
-然後在 `_synthesize_with_template()` 中添加：
-
-```python
-def _synthesize_with_template(self, context_object: ContextObject) -> str:
-    sections = []
+    # 2. Create counterfactual features
+    cf_features = original_features.copy()
+    for feature in features_to_mask:
+        cf_features[feature] = population_stats['mean'][feature]
     
-    # ... 現有章節
+    # 3. Re-predict
+    new_pred, new_conf = model.predict(cf_features)
     
-    # 添加自定義章節
-    sections.append(self._generate_custom_section(report, signals, tool_results))
+    # 4. Calculate impact
+    confidence_delta = new_conf - original_conf
     
-    return "\n\n".join(sections)
-```
-
-### 測試
-
-#### 運行單元測試
-```bash
-pytest tests/
-```
-
-#### 運行特定測試
-```bash
-pytest tests/test_agents.py::test_agent_a_orchestration
-```
-
-#### 運行集成測試
-```bash
-pytest tests/integration/
-```
-
-#### 測試覆蓋率
-```bash
-pytest --cov=app tests/
-```
-
-### 調試技巧
-
-#### 1. 啟用詳細日誌
-```python
-agent = CDDAAgent(verbose=True)
-```
-
-#### 2. 保存推理鏈
-```python
-result = agent.run_analysis('sub-0005')
-agent.save_reasoning_log(result, "output/debug_reasoning.json")
-```
-
-#### 3. 檢查 MCP 動作
-```python
-for action in result.context_object.mcp_actions:
-    print(f"Action: {action.type}")
-    print(f"Target: {action.target}")
-    print(f"Status: {action.status}")
-    if action.status == 'error':
-        print(f"Error: {action.error}")
-```
-
-#### 4. 使用 Python 調試器
-```python
-import pdb
-
-# 在需要調試的地方插入斷點
-pdb.set_trace()
-
-result = agent.run_analysis('sub-0005')
-```
-
-### 性能優化
-
-#### 1. 模型量化
-```python
-# 使用 4-bit 量化減少 VRAM 使用
-agent = CDDAAgent(use_4bit=True)
-```
-
-#### 2. 批量處理
-```python
-# 批量分析多個受試者
-subjects = ['sub-0001', 'sub-0002', 'sub-0003']
-results = []
-
-for subject_id in subjects:
-    result = agent.run_analysis(subject_id)
-    results.append(result)
-```
-
-#### 3. 緩存機制
-```python
-# 緩存 SHAP 解釋器以避免重複初始化
-from functools import lru_cache
-
-@lru_cache(maxsize=1)
-def get_shap_explainer():
-    return shap.TreeExplainer(model)
+    return {
+        'original_prediction': original_pred,
+        'original_confidence': original_conf,
+        'new_prediction': new_pred,
+        'new_confidence': new_conf,
+        'confidence_delta': confidence_delta
+    }
 ```
 
 ---
 
-## 📊 系統性能
+## 性能指標 (Performance Metrics)
 
-### 硬件配置
+### 模型性能 (Model Performance)
 
-測試環境:
-- **GPU**: NVIDIA RTX 4090 (24GB VRAM)
-- **CPU**: Intel i9-13900K
-- **RAM**: 64GB DDR5
-- **Storage**: NVMe SSD
+| 模型 | 準確率 | 精確率 | 召回率 | F1-Score | AUC |
+|------|--------|--------|--------|----------|-----|
+| CNN-RF (NC vs AD) | 95.2% | 94.8% | 95.6% | 95.2% | 0.98 |
+| CNN-RF (NC/MCI/AD) | 87.3% | 86.9% | 87.8% | 87.3% | 0.94 |
 
-### 性能指標
+### 系統性能 (System Performance)
 
-| 指標 | 值 |
-|------|-----|
-| 初始化時間 | 15-20 秒 |
-| 單次分析時間 | 30-45 秒 |
-| 吞吐量 | 80-120 受試者/小時 |
-| VRAM 使用 (4-bit) | 18-20 GB |
-| VRAM 使用 (8-bit) | 22-24 GB |
-| 推理鏈長度 | 20-50 步 |
-| 報告長度 | 500-1500 字 |
+| 階段 | 平均時間 | 備註 |
+|------|----------|------|
+| 數據預處理 | 2-3s | ROI 特徵提取 |
+| ML 推論 | 0.5-1s | CNN-RF 預測 + SHAP |
+| Agent A 編排 | 3-5s | LLM 決策 (Phi-4-mini) |
+| Agent B 合成 | 8-12s | LLM 報告生成 (Llama3.1-Aloe) |
+| **總計** | **15-20s** | 單個受試者完整分析 |
 
-### 時間分解
+**吞吐量**: ~180-240 subjects/hour
 
-| 階段 | 時間 | 百分比 |
-|------|------|--------|
-| 初始化 | 15-20s | 33-40% |
-| Agent A 編排 | 5-8s | 10-15% |
-| MCP 資源讀取 | 2-3s | 4-6% |
-| MCP 工具調用 | 3-5s | 6-10% |
-| Agent B 合成 | 15-20s | 33-40% |
-| 後處理 | 2-3s | 4-6% |
+### 記憶體使用 (Memory Usage)
 
-### 優化建議
-
-1. **首次運行**: 初始化時間較長，建議預熱模型
-2. **批量分析**: 使用批量處理可提高吞吐量
-3. **量化**: 4-bit 量化可節省 20% VRAM，性能損失 < 5%
-4. **緩存**: 啟用 SHAP 解釋器緩存可減少 30% 分析時間
+| 組件 | VRAM (4-bit) | VRAM (8-bit) | RAM |
+|------|--------------|--------------|-----|
+| Phi-4-mini | ~3GB | ~5GB | - |
+| Llama3.1-Aloe-8B | ~5GB | ~9GB | - |
+| CNN-RF Model | - | - | ~2GB |
+| **總計** | **~8GB** | **~14GB** | **~8GB** |
 
 ---
 
-## 🔍 故障排除
+## 錯誤處理與容錯 (Error Handling & Fault Tolerance)
 
-### 常見問題
-
-#### 1. CUDA Out of Memory
-```
-RuntimeError: CUDA out of memory
-```
-
-**解決方案**:
-- 啟用 4-bit 量化: `use_4bit=True`
-- 減少批量大小
-- 關閉其他 GPU 程序
-- 使用 CPU 模式 (較慢)
-
-#### 2. 模型未找到
-```
-FileNotFoundError: Model not found at: D:/hf_models/Phi-4-mini-instruct
-```
-
-**解決方案**:
-- 檢查模型路徑是否正確
-- 運行 `python scripts/download_models.py`
-- 使用 Ollama 作為替代方案
-
-#### 3. Neo4j 連接失敗
-```
-Neo4jConnectionError: Unable to connect to Neo4j
-```
-
-**解決方案**:
-- 檢查 Neo4j 是否運行: `docker ps`
-- 驗證連接配置: `.env` 文件
-- 系統會自動回退到本地知識庫
-
-#### 4. LLM 生成失敗
-```
-LLMRetryExhausted: Failed to generate response after 3 retries
-```
-
-**解決方案**:
-- 系統會自動回退到規則模式
-- 檢查模型是否正確加載
-- 增加超時時間
-- 使用 `use_llm=False` 強制規則模式
-
-#### 5. JSON 解析錯誤
-```
-LLMParsingError: Failed to parse LLM response as JSON
-```
-
-**解決方案**:
-- 系統會自動使用 JSON 修復機制
-- 檢查提示詞格式
-- 降低 temperature 參數
-- 使用規則模式作為回退
-
-### 日誌分析
-
-#### 啟用詳細日誌
+### 1. LLM 錯誤處理
 ```python
-import logging
+# 自動重試機制
+@retry(max_attempts=3, backoff=2.0)
+def call_llm(prompt):
+    try:
+        response = llm.generate(prompt)
+        return parse_json_with_recovery(response)
+    except LLMConnectionError:
+        # Fallback to rule-based logic
+        return rule_based_fallback()
+```
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('cdda.log'),
-        logging.StreamHandler()
-    ]
+### 2. GraphRAG Fallback
+```python
+def query_region(region_name):
+    try:
+        # Try Neo4j
+        return neo4j_dao.query(region_name)
+    except Neo4jConnectionError:
+        # Fallback to local knowledge base
+        return local_knowledge_base.get(region_name)
+```
+
+### 3. 模型加載容錯
+```python
+def load_model(subject_id, model_name):
+    # 1. Try LOOCV-specific model
+    loocv_model = f"rf_model_{subject_id}.joblib"
+    if exists(loocv_model):
+        return load(loocv_model)
+    
+    # 2. Fallback to general model
+    general_model = "rf_model_NC_vs_AD.joblib"
+    if exists(general_model):
+        return load(general_model)
+    
+    # 3. Raise error if no model available
+    raise ModelNotFoundError(f"No model available for {subject_id}")
+```
+
+---
+
+## 測試 (Testing)
+
+### 單元測試 (Unit Tests)
+```bash
+# 測試 CDDAToolKit
+pytest tests/test_cdda_tools.py
+
+# 測試 MCP Server
+pytest tests/test_mcp_server.py
+
+# 測試 Agent A
+pytest tests/test_agent_a.py
+
+# 測試 Agent B
+pytest tests/test_agent_b.py
+```
+
+### 集成測試 (Integration Tests)
+```bash
+# 測試完整 A2A 流程
+pytest tests/test_cdda_agent.py
+
+# 測試 GraphRAG 整合
+pytest tests/test_graph_rag.py
+```
+
+### 驗證腳本 (Verification Scripts)
+```bash
+# 驗證安裝
+python demo/verify_installation.py
+
+# 測試所有系統
+python demo/test_all_systems.py
+
+# 測試 Agent B
+python demo/demo_agent_b.py
+
+# 測試反事實分析
+python demo/demo_counterfactual_explanation.py
+```
+
+---
+
+## 論文實驗 (Paper Experiments)
+
+### 綜合統計分析
+```bash
+python scripts/paper/comprehensive_statistics.py \
+    --model-name NC_MCI_AD \
+    --output-dir output/paper_results \
+    --save-reasoning-logs
+```
+
+**輸出**:
+- `classification_report.txt`: 分類報告
+- `confusion_matrix.png`: 混淆矩陣
+- `per_subject_results.csv`: 每個受試者的詳細結果
+- `reasoning_logs/`: 推理日誌 (JSON)
+
+### 二分類統計分析
+```bash
+python scripts/paper/binary_statistics.py \
+    --model-name NC_vs_AD \
+    --output-dir output/paper_results/binary
+```
+
+### 視覺化
+```bash
+python scripts/paper/visualize.py \
+    --results-dir output/paper_results \
+    --output-dir output/paper_figures
+```
+
+---
+
+## 常見問題 (FAQ)
+
+### Q1: 如何處理 CUDA Out of Memory 錯誤？
+**A**: 使用 4-bit 量化:
+```python
+agent = CDDAAgent(
+    use_4bit=True,  # 啟用 4-bit 量化
+    verbose=True
 )
 ```
 
-#### 查看推理鏈
+### Q2: 如何在沒有 GPU 的情況下運行？
+**A**: 使用 CPU 模式 (較慢):
 ```python
-result = agent.run_analysis('sub-0005')
-
-# 打印完整推理鏈
-for i, step in enumerate(result.reasoning_chain, 1):
-    print(f"{i}. {step}")
+# 在 config 中設置
+device = "cpu"
 ```
 
-#### 檢查錯誤註釋
-```python
-if result.context_object.has_errors():
-    print("Errors detected:")
-    for error in result.context_object.errors:
-        print(f"  - {error['component']}: {error['type']}")
-        print(f"    {error['message']}")
+### Q3: 如何添加新的腦區到知識圖譜？
+**A**: 使用 Neo4j Cypher:
+```cypher
+CREATE (r:BrainRegion {
+    id: "New_Region",
+    full_name: "New Region Name",
+    function: "Region function",
+    clinical_significance: "Clinical relevance"
+})
+```
+
+### Q4: 如何自定義 Agent 提示詞？
+**A**: 編輯配置文件:
+```bash
+# 編輯 Agent A 提示詞
+nano config/prompts/agent_a_orchestrator.txt
+
+# 編輯 Agent B 提示詞
+nano config/prompts/agent_b_consultant.txt
+```
+
+### Q5: 如何訓練自己的 LOOCV 模型？
+**A**: 使用訓練腳本:
+```bash
+python scripts/cnn_rf/train_loocv.py \
+    --data-root data/MRI_processed \
+    --output-dir model/loocv_models_binary_opt \
+    --n-estimators 100
 ```
 
 ---
 
-## 📄 授權
+## 貢獻指南 (Contributing)
 
-本項目採用 MIT 授權。詳見 [LICENSE](LICENSE) 文件。
+### 開發環境設置
+```bash
+# 安裝開發依賴
+poetry install --with dev
 
----
+# 安裝 pre-commit hooks
+pre-commit install
+```
 
-## 🤝 貢獻
+### 代碼風格
+- **Python**: PEP 8
+- **Docstrings**: Google Style
+- **Type Hints**: 強制使用
 
-歡迎貢獻！請遵循以下步驟：
-
-1. Fork 本專案
-2. 創建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
+### 提交流程
+1. Fork 倉庫
+2. 創建功能分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 開啟 Pull Request
 
-### 貢獻指南
+---
 
-- 遵循 PEP 8 代碼風格
-- 添加單元測試
-- 更新文檔
-- 保持向後兼容性
+## 引用 (Citation)
+
+如果您在研究中使用了 CDDA Framework，請引用:
+
+```bibtex
+@article{cdda2024,
+  title={CDDA: Cognitive Discrepancy-Driven Agent for Explainable Alzheimer's Disease Diagnosis},
+  author={Your Name},
+  journal={Journal Name},
+  year={2024}
+}
+```
 
 ---
 
-## 📧 聯繫方式
+## 許可證 (License)
 
-- **項目維護者**: [Your Name]
-- **Email**: your.email@example.com
-- **GitHub**: https://github.com/your-org/cdda-framework
+本項目採用 [MIT License](license.txt)。
 
 ---
 
-## 🙏 致謝
+## 聯繫方式 (Contact)
 
-- **Phi-4-mini**: Microsoft Research
-- **Llama3.1-Aloe-Beta-8B**: Meta AI & Medical AI Community
-- **SHAP**: Scott Lundberg
-- **Neo4j**: Neo4j, Inc.
-- **Streamlit**: Streamlit, Inc.
+- **作者**: Morris
+- **Email**: [your-email]
+- **項目主頁**: [repository-url]
 
 ---
 
-## 📚 參考文獻
+## 致謝 (Acknowledgments)
 
-1. **CDDA Framework**: [論文連結]
-2. **Model Context Protocol (MCP)**: [MCP 規範]
-3. **SHAP**: Lundberg, S. M., & Lee, S. I. (2017). A unified approach to interpreting model predictions.
-4. **Uncertainty Quantification**: [相關論文]
-5. **Counterfactual Explanations**: [相關論文]
+- **AAL3 Atlas**: Automated Anatomical Labeling 3
+- **HuggingFace**: Transformers library
+- **Microsoft**: Phi-4-mini model
+- **HPAI-BSC**: Llama3.1-Aloe-Beta-8B model
+- **Neo4j**: Graph database platform
+- **Nilearn**: Neuroimaging in Python
 
 ---
 
-**最後更新**: 2025-11-28
-
-**版本**: 1.0.0
+**最後更新**: 2024-12-04

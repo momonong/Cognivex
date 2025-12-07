@@ -337,24 +337,21 @@ class AgentB:
         # 修改 app/agents/agent_b_consultant.py
 
         user_prompt = f"""
-Based on the ContextObject below, generate a **concise, structured** clinical report.
+Based on the ContextObject below, generate the **Clinical Audit Report**.
 
 CONTEXT OBJECT:
 {formatted_context}
 
 # ======================================================
-# CRITICAL INSTRUCTION
+# INSTRUCTIONS
 # ======================================================
-- **DO NOT** write long paragraphs.
-- **DO** use bullet points.
-- **DO** round numerical values to 3 decimal places.
-- **INTERPRETATION LOGIC**:
-  - The model is Binary (NC/AD). It assumes everyone is NC or AD.
-  - If Confidence is **Low (< 0.7)** or Uncertainty is **High**, this indicates the subject does not fit the typical NC or AD profile.
-  - You must interpret this ambiguity as a **signal for potential MCI (Mild Cognitive Impairment)** or atypical progression, requiring differential diagnosis.
+1. **Analyze the Data**: Review Prediction, Confidence, UQ Score, and Anatomical Features (Z-scores).
+2. **Apply the System Rules**: Strictly follow the **"AUDIT LOGIC"** defined in your system instructions. 
+   - Prioritize Anatomy (Z-scores) and Confidence thresholds as instructed.
+   - Do not make up rules.
+3. **Format**: Output the report strictly in Markdown, starting with <REPORT>.
 
-Output the report in Markdown format after the <REPORT> marker.
-<REPORT>
+Output the report now:
 """
         
         # Call LLM based on provider
