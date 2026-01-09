@@ -1,0 +1,42 @@
+\documentclass[border=5pt]{standalone}
+\usepackage[dvipsnames]{xcolor} % for \textcolor{red}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+
+\begin{document}
+
+\fbox{%
+  \begin{minipage}{0.95\linewidth}
+    \scriptsize
+    \textbf{CLINICAL SAFETY AUDIT REPORT} \\
+    \rule{\linewidth}{0.5pt} \\
+    \textbf{Subject ID:} Subject-0009 \quad \textbf{Ground Truth:} MCI \\
+    \textbf{Model Prediction:} Normal Control (NC) \\
+    \textbf{Confidence:} $P=0.82$ \quad \textbf{Uncertainty:} $U=0.55$ \\
+    \rule{\linewidth}{0.5pt}
+
+    \textbf{1. Clinical Audit Summary} \\
+    \textbf{Verdict:} \textcolor{red}{Suspected False Negative (Missed Diagnosis)} \\
+    \textbf{Risk Assessment:} High Risk of Discrepancy \\
+    \textbf{Rationale:} High uncertainty ($U \approx 0.55$) combined with visible atrophy
+    in Temporal Pole Sup L suggests a missed diagnosis, despite the model's
+    binary classification of NC.
+
+    \vspace{0.5em}
+    \textbf{2. Evidence Verification} \\
+    \textit{Anatomical Check:}
+    \begin{itemize}
+      \item \textbf{Temporal Pole Sup L:} Atrophy detected ($Z=1.48$).
+      \item \textbf{Hippocampus:} Preserved but warrants monitoring.
+    \end{itemize}
+
+    \vspace{0.5em}
+    \textbf{3. Agent Recommendations} \\
+    \textbf{Next Steps:} Manual review required. Consider neuropsychological testing
+    to confirm MCI conversion risk. Re-evaluate segmentation for Temporal Pole region. \\
+    \textbf{Agent Interaction:} Orchestrator triggered \texttt{ANOMALY\_INVESTIGATION}
+    due to moderate uncertainty and anatomical outliers.
+  \end{minipage}%
+}
+
+\end{document}

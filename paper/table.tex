@@ -1,0 +1,24 @@
+\documentclass[border=5pt]{standalone}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{lmodern}
+
+\begin{document}
+
+\begin{minipage}{\linewidth}
+  \captionof{table}{System Performance Metrics (LOOCV)}
+  \label{tab:results}
+
+  \begin{tabularx}{\linewidth}{l c X}
+    \toprule
+    \textbf{Metric} & \textbf{Value} & \textbf{Clinical Significance} \\
+    \midrule
+    Binary Accuracy (NC/AD) & \textbf{80.70\%} & Strong baseline for clear cases \\
+    Specificity (NC) & \textbf{88.89\%} & High reliability in ruling out healthy subjects \\ 
+    MCI Intervention Rate & \textbf{89.39\%} & Effective safety net for ambiguous cases \\
+    \bottomrule
+  \end{tabularx}
+\end{minipage}
+
+\end{document}
