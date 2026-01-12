@@ -2,18 +2,14 @@
 \usepackage[dvipsnames]{xcolor} % for \textcolor{red}
 \usepackage{amsmath,amssymb}
 \usepackage{lmodern}
+\usepackage{varwidth}
 
 \begin{document}
 
-\begin{minipage}{8.5cm} 
+\begin{minipage}{9cm} 
   \centering 
   
-  % --- 標題改放在這裡 (上面) ---
-  \scriptsize    
-  \textbf{Figure 2: Safety Audit Report for Subject-0009.} 
-  \vspace{4pt} % 標題與下方框框的距離 (可以自己微調)
-  
-  % --- Report 框框 ---
+  % --- 1. Report 框框 (主圖在上方) ---
   \fbox{%
     \begin{minipage}{0.95\linewidth}
       \scriptsize
@@ -28,10 +24,9 @@
       \textbf{Verdict:} \textcolor{red}{Suspected False Negative (Missed Diagnosis)} \\
       \textbf{Risk Assessment:} High Risk of Discrepancy \\
       \textbf{Rationale:} High uncertainty ($U \approx 0.55$) combined with visible atrophy
-      in Temporal Pole Sup L suggests a missed diagnosis, despite the model's
-      binary classification of NC.
+      in Temporal Pole Sup L suggests a missed diagnosis.
 
-      \vspace{0.5em}
+      \vspace{0.3em}
       \textbf{2. Evidence Verification} \\
       \textit{Anatomical Check:}
       \begin{itemize}
@@ -39,15 +34,20 @@
         \item \textbf{Hippocampus:} Preserved but warrants monitoring.
       \end{itemize}
 
-      \vspace{0.5em}
+      \vspace{0.3em}
       \textbf{3. Agent Recommendations} \\
-      \textbf{Next Steps:} Manual review required. Consider neuropsychological testing
-      to confirm MCI conversion risk. Re-evaluate segmentation for Temporal Pole region. \\
-      \textbf{Agent Interaction:} Orchestrator triggered \texttt{ANOMALY\_INVESTIGATION}
-      due to moderate uncertainty and anatomical outliers.
+      \textbf{Next Steps:} Manual review required. Consider neuropsychological testing.
+      \textbf{Agent Interaction:} Triggered \texttt{ANOMALY\_INVESTIGATION}.
     \end{minipage}%
   }
   
+  \vspace{6pt} % 圖與文字的間距
+
+  % --- 2. 標題與說明 (文字在下方) ---
+  \scriptsize
+  \textbf{Figure 2. Safety Audit Report for Subject-0009.} \\
+  The system correctly flagged a ``Missed Diagnosis'' (False Negative) in an MCI patient by detecting anatomical discrepancies ($Z=1.48$) despite the model's NC prediction.
+
 \end{minipage}
 
 \end{document}
